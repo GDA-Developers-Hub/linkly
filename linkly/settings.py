@@ -35,8 +35,7 @@ CORS_ALLOW_HEADERS = ["*"]
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5174",
-    "https://godigatafrica-website-production.up.railway.app",
-    "https://godigitalafrica.com/",
+    "http://localhost:3000",
 ]
 
 SESSION_COOKIE_SECURE = True  # Enable in production
