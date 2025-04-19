@@ -79,7 +79,9 @@ class Subscription(models.Model):
         if self.end_date:
             now = timezone.now()
             if now < self.end_date:
-                return (self.end_date - now).days
+                time_left = self.end_date - now
+                # Convert to total seconds and then to days with decimal places
+                return round(time_left.total_seconds() / (24 * 3600), 1)
         return 0
 
     def cancel(self):
@@ -291,7 +293,8 @@ class User(AbstractUser):
 
         trial_plan = SubscriptionPlan.objects.get(name='FREE_TRIAL')
         now = timezone.now()
-        trial_end = now + timedelta(days=10)  # 10-day trial
+        # Set trial to end at midnight of the 10th day
+        trial_end = (now + timedelta(days=10)).replace(hour=23, minute=59, second=59, microsecond=999999)
 
         subscription = Subscription.objects.create(
             user=self,
