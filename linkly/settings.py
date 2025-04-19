@@ -25,9 +25,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Allow requests from your React frontend (Update this with your frontend URL)
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://godigatafrica-website-production.up.railway.app",
-    "https://go-digital-africa-production.up.railway.app",
-    "https://godigitalafrica.com/",
+    "https://linkly-production.up.railway.app",
 ]
 
 # Allow specific headers
@@ -36,6 +34,7 @@ CORS_ALLOW_HEADERS = ["*"]
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5174",
     "http://localhost:3000",
+    "https://linkly-production.up.railway.app",
 ]
 
 SESSION_COOKIE_SECURE = True  # Enable in production
