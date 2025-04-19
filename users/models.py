@@ -221,8 +221,8 @@ class User(AbstractUser):
     has_used_trial = models.BooleanField(default=False)
     subscription_updated_at = models.DateTimeField(auto_now=True)
 
-    USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email']
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
 
     def __str__(self):
         return self.email

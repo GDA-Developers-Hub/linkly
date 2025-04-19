@@ -17,7 +17,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             '--superadmin-password',
-            default=os.getenv('SUPERADMIN_PASSWORD', 'Linkly@2024!'),
+            default=os.getenv('SUPERADMIN_PASSWORD', 'Linkly@2025!'),
             help='Password for the superadmin user'
         )
         parser.add_argument(

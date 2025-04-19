@@ -26,6 +26,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     "https://linkly-production.up.railway.app",
+    "https://c175-102-217-65-14.ngrok-free.app",
 ]
 
 # Allow specific headers
