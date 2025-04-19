@@ -113,6 +113,9 @@ class User(AbstractUser):
     website = models.URLField(max_length=500, blank=True, null=True)
     industry = models.CharField(max_length=100, blank=True, null=True)
     
+    # Subscription fields
+    has_used_trial = models.BooleanField(default=False)
+    
     # JWT token fields
     access_token_jwt = models.TextField(blank=True, null=True)
     refresh_token_jwt = models.TextField(blank=True, null=True)

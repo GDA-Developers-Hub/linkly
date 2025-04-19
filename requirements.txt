@@ -24,10 +24,19 @@ social-auth-app-django==5.4.0
 python-social-auth[django]
 django-allauth==0.57.0
 django-jazzmin==2.6.0
-drf-yasg==1.21.7
+drf-yasg>=1.21.7
 setuptools>=69.0.2
 
 # Subscription and Payment
 stripe==7.11.0
 celery==5.3.6
-django-celery-beat==2.5.0 
+django-celery-beat==2.5.0
+
+# Token encryption and caching
+cryptography>=41.0.0
+django-redis>=5.3.0
+redis>=4.5.0
+
+# API Documentation
+coreapi>=2.3.3
+PyYAML>=6.0.1 

@@ -99,10 +99,16 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
+            
+        # Ensure username is provided and not automatically set to email
+        if 'username' not in attrs or not attrs['username']:
+            raise serializers.ValidationError({"username": "Username is required"})
+            
         return attrs
 
     def create(self, validated_data):
         validated_data.pop('password2')
+        # Create user with provided username
         user = User.objects.create_user(**validated_data)
         return user
 
