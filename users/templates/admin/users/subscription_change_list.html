@@ -1,0 +1,76 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block content_title %}
+    <h1>Subscription Management</h1>
+{% endblock %}
+
+{% block result_list %}
+    <div class="module" style="margin-bottom: 20px;">
+        <div class="row" style="display: flex; justify-content: space-around; padding: 20px;">
+            <div class="col" style="text-align: center;">
+                <h3>Active Subscriptions</h3>
+                <p style="font-size: 24px; color: #28a745;">{{ total_active }}</p>
+            </div>
+            <div class="col" style="text-align: center;">
+                <h3>Trial Users</h3>
+                <p style="font-size: 24px; color: #17a2b8;">{{ total_trial }}</p>
+            </div>
+            <div class="col" style="text-align: center;">
+                <h3>Monthly Revenue</h3>
+                <p style="font-size: 24px; color: #28a745;">${{ monthly_revenue|floatformat:2 }}</p>
+            </div>
+            <div class="col" style="text-align: center;">
+                <h3>Avg. Subscription Length</h3>
+                <p style="font-size: 24px; color: #6c757d;">{{ avg_subscription_length.days|default:0 }} days</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="module" style="margin-bottom: 20px;">
+        <div class="row" style="display: flex; justify-content: space-around; padding: 20px;">
+            <div class="col" style="text-align: center;">
+                <h3>MRR Growth</h3>
+                <p style="font-size: 24px; {% if mrr_growth > 0 %}color: #28a745;{% else %}color: #dc3545;{% endif %}">
+                    {{ mrr_growth|floatformat:1 }}%
+                </p>
+            </div>
+            <div class="col" style="text-align: center;">
+                <h3>Trial Conversion Rate</h3>
+                <p style="font-size: 24px; color: #17a2b8;">{{ trial_conversion_rate|floatformat:1 }}%</p>
+            </div>
+            <div class="col" style="text-align: center;">
+                <h3>Churn Rate</h3>
+                <p style="font-size: 24px; {% if churn_rate < 5 %}color: #28a745;{% else %}color: #dc3545;{% endif %}">
+                    {{ churn_rate|floatformat:1 }}%
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="module" style="margin-bottom: 20px;">
+        <h3 style="padding: 8px 10px;">Plan Distribution</h3>
+        <div style="padding: 0 20px 20px;">
+            <table style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Plan</th>
+                        <th>Active Users</th>
+                        <th>Monthly Revenue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plan in plan_distribution %}
+                    <tr>
+                        <td>{{ plan.name }}</td>
+                        <td>{{ plan.count }}</td>
+                        <td>${{ plan.revenue|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{ block.super }}
+{% endblock %} 

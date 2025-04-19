@@ -1,0 +1,278 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.css">
+    <style>
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+        .trend-indicator {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+        .trend-up { background: #e6ffe6; color: #28a745; }
+        .trend-down { background: #ffe6e6; color: #dc3545; }
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .platform-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px;
+        }
+        .platform-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .platform-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+    </style>
+{% endblock %}
+
+{% block content_title %}
+    <h1>User Management</h1>
+{% endblock %}
+
+{% block result_list %}
+    {# User Statistics Dashboard #}
+    <div class="module dashboard">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Users</h5>
+                        <p class="card-text">{{ cl.queryset.count }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-title">Active Users</div>
+                    <div class="card-body">
+                        <p class="card-text">{{ cl.queryset.filter.is_active=True.count }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-title">Business Accounts</div>
+                    <div class="card-body">
+                        <p class="card-text">{{ cl.queryset.filter.is_business=True.count }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-title">Total Reach</div>
+                    <div class="card-body">
+                        <p class="card-text">{{ cl.queryset.aggregate.total_followers.Sum }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Platform Distribution Chart #}
+    <div class="module">
+        <h2>Platform Distribution</h2>
+        <div id="platformChart"></div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Total Users</div>
+            <div class="stat-value">{{ total_users }}</div>
+            <div class="stat-label">
+                Growth Rate: 
+                <span class="trend-indicator {% if user_growth_rate > 0 %}trend-up{% else %}trend-down{% endif %}">
+                    {{ user_growth_rate|floatformat:1 }}%
+                </span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Active Users (30d)</div>
+            <div class="stat-value">{{ active_users }}</div>
+            <div class="stat-label">
+                {{ active_users|div:total_users|multiply:100|floatformat:1 }}% of total users
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Business Users</div>
+            <div class="stat-value">{{ business_users }}</div>
+            <div class="stat-label">
+                Conversion: {{ business_conversion_rate|floatformat:1 }}%
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Verified Business</div>
+            <div class="stat-value">{{ verified_business }}</div>
+            <div class="stat-label">
+                Verification Rate: {{ platform_verification_rate|floatformat:1 }}%
+            </div>
+        </div>
+    </div>
+
+    <!-- Platform Stats -->
+    <div class="platform-stats">
+        {% for platform, count in platform_stats.items %}
+        <div class="platform-card">
+            <div class="platform-icon">
+                {% if platform == 'Facebook' %}📘
+                {% elif platform == 'Instagram' %}📸
+                {% elif platform == 'LinkedIn' %}💼
+                {% elif platform == 'YouTube' %}🎥
+                {% elif platform == 'TikTok' %}🎵
+                {% elif platform == 'Telegram' %}✈️
+                {% endif %}
+            </div>
+            <div class="stat-value">{{ count }}</div>
+            <div class="stat-label">{{ platform }} Users</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Charts -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div class="chart-container">
+            <canvas id="userGrowthChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="platformGrowthChart"></canvas>
+        </div>
+    </div>
+
+    {{ block.super }}
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" href="{% static 'admin/css/dashboard.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+{% endblock %}
+
+{% block extrajs %}
+    {{ block.super }}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
+    <script>
+        // User Growth Chart
+        new Chart(document.getElementById('userGrowthChart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: {{ labels|safe }},
+                datasets: [{
+                    label: 'New Users',
+                    data: {{ user_growth_data|safe }},
+                    borderColor: '#28a745',
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                title: {
+                    display: true,
+                    text: 'User Growth Trend'
+                }
+            }
+        });
+
+        // Platform Growth Chart
+        new Chart(document.getElementById('platformGrowthChart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: {{ labels|safe }},
+                datasets: [
+                    {% for platform, data in platform_growth_data.items %}
+                    {
+                        label: '{{ platform }}',
+                        data: {{ data|safe }},
+                        backgroundColor: '{{ forloop.counter|platform_color }}'
+                    }{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            },
+            options: {
+                responsive: true,
+                title: {
+                    display: true,
+                    text: 'Platform Growth Comparison'
+                },
+                scales: {
+                    xAxes: [{ stacked: true }],
+                    yAxes: [{ stacked: true }]
+                }
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const ctx = document.getElementById('platformChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Facebook', 'Instagram', 'LinkedIn', 'YouTube', 'TikTok', 'Telegram'],
+                    datasets: [{
+                        label: 'Connected Accounts',
+                        data: [
+                            {{ cl.queryset.filter.has_facebook_business=True.count }},
+                            {{ cl.queryset.filter.has_instagram_business=True.count }},
+                            {{ cl.queryset.filter.has_linkedin_company=True.count }},
+                            {{ cl.queryset.filter.has_youtube_brand=True.count }},
+                            {{ cl.queryset.filter.has_tiktok_business=True.count }},
+                            {{ cl.queryset.filter.has_telegram_channel=True.count }}
+                        ],
+                        backgroundColor: [
+                            '#4267B2', // Facebook
+                            '#E1306C', // Instagram
+                            '#0077B5', // LinkedIn
+                            '#FF0000', // YouTube
+                            '#000000', // TikTok
+                            '#0088CC'  // Telegram
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+{% endblock %} 
