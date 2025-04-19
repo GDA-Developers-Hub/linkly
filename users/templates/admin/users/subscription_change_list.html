@@ -73,4 +73,61 @@
     </div>
 
     {{ block.super }}
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .countdown {
+        font-weight: bold;
+    }
+    .countdown.ending-soon {
+        color: #dc3545;
+    }
+</style>
+<script>
+    function updateCountdowns() {
+        document.querySelectorAll('[data-end-date]').forEach(element => {
+            const endDate = new Date(element.dataset.endDate);
+            const now = new Date();
+            const diff = endDate - now;
+
+            if (diff <= 0) {
+                element.textContent = '0m';
+                element.classList.remove('ending-soon');
+                return;
+            }
+
+            // Calculate days, hours, minutes
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+            // Format the display
+            let timeStr = '';
+            if (days > 0) {
+                timeStr = `${days}d ${hours}h ${minutes}m`;
+            } else if (hours > 0) {
+                timeStr = `${hours}h ${minutes}m`;
+            } else {
+                timeStr = `${minutes}m`;
+            }
+
+            element.textContent = timeStr;
+
+            // Add warning class if less than 24 hours remaining
+            if (diff < (24 * 60 * 60 * 1000)) {
+                element.classList.add('ending-soon');
+            } else {
+                element.classList.remove('ending-soon');
+            }
+        });
+    }
+
+    // Update every minute
+    document.addEventListener('DOMContentLoaded', function() {
+        updateCountdowns();
+        setInterval(updateCountdowns, 60000);
+    });
+</script>
 {% endblock %} 

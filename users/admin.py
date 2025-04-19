@@ -27,22 +27,104 @@ class SubscriptionInline(admin.TabularInline):
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     list_display = (
-        'email', 'username', 'is_active', 'subscription_status',
-        'date_joined', 'get_connected_platforms', 'get_business_accounts',
-        'total_followers', 'last_login_colored', 'engagement_score'
+        'email', 
+        'username', 
+        'subscription_info', 
+        'get_connected_platforms',
+        'get_business_accounts',
+        'last_login_colored',
+        'is_active'
     )
     list_filter = (
-        'is_active', 'is_staff', 'is_superuser',
-        'current_subscription__status', 'has_used_trial',
-        'has_facebook_business', 'has_instagram_business',
-        'has_linkedin_company', 'has_youtube_brand',
-        'has_tiktok_business', 'has_telegram_channel',
-        'date_joined', 'last_login',
-        ('metrics_last_updated', admin.DateFieldListFilter),
+        'is_active', 
+        'is_staff', 
+        'is_business',
+        'subscriptions__status',
+        'subscriptions__is_trial',
+        'two_factor_enabled'
     )
-    search_fields = ('email', 'username', 'first_name', 'last_name', 
-                    'company_name', 'business_description', 'industry')
+    search_fields = ('email', 'username', 'company_name')
     ordering = ('-date_joined',)
+
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        (_('Personal info'), {
+            'fields': (
+                'username', 'first_name', 'last_name', 'profile_picture',
+                'phone_number', 'is_business', 'company_name', 'business_description',
+                'website', 'industry'
+            )
+        }),
+        (_('Social Accounts'), {
+            'fields': (
+                # Google
+                'google_id', 'google_access_token', 'google_refresh_token',
+                'google_token_expiry', 'google_business_connected',
+                # Facebook
+                'facebook_id', 'facebook_access_token', 'facebook_token_expiry',
+                'facebook_page', 'facebook_page_id', 'facebook_page_name',
+                'facebook_page_token', 'facebook_page_category', 'facebook_page_followers',
+                'has_facebook_business',
+                # LinkedIn
+                'linkedin_id', 'linkedin_access_token', 'linkedin_token_expiry',
+                'linkedin_profile', 'linkedin_company_id', 'linkedin_company_name',
+                'linkedin_company_token', 'linkedin_company_page', 'linkedin_company_followers',
+                'has_linkedin_company',
+                # Twitter
+                'twitter_id', 'twitter_access_token', 'twitter_access_token_secret',
+                'twitter_token_expiry', 'twitter_handle', 'twitter_profile_url',
+                'twitter_followers', 'has_twitter_business',
+                # Instagram
+                'instagram_id', 'instagram_access_token', 'instagram_token_expiry',
+                'instagram_handle', 'instagram_profile_url', 'instagram_business_id',
+                'instagram_business_name', 'instagram_business_token',
+                'instagram_business_followers', 'has_instagram_business',
+                # TikTok
+                'tiktok_id', 'tiktok_access_token', 'tiktok_token_expiry',
+                'tiktok_handle', 'tiktok_profile_url', 'tiktok_business_id',
+                'tiktok_business_name', 'tiktok_business_token',
+                'tiktok_business_category', 'tiktok_followers', 'has_tiktok_business',
+                # Telegram
+                'telegram_id', 'telegram_username', 'telegram_chat_id',
+                'telegram_channel_name', 'telegram_subscribers', 'has_telegram_channel',
+                # YouTube
+                'youtube_id', 'youtube_access_token', 'youtube_refresh_token',
+                'youtube_token_expiry', 'youtube_channel', 'youtube_channel_id',
+                'youtube_channel_title', 'youtube_subscribers', 'has_youtube_brand'
+            )
+        }),
+        (_('Security'), {
+            'fields': (
+                'two_factor_enabled', 'two_factor_secret', 'backup_codes',
+                'access_token_jwt', 'refresh_token_jwt', 'token_created_at'
+            )
+        }),
+        (_('Metrics'), {
+            'fields': ('metrics_last_updated', 'last_sync')
+        }),
+        (_('Permissions'), {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
+        }),
+        (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
+    )
+
+    readonly_fields = (
+        'date_joined', 'last_login', 'token_created_at', 'metrics_last_updated',
+        'last_sync', 'google_token_expiry', 'facebook_token_expiry',
+        'linkedin_token_expiry', 'twitter_token_expiry', 'instagram_token_expiry',
+        'tiktok_token_expiry', 'youtube_token_expiry',
+        'facebook_page_followers', 'linkedin_company_followers',
+        'twitter_followers', 'instagram_business_followers',
+        'tiktok_followers', 'telegram_subscribers', 'youtube_subscribers'
+    )
+
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'username', 'password1', 'password2'),
+        }),
+    )
+
     actions = [
         'update_metrics', 'deactivate_users', 'activate_users', 
         'start_trial', 'cancel_subscription', 'reset_2fa',
@@ -50,95 +132,6 @@ class UserAdmin(BaseUserAdmin):
     ]
     inlines = [SubscriptionInline]
     change_list_template = 'admin/users/user/change_list.html'
-
-    fieldsets = (
-        (None, {
-            'fields': ('email', 'username', 'password'),
-            'classes': ('wide',)
-        }),
-        (_('Personal Info'), {
-            'fields': ('first_name', 'last_name', 'profile_picture', 'phone_number'),
-            'classes': ('collapse',)
-        }),
-        (_('Business Info'), {
-            'fields': (
-                'is_business', 'company_name', 'business_description', 
-                'website', 'industry', 'get_total_reach'
-            ),
-            'classes': ('collapse',)
-        }),
-        (_('Permissions'), {
-            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
-            'classes': ('collapse',)
-        }),
-        (_('Important dates'), {
-            'fields': ('last_login', 'date_joined', 'metrics_last_updated'),
-            'classes': ('collapse',)
-        }),
-        (_('Personal Social Accounts'), {
-            'classes': ('collapse',),
-            'fields': (
-                ('google_id', 'google_token_expiry', 'get_google_status'),
-                ('facebook_id', 'facebook_token_expiry', 'get_facebook_status'),
-                ('linkedin_id', 'linkedin_token_expiry', 'get_linkedin_status'),
-                ('telegram_id', 'telegram_token_expiry', 'get_telegram_status'),
-                ('instagram_id', 'instagram_token_expiry', 'get_instagram_status'),
-                ('twitter_id', 'twitter_token_expiry', 'get_twitter_status'),
-                ('tiktok_id', 'tiktok_token_expiry', 'get_tiktok_status')
-            ),
-        }),
-        (_('Business Accounts'), {
-            'classes': ('collapse',),
-            'fields': (
-                ('has_facebook_business', 'facebook_page_id', 'facebook_page_name', 'facebook_page_token', 'facebook_page_token_expiry', 'get_facebook_metrics'),
-                ('has_instagram_business', 'instagram_business_id', 'instagram_business_name', 'instagram_business_token', 'instagram_business_token_expiry', 'get_instagram_metrics'),
-                ('has_linkedin_company', 'linkedin_company_id', 'linkedin_company_name', 'linkedin_company_token', 'linkedin_company_token_expiry', 'get_linkedin_metrics'),
-                ('has_youtube_brand', 'youtube_brand_id', 'youtube_brand_name', 'youtube_brand_token', 'youtube_brand_token_expiry', 'get_youtube_metrics'),
-                ('has_tiktok_business', 'tiktok_business_id', 'tiktok_business_name', 'tiktok_business_token', 'tiktok_business_token_expiry', 'get_tiktok_metrics'),
-                ('has_telegram_channel', 'telegram_chat_id', 'telegram_channel_name', 'get_telegram_metrics')
-            ),
-        }),
-        (_('Metrics & Analytics'), {
-            'classes': ('collapse',),
-            'fields': (
-                ('facebook_page_followers', 'instagram_business_followers', 'get_social_growth'),
-                ('linkedin_company_followers', 'youtube_subscribers', 'get_engagement_rate'),
-                ('twitter_followers', 'tiktok_followers', 'get_platform_distribution'),
-                ('telegram_subscribers', 'get_total_engagement', 'get_best_performing_platform')
-            ),
-        }),
-        (_('2FA Settings'), {
-            'classes': ('collapse',),
-            'fields': ('two_factor_enabled', 'two_factor_secret', 'backup_codes', 'get_2fa_status'),
-        }),
-        (_('Subscription'), {
-            'fields': (
-                'current_subscription', 'has_used_trial',
-                'subscription_updated_at', 'get_subscription_history'
-            ),
-            'classes': ('collapse',)
-        }),
-    )
-
-    readonly_fields = (
-        'date_joined', 'last_login', 'metrics_last_updated',
-        'google_id', 'facebook_id', 'linkedin_id',
-        'telegram_id', 'instagram_id', 'twitter_id',
-        'tiktok_id', 'google_token_expiry', 'facebook_token_expiry',
-        'linkedin_token_expiry', 'telegram_token_expiry',
-        'instagram_token_expiry', 'twitter_token_expiry',
-        'tiktok_token_expiry', 'facebook_page_token_expiry',
-        'instagram_business_token_expiry', 'linkedin_company_token_expiry',
-        'youtube_brand_token_expiry', 'tiktok_business_token_expiry',
-        'subscription_updated_at', 'get_total_reach', 'get_google_status',
-        'get_facebook_status', 'get_linkedin_status', 'get_telegram_status',
-        'get_instagram_status', 'get_twitter_status', 'get_tiktok_status',
-        'get_facebook_metrics', 'get_instagram_metrics', 'get_linkedin_metrics',
-        'get_youtube_metrics', 'get_tiktok_metrics', 'get_telegram_metrics',
-        'get_social_growth', 'get_engagement_rate', 'get_platform_distribution',
-        'get_total_engagement', 'get_best_performing_platform', 'get_2fa_status',
-        'get_subscription_history'
-    )
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(
@@ -218,26 +211,62 @@ class UserAdmin(BaseUserAdmin):
     total_followers.short_description = 'Total Followers'
     total_followers.admin_order_field = 'total_followers'
 
-    def subscription_status(self, obj):
-        if not obj.current_subscription:
-            return format_html('<span class="text-muted">No Subscription</span>')
-        
-        status = obj.current_subscription.status
-        if status == 'ACTIVE':
-            color = 'success'
-        elif status == 'TRIAL':
-            color = 'info'
-        elif status == 'PENDING':
-            color = 'warning'
-        else:
-            color = 'danger'
-        
-        days = obj.current_subscription.days_remaining()
-        status_text = f"{status} ({days} days left)"
-        
-        return format_html('<span class="text-{}">{}</span>', color, status_text)
-    subscription_status.short_description = 'Subscription'
-    subscription_status.admin_order_field = 'current_subscription__status'
+    def subscription_info(self, obj):
+        """Display subscription status with trial info and time remaining"""
+        try:
+            current_sub = obj.current_subscription
+            if not current_sub:
+                return format_html(
+                    '<span class="badge badge-secondary">No Subscription</span>'
+                )
+
+            # Define status colors
+            status_colors = {
+                'ACTIVE': 'success',
+                'TRIAL': 'info',
+                'EXPIRED': 'danger',
+                'CANCELLED': 'warning',
+                'PENDING': 'secondary'
+            }
+            color = status_colors.get(current_sub.status, 'secondary')
+            
+            # Format time remaining
+            remaining = current_sub.days_remaining()
+            if 'd' in remaining:
+                time_color = '#28a745'  # green for days
+            elif 'h' in remaining:
+                time_color = '#ffc107'  # yellow for hours
+            else:
+                time_color = '#dc3545'  # red for minutes
+
+            # Build the display HTML
+            html = [
+                f'<div style="min-width: 200px;">',
+                f'<span class="badge badge-{color}" style="margin-right: 8px;">{current_sub.status}</span>'
+            ]
+
+            # Add trial badge if applicable
+            if current_sub.is_trial:
+                html.append(
+                    '<span class="badge badge-info" '
+                    'style="background-color: #17a2b8; margin-right: 8px;">'
+                    '✓ Trial</span>'
+                )
+
+            # Add time remaining
+            html.append(
+                f'<span style="color: {time_color}; font-weight: bold;">'
+                f'{remaining}</span>'
+            )
+
+            html.append('</div>')
+            return format_html(''.join(html))
+        except Exception:
+            return format_html(
+                '<span class="badge badge-secondary">No Subscription</span>'
+            )
+    subscription_info.short_description = 'Subscription'
+    subscription_info.admin_order_field = 'subscriptions__status'
 
     def engagement_score(self, obj):
         score = obj.engagement_score
@@ -535,6 +564,11 @@ class UserAdmin(BaseUserAdmin):
         )
     get_2fa_status.short_description = '2FA Status'
 
+    class Media:
+        css = {
+            'all': ('admin/css/subscription.css',)
+        }
+
 @admin.register(SubscriptionPlan)
 class SubscriptionPlanAdmin(admin.ModelAdmin):
     list_display = ('name', 'formatted_price', 'social_accounts_limit', 'ai_caption_limit', 'is_active', 'get_features', 'active_subscriptions')
@@ -633,45 +667,85 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
 
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ('user_email', 'plan_name', 'status', 'start_date', 'end_date', 'is_trial', 'days_remaining', 'auto_renew', 'monthly_revenue')
-    list_filter = ('status', 'is_trial', 'auto_renew', 'plan__name', 'created_at', 'payment_method')
+    list_display = ('user_email', 'plan_name', 'formatted_status', 'formatted_dates', 'formatted_trial', 'days_remaining')
+    list_filter = ('status', 'is_trial', 'auto_renew')
     search_fields = ('user__email', 'user__username', 'plan__name')
-    ordering = ('-created_at',)
-    date_hierarchy = 'created_at'
-    actions = ['cancel_subscriptions', 'activate_subscriptions', 'extend_trial', 'enable_auto_renew', 'disable_auto_renew']
-    
-    change_list_template = 'admin/users/subscription_change_list.html'
+    raw_id_fields = ('user', 'plan')
+    actions = ['extend_trial', 'enable_auto_renew', 'disable_auto_renew', 'cancel_subscriptions', 'activate_subscriptions']
 
-    fieldsets = (
-        (None, {
-            'fields': ('user', 'plan', 'status')
-        }),
-        (_('Dates'), {
-            'fields': (
-                'start_date',
-                'end_date',
-                'trial_end_date',
-                'cancelled_at',
-                'created_at',
-                'updated_at'
+    def user_email(self, obj):
+        return obj.user.email
+    user_email.short_description = 'User'
+    user_email.admin_order_field = 'user__email'
+
+    def plan_name(self, obj):
+        return obj.plan.get_name_display()
+    plan_name.short_description = 'Plan'
+    plan_name.admin_order_field = 'plan__name'
+
+    def formatted_status(self, obj):
+        status_colors = {
+            'ACTIVE': 'success',
+            'TRIAL': 'info',
+            'EXPIRED': 'danger',
+            'CANCELLED': 'warning',
+            'PENDING': 'secondary'
+        }
+        color = status_colors.get(obj.status, 'secondary')
+        return format_html(
+            '<span class="badge badge-{}">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    formatted_status.short_description = 'Status'
+    formatted_status.admin_order_field = 'status'
+
+    def formatted_dates(self, obj):
+        return format_html(
+            '<div style="font-size: 0.9em;">'
+            '<div>Start: {}</div>'
+            '<div>End: {}</div>'
+            '</div>',
+            obj.start_date.strftime('%b %d, %Y, %I:%M %p'),
+            obj.end_date.strftime('%b %d, %Y, %I:%M %p')
+        )
+    formatted_dates.short_description = 'Dates'
+
+    def formatted_trial(self, obj):
+        if obj.is_trial:
+            return format_html(
+                '<span class="badge badge-info" '
+                'style="background-color: #17a2b8; color: white; padding: 5px 10px; '
+                'border-radius: 10px; font-size: 0.9em;">'
+                '✓ Trial</span>'
             )
-        }),
-        (_('Settings'), {
-            'fields': (
-                'is_trial',
-                'auto_renew',
-                'payment_method'
+        return ''
+    formatted_trial.short_description = 'Trial'
+
+    def days_remaining(self, obj):
+        if obj.end_date:
+            remaining = obj.days_remaining()
+            if 'd' in remaining:
+                color = '#28a745'  # green for days
+            elif 'h' in remaining:
+                color = '#ffc107'  # yellow for hours
+            else:
+                color = '#dc3545'  # red for minutes
+            
+            return format_html(
+                '<span style="color: {}; font-weight: bold;">{}</span>',
+                color,
+                remaining
             )
-        }),
-    )
+        return format_html(
+            '<span style="color: #dc3545;">Expired</span>'
+        )
+    days_remaining.short_description = 'Time Remaining'
 
-    readonly_fields = ('created_at', 'updated_at')
-
-    def monthly_revenue(self, obj):
-        if obj.status == 'ACTIVE' and not obj.is_trial:
-            return format_html('${:.2f}', obj.plan.price)
-        return format_html('<span class="text-muted">$0.00</span>')
-    monthly_revenue.short_description = 'Monthly Revenue'
+    class Media:
+        css = {
+            'all': ('admin/css/subscription.css',)
+        }
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user', 'plan')
@@ -843,27 +917,6 @@ class SubscriptionAdmin(admin.ModelAdmin):
     def disable_auto_renew(self, request, queryset):
         updated = queryset.update(auto_renew=False)
         self.message_user(request, f'Disabled auto-renew for {updated} subscriptions.')
-
-    def user_email(self, obj):
-        return obj.user.email
-    user_email.short_description = 'User'
-    user_email.admin_order_field = 'user__email'
-
-    def plan_name(self, obj):
-        return obj.plan.get_name_display()
-    plan_name.short_description = 'Plan'
-    plan_name.admin_order_field = 'plan__name'
-
-    def days_remaining(self, obj):
-        days = obj.days_remaining()
-        if days > 30:
-            color = 'success'
-        elif days > 7:
-            color = 'warning'
-        else:
-            color = 'danger'
-        return format_html('<span class="text-{}">{} days</span>', color, days)
-    days_remaining.short_description = 'Days Remaining'
 
     @admin.action(description='Cancel selected subscriptions')
     def cancel_subscriptions(self, request, queryset):

@@ -305,7 +305,8 @@ SWAGGER_SETTINGS = {
         'Bearer': {
             'type': 'apiKey',
             'name': 'Authorization',
-            'in': 'header'
+            'in': 'header',
+            'description': 'JWT token format: Bearer <token>'
         }
     },
     'USE_SESSION_AUTH': False,
@@ -317,4 +318,97 @@ SWAGGER_SETTINGS = {
         'delete',
         'patch'
     ],
+    'OPERATIONS_SORTER': 'alpha',
+    'TAGS_SORTER': 'alpha',
+    'DOC_EXPANSION': 'none',
+    'DEFAULT_MODEL_RENDERING': 'model',
+    'DEFAULT_MODEL_DEPTH': 3,
+    'SHOW_REQUEST_HEADERS': True,
+    'DEEP_LINKING': True,
+    'DISPLAY_OPERATION_ID': False,
+    'PERSIST_AUTH': True,
+    'VALIDATOR_URL': None,
+    'APIS_SORTER': 'alpha',
+    'DEFAULT_API_URL': None,
+    'ENABLE_OAUTH2_BUTTON': False,
+    'REFETCH_SCHEMA_WITH_AUTH': True,
+    'REFETCH_SCHEMA_ON_LOGOUT': True,
+    'API_KEYS_ENABLED': True,
+    'API_KEY_NAME': 'Authorization',
+    'API_KEY_TYPE': 'header',
+    'API_KEY_PREFIX': 'Bearer',
+    'SHOW_EXTENSIONS': True,
+    'SERVERS': [
+        {
+            'url': 'https://api.linkly.com/v1',
+            'description': 'Production server'
+        },
+        {
+            'url': 'https://staging-api.linkly.com/v1',
+            'description': 'Staging server'
+        },
+        {
+            'url': 'http://localhost:8000',
+            'description': 'Local development server'
+        }
+    ],
+    'SPEC_URL': 'swagger.json',
+    'FILTER': True,
+    'DEFAULT_INFO': {
+        'description': """
+# API Overview
+
+This API provides access to Linkly's social media management platform.
+
+## Authentication
+All authenticated endpoints require a valid JWT token in the Authorization header:
+```
+Authorization: Bearer <token>
+```
+
+## Rate Limiting
+Rate limits are based on your subscription plan:
+- Free Trial: 100 requests/hour
+- Basic: 1,000 requests/hour
+- Pro: 5,000 requests/hour
+- Enterprise: Unlimited
+
+## Common Response Codes
+- 200: Success
+- 201: Created
+- 400: Bad Request
+- 401: Unauthorized
+- 403: Forbidden
+- 404: Not Found
+- 429: Too Many Requests
+- 500: Internal Server Error
+
+## Versioning
+The API version is included in the URL path:
+```
+https://api.linkly.com/v1/
+```
+
+## Support
+For API support:
+- Email: api-support@linkly.com
+- Documentation: https://docs.linkly.com
+- Status: https://status.linkly.com
+""",
+        'terms_of_service': 'https://www.linkly.com/terms/',
+        'contact': {
+            'name': 'API Support',
+            'url': 'https://www.linkly.com/support',
+            'email': 'api-support@linkly.com'
+        },
+        'license': {
+            'name': 'MIT License',
+            'url': 'https://opensource.org/licenses/MIT'
+        },
+        'x-logo': {
+            'url': 'https://www.linkly.com/logo.png',
+            'backgroundColor': '#FFFFFF',
+            'altText': 'Linkly Logo'
+        }
+    }
 } 

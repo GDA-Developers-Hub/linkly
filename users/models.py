@@ -80,9 +80,21 @@ class Subscription(models.Model):
             now = timezone.now()
             if now < self.end_date:
                 time_left = self.end_date - now
-                # Convert to total seconds and then to days with decimal places
-                return round(time_left.total_seconds() / (24 * 3600), 1)
-        return 0
+                total_seconds = time_left.total_seconds()
+                
+                # Calculate days, hours, and minutes
+                days = int(total_seconds // (24 * 3600))
+                hours = int((total_seconds % (24 * 3600)) // 3600)
+                minutes = int((total_seconds % 3600) // 60)
+                
+                # Format the time remaining
+                if days > 0:
+                    return f"{days}d {hours}h {minutes}m"
+                elif hours > 0:
+                    return f"{hours}h {minutes}m"
+                else:
+                    return f"{minutes}m"
+        return "0m"
 
     def cancel(self):
         self.status = 'CANCELLED'
@@ -91,137 +103,114 @@ class Subscription(models.Model):
         self.save()
 
 class User(AbstractUser):
-    email = models.EmailField(_('email address'), unique=True)
+    # Basic user fields
+    email = models.EmailField(unique=True)
     is_business = models.BooleanField(default=False)
-    company_name = models.CharField(max_length=255, blank=True)
-    phone_number = models.CharField(max_length=20, blank=True)
-    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
+    company_name = models.CharField(max_length=255, blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    profile_picture = models.URLField(max_length=500, blank=True, null=True)
+    business_description = models.TextField(blank=True, null=True)
+    website = models.URLField(max_length=500, blank=True, null=True)
+    industry = models.CharField(max_length=100, blank=True, null=True)
     
-    # Social auth fields
-    google_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
-    facebook_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
-    facebook_page_id = models.CharField(max_length=255, blank=True, null=True)
-    linkedin_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
-    linkedin_company_id = models.CharField(max_length=255, blank=True, null=True)
-    twitter_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
-    youtube_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
-    youtube_brand_id = models.CharField(max_length=255, blank=True, null=True)
-    telegram_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
-    instagram_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
-    instagram_business_id = models.CharField(max_length=255, blank=True, null=True)
-    tiktok_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
-    tiktok_business_id = models.CharField(max_length=255, blank=True, null=True)
-    
-    # Social media fields
-    instagram_handle = models.CharField(max_length=255, blank=True)
-    instagram_profile_url = models.URLField(blank=True)
-    instagram_business_name = models.CharField(max_length=255, blank=True)
-    instagram_business_category = models.CharField(max_length=255, blank=True)
-    
-    twitter_handle = models.CharField(max_length=255, blank=True)
-    twitter_profile_url = models.URLField(blank=True)
-    twitter_business_type = models.CharField(max_length=255, blank=True)
-    
-    linkedin_profile = models.URLField(blank=True)
-    linkedin_company_page = models.URLField(blank=True)
-    linkedin_company_name = models.CharField(max_length=255, blank=True)
-    
-    youtube_channel = models.URLField(blank=True)
-    youtube_channel_id = models.CharField(max_length=255, blank=True)
-    youtube_channel_title = models.CharField(max_length=255, blank=True)
-    youtube_brand_name = models.CharField(max_length=255, blank=True)
-    
-    facebook_page = models.URLField(blank=True)
-    facebook_page_name = models.CharField(max_length=255, blank=True)
-    facebook_page_category = models.CharField(max_length=255, blank=True)
-    
-    tiktok_handle = models.CharField(max_length=255, blank=True)
-    tiktok_profile_url = models.URLField(blank=True)
-    tiktok_business_name = models.CharField(max_length=255, blank=True)
-    tiktok_business_category = models.CharField(max_length=255, blank=True)
-    
-    telegram_username = models.CharField(max_length=255, blank=True)
-    telegram_chat_id = models.CharField(max_length=255, blank=True)
-    telegram_channel_name = models.CharField(max_length=255, blank=True)
-
-    # Social tokens
-    google_access_token = models.TextField(blank=True, null=True)
-    facebook_access_token = models.TextField(blank=True, null=True)
-    facebook_page_token = models.TextField(blank=True, null=True)
-    linkedin_access_token = models.TextField(blank=True, null=True)
-    linkedin_company_token = models.TextField(blank=True, null=True)
-    twitter_access_token = models.TextField(blank=True, null=True)
-    twitter_access_token_secret = models.TextField(blank=True, null=True)
-    youtube_access_token = models.TextField(blank=True, null=True)
-    youtube_refresh_token = models.TextField(blank=True, null=True)
-    youtube_brand_token = models.TextField(blank=True, null=True)
-    telegram_bot_token = models.TextField(blank=True, null=True)
-    instagram_access_token = models.TextField(blank=True, null=True)
-    instagram_business_token = models.TextField(blank=True, null=True)
-    tiktok_access_token = models.TextField(blank=True, null=True)
-    tiktok_business_token = models.TextField(blank=True, null=True)
-    
-    # Token refresh timestamps
-    google_token_expiry = models.DateTimeField(null=True)
-    facebook_token_expiry = models.DateTimeField(null=True)
-    facebook_page_token_expiry = models.DateTimeField(null=True)
-    linkedin_token_expiry = models.DateTimeField(null=True)
-    linkedin_company_token_expiry = models.DateTimeField(null=True)
-    twitter_token_expiry = models.DateTimeField(null=True)
-    youtube_token_expiry = models.DateTimeField(null=True)
-    youtube_brand_token_expiry = models.DateTimeField(null=True)
-    telegram_token_expiry = models.DateTimeField(null=True)
-    instagram_token_expiry = models.DateTimeField(null=True)
-    instagram_business_token_expiry = models.DateTimeField(null=True)
-    tiktok_token_expiry = models.DateTimeField(null=True)
-    tiktok_business_token_expiry = models.DateTimeField(null=True)
-
-    # Business account flags
-    has_facebook_business = models.BooleanField(default=False)
-    has_instagram_business = models.BooleanField(default=False)
-    has_linkedin_company = models.BooleanField(default=False)
-    has_youtube_brand = models.BooleanField(default=False)
-    has_twitter_business = models.BooleanField(default=False)
-    has_tiktok_business = models.BooleanField(default=False)
-    has_telegram_channel = models.BooleanField(default=False)
-
-    # Business metrics (for caching common metrics)
-    facebook_page_followers = models.IntegerField(default=0)
-    instagram_business_followers = models.IntegerField(default=0)
-    linkedin_company_followers = models.IntegerField(default=0)
-    youtube_subscribers = models.IntegerField(default=0)
-    twitter_followers = models.IntegerField(default=0)
-    tiktok_followers = models.IntegerField(default=0)
-    telegram_subscribers = models.IntegerField(default=0)
-    
-    # Last metrics update
-    metrics_last_updated = models.DateTimeField(null=True)
-
-    # Additional business fields
-    business_description = models.TextField(blank=True)
-    website = models.URLField(blank=True)
-    industry = models.CharField(max_length=100, blank=True)
-    
-    # 2FA fields
-    two_factor_enabled = models.BooleanField(default=False)
-    two_factor_secret = models.CharField(max_length=32, blank=True)
-    backup_codes = models.JSONField(default=list, blank=True)
-    
-    # Token fields for Node.js compatibility
+    # JWT token fields
     access_token_jwt = models.TextField(blank=True, null=True)
     refresh_token_jwt = models.TextField(blank=True, null=True)
     token_created_at = models.DateTimeField(null=True)
+
+    # 2FA fields
+    two_factor_enabled = models.BooleanField(default=False)
+    two_factor_secret = models.CharField(max_length=32, blank=True, null=True)
+    backup_codes = models.JSONField(default=list)
+
+    # Google fields
+    google_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    google_access_token = models.TextField(blank=True, null=True)
+    google_refresh_token = models.TextField(blank=True, null=True)
+    google_token_expiry = models.DateTimeField(null=True)
+    google_business_connected = models.BooleanField(default=False)
     
-    # Add subscription-related fields
-    current_subscription = models.ForeignKey(
-        Subscription,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='current_user'
-    )
-    has_used_trial = models.BooleanField(default=False)
-    subscription_updated_at = models.DateTimeField(auto_now=True)
+    # Facebook fields
+    facebook_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    facebook_access_token = models.TextField(blank=True, null=True)
+    facebook_token_expiry = models.DateTimeField(null=True)
+    facebook_page = models.URLField(max_length=500, blank=True, null=True)
+    facebook_page_id = models.CharField(max_length=255, blank=True, null=True)
+    facebook_page_name = models.CharField(max_length=255, blank=True, null=True)
+    facebook_page_token = models.TextField(blank=True, null=True)
+    facebook_page_category = models.CharField(max_length=100, blank=True, null=True)
+    facebook_page_followers = models.IntegerField(default=0)
+    has_facebook_business = models.BooleanField(default=False)
+    
+    # LinkedIn fields
+    linkedin_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    linkedin_access_token = models.TextField(blank=True, null=True)
+    linkedin_token_expiry = models.DateTimeField(null=True)
+    linkedin_profile = models.URLField(max_length=500, blank=True, null=True)
+    linkedin_company_id = models.CharField(max_length=255, blank=True, null=True)
+    linkedin_company_name = models.CharField(max_length=255, blank=True, null=True)
+    linkedin_company_token = models.TextField(blank=True, null=True)
+    linkedin_company_page = models.URLField(max_length=500, blank=True, null=True)
+    linkedin_company_followers = models.IntegerField(default=0)
+    has_linkedin_company = models.BooleanField(default=False)
+    
+    # Twitter fields
+    twitter_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    twitter_access_token = models.TextField(blank=True, null=True)
+    twitter_access_token_secret = models.TextField(blank=True, null=True)
+    twitter_token_expiry = models.DateTimeField(null=True)
+    twitter_handle = models.CharField(max_length=255, blank=True, null=True)
+    twitter_profile_url = models.URLField(max_length=500, blank=True, null=True)
+    twitter_followers = models.IntegerField(default=0)
+    has_twitter_business = models.BooleanField(default=False)
+    
+    # Instagram fields
+    instagram_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    instagram_access_token = models.TextField(blank=True, null=True)
+    instagram_token_expiry = models.DateTimeField(null=True)
+    instagram_handle = models.CharField(max_length=255, blank=True, null=True)
+    instagram_profile_url = models.URLField(max_length=500, blank=True, null=True)
+    instagram_business_id = models.CharField(max_length=255, blank=True, null=True)
+    instagram_business_name = models.CharField(max_length=255, blank=True, null=True)
+    instagram_business_token = models.TextField(blank=True, null=True)
+    instagram_business_followers = models.IntegerField(default=0)
+    has_instagram_business = models.BooleanField(default=False)
+    
+    # TikTok fields
+    tiktok_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    tiktok_access_token = models.TextField(blank=True, null=True)
+    tiktok_token_expiry = models.DateTimeField(null=True)
+    tiktok_handle = models.CharField(max_length=255, blank=True, null=True)
+    tiktok_profile_url = models.URLField(max_length=500, blank=True, null=True)
+    tiktok_business_id = models.CharField(max_length=255, blank=True, null=True)
+    tiktok_business_name = models.CharField(max_length=255, blank=True, null=True)
+    tiktok_business_token = models.TextField(blank=True, null=True)
+    tiktok_business_category = models.CharField(max_length=100, blank=True, null=True)
+    tiktok_followers = models.IntegerField(default=0)
+    has_tiktok_business = models.BooleanField(default=False)
+    
+    # Telegram fields
+    telegram_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    telegram_username = models.CharField(max_length=255, blank=True, null=True)
+    telegram_chat_id = models.CharField(max_length=255, blank=True, null=True)
+    telegram_channel_name = models.CharField(max_length=255, blank=True, null=True)
+    telegram_subscribers = models.IntegerField(default=0)
+    has_telegram_channel = models.BooleanField(default=False)
+    
+    # YouTube fields
+    youtube_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    youtube_access_token = models.TextField(blank=True, null=True)
+    youtube_refresh_token = models.TextField(blank=True, null=True)
+    youtube_token_expiry = models.DateTimeField(null=True)
+    youtube_channel = models.URLField(max_length=500, blank=True, null=True)
+    youtube_channel_id = models.CharField(max_length=255, blank=True, null=True)
+    youtube_channel_title = models.CharField(max_length=255, blank=True, null=True)
+    youtube_subscribers = models.IntegerField(default=0)
+    has_youtube_brand = models.BooleanField(default=False)
+    
+    # Metrics and sync tracking
+    metrics_last_updated = models.DateTimeField(null=True)
+    last_sync = models.JSONField(default=dict)  # Stores last sync time for each platform
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
@@ -262,30 +251,25 @@ class User(AbstractUser):
         return None
 
     def update_jwt_tokens(self, access_token, refresh_token):
-        """Update JWT tokens for Node.js compatibility"""
+        """Update JWT tokens"""
         self.access_token_jwt = access_token
         self.refresh_token_jwt = refresh_token
-        self.token_created_at = datetime.now()
+        self.token_created_at = timezone.now()
         self.save()
 
     def update_social_token(self, platform, access_token, expires_in=3600):
         """Update social media access token and expiry"""
-        token_field = f"{platform}_access_token"
-        expiry_field = f"{platform}_token_expiry"
-        
-        if hasattr(self, token_field) and hasattr(self, expiry_field):
-            setattr(self, token_field, access_token)
-            setattr(self, expiry_field, datetime.now() + timedelta(seconds=expires_in))
-            self.save()
+        setattr(self, f'{platform}_access_token', access_token)
+        setattr(self, f'{platform}_token_expiry', 
+                timezone.now() + timedelta(seconds=int(expires_in)))
+        self.save()
 
     def is_social_token_valid(self, platform):
         """Check if social media token is still valid"""
-        expiry_field = f"{platform}_token_expiry"
-        if hasattr(self, expiry_field):
-            expiry = getattr(self, expiry_field)
-            if expiry and expiry > datetime.now():
-                return True
-        return False
+        expiry = getattr(self, f'{platform}_token_expiry', None)
+        if not expiry:
+            return False
+        return timezone.now() < expiry
 
     def start_free_trial(self):
         if self.has_used_trial:
@@ -359,4 +343,45 @@ class User(AbstractUser):
     def get_ai_caption_limit(self):
         if not self.current_subscription or not self.current_subscription.is_active():
             return 0
-        return self.current_subscription.plan.ai_caption_limit 
+        return self.current_subscription.plan.ai_caption_limit
+
+    def update_last_sync(self, platform):
+        """Update last sync time for a platform"""
+        self.last_sync[platform] = timezone.now().isoformat()
+        self.save()
+
+    def get_last_sync(self, platform):
+        """Get last sync time for a platform"""
+        return self.last_sync.get(platform)
+
+    def update_last_sync(self, platform):
+        """Update the last sync timestamp for a platform"""
+        sync_field = f'last_sync_{platform.lower()}'
+        if hasattr(self, sync_field):
+            setattr(self, sync_field, timezone.now())
+            self.save(update_fields=[sync_field])
+
+    def get_last_sync(self, platform):
+        """Get the last sync time for a platform in a human-readable format"""
+        sync_field = f'last_sync_{platform.lower()}'
+        last_sync = getattr(self, sync_field) if hasattr(self, sync_field) else None
+        
+        if not last_sync:
+            return 'Never'
+            
+        now = timezone.now()
+        diff = now - last_sync
+        
+        if diff.days > 0:
+            return f'{diff.days} days ago'
+        elif diff.seconds >= 3600:
+            hours = diff.seconds // 3600
+            return f'{hours} hours ago'
+        elif diff.seconds >= 60:
+            minutes = diff.seconds // 60
+            return f'{minutes} minutes ago'
+        else:
+            return 'Just now'
+
+    class Meta:
+        db_table = 'auth_user' 

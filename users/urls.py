@@ -30,6 +30,7 @@ from .views import (
     stripe_webhook,
     SubscriptionStatusView,
     available_plans,
+    init_oauth,
 )
 
 urlpatterns = [
@@ -52,6 +53,9 @@ urlpatterns = [
     # Profile management
     path('profile/', UserProfileView.as_view(), name='user_profile'),
     path('profile/update/', UpdateProfileView.as_view(), name='update_profile'),
+    
+    # OAuth2 Initialization URL (unified)
+    path('auth/init/', init_oauth, name='init-oauth'),
     
     # Social Authentication URLs
     path('auth/google/callback/', google_auth_callback, name='google-auth-callback'),

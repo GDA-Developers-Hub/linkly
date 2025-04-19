@@ -5,18 +5,87 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 import qrcode
 import base64
 from io import BytesIO
+from .models import User, Subscription, SubscriptionPlan
 
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
+    connected_platforms = serializers.SerializerMethodField()
+    subscription_status = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = ('id', 'email', 'username', 'is_business', 'company_name', 
                  'phone_number', 'profile_picture', 'instagram_handle', 
                  'twitter_handle', 'linkedin_profile', 'youtube_channel', 
                  'facebook_page', 'tiktok_handle', 'business_description', 
-                 'website', 'industry', 'two_factor_enabled')
-        read_only_fields = ('id', 'two_factor_enabled')
+                 'website', 'industry', 'two_factor_enabled', 'connected_platforms', 'subscription_status')
+        read_only_fields = ('id', 'two_factor_enabled', 'connected_platforms', 'subscription_status')
+
+    def get_connected_platforms(self, obj):
+        platforms = []
+        
+        # Check each platform
+        if obj.facebook_id:
+            platforms.append({
+                'platform': 'facebook',
+                'connected': True,
+                'profile_url': obj.facebook_page or '',
+                'handle': obj.facebook_page_name or '',
+                'followers': obj.facebook_page_followers,
+                'is_business': obj.has_facebook_business,
+                'last_synced': obj.get_last_sync('facebook')
+            })
+        
+        if obj.instagram_id:
+            platforms.append({
+                'platform': 'instagram',
+                'connected': True,
+                'profile_url': obj.instagram_profile_url or '',
+                'handle': obj.instagram_handle or '',
+                'followers': obj.instagram_business_followers,
+                'is_business': obj.has_instagram_business,
+                'last_synced': obj.get_last_sync('instagram')
+            })
+        
+        # Add similar blocks for other platforms
+        platform_checks = [
+            ('twitter', 'twitter_id', 'twitter_profile_url', 'twitter_handle', 'twitter_followers'),
+            ('linkedin', 'linkedin_id', 'linkedin_profile', 'linkedin_company_name', 'linkedin_company_followers'),
+            ('youtube', 'youtube_id', 'youtube_channel', 'youtube_channel_title', 'youtube_subscribers'),
+            ('tiktok', 'tiktok_id', 'tiktok_profile_url', 'tiktok_handle', 'tiktok_followers'),
+            ('telegram', 'telegram_id', 'telegram_username', 'telegram_channel_name', 'telegram_subscribers')
+        ]
+        
+        for platform, id_field, url_field, handle_field, followers_field in platform_checks:
+            if getattr(obj, id_field):
+                platforms.append({
+                    'platform': platform,
+                    'connected': True,
+                    'profile_url': getattr(obj, url_field) or '',
+                    'handle': getattr(obj, handle_field) or '',
+                    'followers': getattr(obj, followers_field),
+                    'is_business': getattr(obj, f'has_{platform}_business', False),
+                    'last_synced': obj.get_last_sync(platform)
+                })
+        
+        return platforms
+
+    def get_subscription_status(self, obj):
+        if not obj.current_subscription:
+            return {
+                'status': 'NONE',
+                'plan': None,
+                'days_remaining': '0',
+                'is_trial': False
+            }
+        
+        return {
+            'status': obj.current_subscription.status,
+            'plan': obj.current_subscription.plan.name,
+            'days_remaining': obj.current_subscription.days_remaining(),
+            'is_trial': obj.current_subscription.is_trial
+        }
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -102,4 +171,19 @@ class UpdateUserSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         if User.objects.exclude(pk=user.pk).filter(email=value).exists():
             raise serializers.ValidationError("This email is already in use.")
-        return value 
+        return value
+
+class SocialConnectionSerializer(serializers.Serializer):
+    platform = serializers.CharField()
+    auth_code = serializers.CharField()
+    redirect_uri = serializers.CharField(required=False)
+    business_account = serializers.BooleanField(default=False)
+
+class SocialAccountSerializer(serializers.Serializer):
+    platform = serializers.CharField()
+    connected = serializers.BooleanField()
+    profile_url = serializers.CharField()
+    handle = serializers.CharField()
+    followers = serializers.IntegerField()
+    is_business = serializers.BooleanField()
+    last_synced = serializers.CharField() 

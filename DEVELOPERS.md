@@ -18,6 +18,13 @@ Linkly is built with a Django backend and uses several key components:
 linkly/
 ├── backend/             # Django project settings
 ├── users/              # User management and authentication
+│   ├── models.py       # User and social account models
+│   ├── views.py        # Authentication and user views
+│   ├── serializers.py  # API serializers
+│   ├── services/       # Business logic
+│   │   ├── oauth.py    # OAuth URL generation
+│   │   └── social.py   # Social account connection
+│   └── urls.py         # API endpoints
 ├── social/             # Social media integration
 ├── subscriptions/      # Subscription and payment handling
 ├── analytics/          # Analytics and reporting
@@ -56,6 +63,225 @@ python manage.py loaddata subscription_plans
 python manage.py createsuperuser
 ```
 
+## Social Authentication Implementation
+
+### OAuth Flow Architecture
+
+The social authentication system uses a unified approach for handling multiple platforms. Here's how it works:
+
+1. **OAuth Initialization**
+   ```python
+   @api_view(['GET'])
+   @permission_classes([IsAuthenticated])
+   def init_oauth(request):
+       """
+       Unified OAuth initialization for all platforms.
+       Query params:
+       - platform: The social platform (google, facebook, etc.)
+       - business: Boolean for business account access
+       - redirect_uri: Optional custom redirect URI
+       """
+       platform = request.query_params.get('platform')
+       business = request.query_params.get('business', 'false').lower() == 'true'
+       redirect_uri = request.query_params.get('redirect_uri')
+       # Returns platform-specific authorization URL
+   ```
+
+2. **Platform-Specific Callbacks**
+   ```python
+   @api_view(['GET'])
+   @permission_classes([IsAuthenticated])
+   def google_auth_callback(request):
+       """Handle Google OAuth callback"""
+       code = request.query_params.get('code')
+       # Exchange code for tokens
+   ```
+
+3. **Account Connection**
+   ```python
+   def connect_social_account(user, platform, tokens, is_business=False):
+       """
+       Connect social account to user profile.
+       - Stores OAuth tokens
+       - Syncs profile information
+       - Sets up token refresh if supported
+       """
+   ```
+
+### Database Schema
+
+```python
+class User(AbstractUser):
+    # Social account fields
+    google_account = JSONField(null=True)
+    facebook_account = JSONField(null=True)
+    linkedin_account = JSONField(null=True)
+    twitter_account = JSONField(null=True)
+    instagram_account = JSONField(null=True)
+    tiktok_account = JSONField(null=True)
+    telegram_account = JSONField(null=True)
+```
+
+### OAuth URL Generation
+
+The `oauth_utils.py` module contains platform-specific URL generators:
+
+```python
+def get_oauth_url(platform, business=False, redirect_uri=None):
+    """
+    Generate OAuth URL for specified platform.
+    
+    Args:
+        platform (str): Social media platform
+        business (bool): Request business account access
+        redirect_uri (str): Optional custom redirect URI
+    
+    Returns:
+        str: Authorization URL
+    """
+    settings = get_oauth_settings(platform)
+    
+    scopes = settings['scopes']
+    if business:
+        scopes.extend(settings['business_scopes'])
+        
+    params = {
+        'client_id': settings['client_id'],
+        'redirect_uri': redirect_uri or settings['redirect_uri'],
+        'scope': ' '.join(scopes),
+        'response_type': 'code',
+        'state': generate_state_token()
+    }
+    
+    return f"{settings['auth_url']}?{urlencode(params)}"
+```
+
+### Token Management
+
+1. **Token Storage**
+   - Tokens are encrypted before storage
+   - Refresh tokens are handled automatically
+   - Token rotation is implemented where supported
+
+2. **Token Refresh**
+   ```python
+   def refresh_oauth_token(user, platform):
+       """
+       Refresh OAuth access token if expired.
+       Implements platform-specific refresh logic.
+       """
+   ```
+
+### Error Handling
+
+Custom exceptions for OAuth-related errors:
+
+```python
+class OAuthError(Exception):
+    """Base exception for OAuth errors"""
+    pass
+
+class TokenExchangeError(OAuthError):
+    """Error during code-to-token exchange"""
+    pass
+
+class ProfileFetchError(OAuthError):
+    """Error fetching user profile"""
+    pass
+
+class TokenRefreshError(OAuthError):
+    """Error refreshing OAuth token"""
+    pass
+```
+
+### Testing
+
+1. **Unit Tests**
+   ```python
+   class OAuthTests(TestCase):
+       def test_oauth_initialization(self):
+           """Test OAuth URL generation"""
+           response = self.client.get('/api/auth/init/', {'platform': 'google'})
+           self.assertEqual(response.status_code, 200)
+           self.assertIn('auth_url', response.data)
+
+       def test_oauth_callback(self):
+           """Test OAuth callback handling"""
+           response = self.client.get('/api/auth/google/callback/', {'code': 'test_code'})
+           self.assertEqual(response.status_code, 200)
+   ```
+
+2. **Integration Tests**
+   ```python
+   class SocialIntegrationTests(TestCase):
+       def test_google_connection(self):
+           """Test complete Google OAuth flow"""
+           # Initialize OAuth
+           init_response = self.client.get('/api/auth/init/', {'platform': 'google'})
+           # Mock OAuth callback
+           callback_response = self.client.get('/api/auth/google/callback/', {'code': 'test_code'})
+           # Verify connection
+           self.assertTrue(self.user.google_account is not None)
+   ```
+
+### Security Considerations
+
+1. **Token Security**
+   - Access tokens are encrypted at rest
+   - Refresh tokens use additional encryption
+   - Token rotation is implemented where supported
+
+2. **State Validation**
+   ```python
+   def validate_oauth_state(request_state, stored_state):
+       """
+       Validate OAuth state parameter to prevent CSRF.
+       Implements time-based expiration and one-time use.
+       """
+   ```
+
+3. **Scope Management**
+   - Minimal scope requests by default
+   - Business scopes require subscription check
+   - Scope elevation requires re-authentication
+
+### Rate Limiting
+
+```python
+@method_decorator(ratelimit(key='user', rate='5/m', method=['GET']), name='get')
+def init_oauth(request):
+    """Rate limited to 5 requests per minute per user"""
+```
+
+### Monitoring
+
+1. **OAuth Metrics**
+   - Connection success/failure rates
+   - Token refresh success/failure rates
+   - API quota usage per platform
+
+2. **Logging**
+   ```python
+   logger = logging.getLogger('oauth')
+   logger.info('OAuth initialized', extra={
+       'platform': platform,
+       'user_id': user.id,
+       'business': business
+   })
+   ```
+
+### Webhook Handling
+
+```python
+def handle_oauth_webhook(request, platform):
+    """
+    Handle platform-specific OAuth webhooks.
+    - Token revocation
+    - Account disconnection
+    - Permission changes
+    """
+```
+
 ## Code Style Guidelines
 
 We follow PEP 8 with some modifications:
@@ -78,47 +304,6 @@ isort .
 flake8
 ```
 
-## Testing
-
-### Running Tests
-
-```bash
-# Run all tests
-python manage.py test
-
-# Run specific test file
-python manage.py test tests.test_subscriptions
-
-# Run with coverage
-coverage run manage.py test
-coverage report
-```
-
-### Writing Tests
-
-- Place tests in the `tests/` directory
-- Follow the `test_*.py` naming convention
-- Use descriptive test method names
-- Include docstrings explaining test purpose
-
-Example:
-```python
-from django.test import TestCase
-from users.models import User
-
-class SubscriptionTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(
-            email="test@example.com",
-            password="testpass123"
-        )
-
-    def test_free_trial_creation(self):
-        """Test that free trial is created when user registers"""
-        self.assertTrue(self.user.has_used_trial)
-        self.assertIsNotNone(self.user.current_subscription)
-```
-
 ## API Development
 
 ### Adding New Endpoints
@@ -127,25 +312,36 @@ class SubscriptionTests(TestCase):
 ```python
 from rest_framework import serializers
 
-class MyModelSerializer(serializers.ModelSerializer):
+class SocialAccountSerializer(serializers.ModelSerializer):
     class Meta:
-        model = MyModel
-        fields = ['id', 'name', 'description']
+        model = User
+        fields = [
+            'google_business_connected',
+            'facebook_business_connected',
+            'linkedin_business_connected',
+            'twitter_business_connected',
+            'instagram_business_connected',
+            'tiktok_business_connected',
+            'telegram_business_connected'
+        ]
 ```
 
 2. Create view in `views.py`:
 ```python
 from rest_framework import viewsets
 
-class MyModelViewSet(viewsets.ModelViewSet):
-    queryset = MyModel.objects.all()
-    serializer_class = MyModelSerializer
+class SocialAccountViewSet(viewsets.ModelViewSet):
+    serializer_class = SocialAccountSerializer
     permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return User.objects.filter(id=self.request.user.id)
 ```
 
 3. Add URL in `urls.py`:
 ```python
-path('my-models/', MyModelViewSet.as_view({'get': 'list', 'post': 'create'}))
+path('social-accounts/', 
+     SocialAccountViewSet.as_view({'get': 'list', 'post': 'create'}))
 ```
 
 ### API Documentation
@@ -154,208 +350,113 @@ Use Swagger decorators for documentation:
 
 ```python
 @swagger_auto_schema(
-    operation_description="Create a new resource",
-    request_body=MyModelSerializer,
+    operation_description="Connect a social media account",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'code': openapi.Schema(type=openapi.TYPE_STRING),
+            'redirect_uri': openapi.Schema(type=openapi.TYPE_STRING),
+            'business': openapi.Schema(type=openapi.TYPE_BOOLEAN)
+        },
+        required=['code']
+    ),
     responses={
-        201: MyModelSerializer,
-        400: "Bad Request",
-        403: "Forbidden"
+        200: "{'status': 'success'}",
+        400: "{'error': 'error message'}",
+        401: "{'detail': 'Authentication credentials not provided'}"
     }
 )
-def create(self, request):
+def connect_social_account(request, platform):
     # Implementation
     pass
 ```
 
-## Subscription System
+## Security Best Practices
 
-### Adding New Plan Features
+1. **Token Storage**
+   - Never store tokens in plaintext
+   - Use encryption for sensitive data
+   - Implement token rotation
 
-1. Update `SubscriptionPlan` model:
-```python
-class SubscriptionPlan(models.Model):
-    # Add new feature flag
-    has_new_feature = models.BooleanField(default=False)
-```
+2. **OAuth Security**
+   - Validate redirect URIs
+   - Use state parameter
+   - Implement PKCE for mobile apps
 
-2. Update middleware checks:
-```python
-class SubscriptionRestrictionMiddleware:
-    def __call__(self, request):
-        # Add feature check
-        if url_name == 'new-feature' and not request.user.can_use_feature('new_feature'):
-            return JsonResponse({
-                'error': 'Feature not available',
-                'code': 'feature_not_available'
-            }, status=402)
-```
+3. **API Security**
+   - Rate limiting
+   - Input validation
+   - CORS configuration
 
-### Payment Integration
-
-1. Create Stripe product and price:
-```python
-stripe.Product.create(
-    name="New Plan",
-    description="Description"
-)
-
-stripe.Price.create(
-    product="prod_xxx",
-    unit_amount=2900,  # $29.00
-    currency="usd",
-    recurring={"interval": "month"}
-)
-```
-
-2. Update subscription views:
-```python
-def create_checkout_session(request):
-    checkout_session = stripe.checkout.Session.create(
-        payment_method_types=['card'],
-        line_items=[{
-            'price': 'price_xxx',
-            'quantity': 1,
-        }],
-        mode='subscription',
-        success_url=domain + '/success',
-        cancel_url=domain + '/cancel',
-    )
-    return JsonResponse({'id': checkout_session.id})
-```
-
-## Social Media Integration
-
-### Adding New Platform
-
-1. Add model fields:
-```python
-class User(AbstractUser):
-    new_platform_id = models.CharField(max_length=255, blank=True)
-    new_platform_token = models.TextField(blank=True)
-```
-
-2. Create OAuth views:
-```python
-@api_view(['POST'])
-def connect_new_platform(request):
-    code = request.data.get('code')
-    # Implement OAuth flow
-    # Save tokens
-    return Response({'status': 'success'})
-```
-
-3. Update platform limits check:
-```python
-def check_platform_limits(user):
-    connected_platforms = sum([
-        bool(user.facebook_id),
-        bool(user.instagram_id),
-        bool(user.new_platform_id),  # Add new platform
-    ])
-    return connected_platforms <= user.get_platform_limit()
-```
+4. **Error Handling**
+   - Don't expose sensitive info in errors
+   - Log security events
+   - Monitor failed attempts
 
 ## Deployment
 
-### Production Setup
-
-1. Update settings:
-```python
-DEBUG = False
-ALLOWED_HOSTS = ['yourdomain.com']
-SECURE_SSL_REDIRECT = True
-```
-
-2. Configure web server (Nginx):
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com;
-    location / {
-        proxy_pass http://localhost:8000;
-    }
-}
-```
-
-3. Set up Gunicorn:
+1. **Environment Setup**
 ```bash
-gunicorn backend.wsgi:application --bind 0.0.0.0:8000
+# Set production environment
+export DJANGO_SETTINGS_MODULE=linkly.settings.production
+
+# Configure SSL
+python manage.py check --deploy
 ```
 
-### Environment Variables
-
-Required production variables:
-```plaintext
-DATABASE_URL=postgres://user:pass@host:5432/dbname
-REDIS_URL=redis://host:6379
-STRIPE_LIVE_SECRET_KEY=sk_live_xxx
-STRIPE_LIVE_WEBHOOK_SECRET=whsec_xxx
+2. **Database Migration**
+```bash
+python manage.py migrate --noinput
 ```
+
+3. **Static Files**
+```bash
+python manage.py collectstatic --noinput
+```
+
+4. **Security Headers**
+```python
+SECURE_HSTS_SECONDS = 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+```
+
+## Monitoring
+
+1. **Error Tracking**
+   - Sentry integration
+   - Custom error logging
+
+2. **Performance Monitoring**
+   - New Relic
+   - Django Debug Toolbar
+
+3. **Security Monitoring**
+   - Failed login attempts
+   - API usage patterns
+   - Token revocations
 
 ## Contributing
 
-1. Create feature branch:
-```bash
-git checkout -b feature/new-feature
-```
+1. Fork the repository
+2. Create a feature branch
+3. Write tests
+4. Implement changes
+5. Run linters and tests
+6. Submit pull request
 
-2. Make changes and test:
-```bash
-python manage.py test
-```
+### Pull Request Guidelines
 
-3. Update documentation:
-- Add API endpoints to Swagger
-- Update README if needed
-- Add migration notes if needed
+- Follow code style
+- Include tests
+- Update documentation
+- One feature per PR
+- Clear commit messages
 
-4. Create pull request:
-- Use descriptive title
-- Include testing steps
-- Link related issues
+## Support
 
-## Troubleshooting
-
-### Common Issues
-
-1. **Migration Conflicts**
-```bash
-python manage.py migrate --fake
-python manage.py migrate
-```
-
-2. **Stripe Webhook Errors**
-- Check webhook signature
-- Verify endpoint URL
-- Check event types
-
-3. **Social Auth Issues**
-- Verify OAuth credentials
-- Check callback URLs
-- Monitor token expiration
-
-### Debug Tools
-
-1. Django Debug Toolbar:
-```python
-INSTALLED_APPS += ['debug_toolbar']
-MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
-```
-
-2. Logging:
-```python
-LOGGING = {
-    'version': 1,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-        },
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': 'INFO',
-        },
-    },
-}
-``` 
+- Technical Documentation: [docs.linkly.com/developers](https://docs.linkly.com/developers)
+- API Reference: [docs.linkly.com/api](https://docs.linkly.com/api)
+- Developer Discord: [discord.gg/linkly-dev](https://discord.gg/linkly-dev) 

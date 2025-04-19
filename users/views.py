@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.conf import settings
-from rest_framework import generics, status, permissions
+from rest_framework import generics, status, permissions, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -9,11 +9,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django_rest_passwordreset.signals import reset_password_token_created
 from django.dispatch import receiver
 from django.urls import reverse
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
@@ -24,10 +24,18 @@ import hmac
 import tweepy
 import stripe
 from django.db.models import Q
-from datetime import datetime, timedelta
 from .models import SubscriptionPlan, Subscription
 from .utils import get_stripe_instance, get_stripe_public_key
-
+from .oauth_utils import (
+    get_google_auth_url,
+    get_facebook_auth_url,
+    get_linkedin_auth_url,
+    get_twitter_auth_url,
+    get_instagram_auth_url,
+    get_tiktok_auth_url,
+    get_telegram_auth_url,
+    verify_telegram_hash
+)
 from .serializers import (
     UserSerializer,
     RegisterSerializer,
@@ -35,7 +43,21 @@ from .serializers import (
     ChangePasswordSerializer,
     UpdateUserSerializer,
     Enable2FASerializer,
-    Verify2FASerializer
+    Verify2FASerializer,
+    SocialConnectionSerializer,
+    SocialAccountSerializer
+)
+from .services.oauth import (
+    get_google_oauth_url, get_facebook_oauth_url,
+    get_linkedin_oauth_url, get_twitter_oauth_url,
+    get_instagram_oauth_url, get_tiktok_oauth_url,
+    get_telegram_oauth_url
+)
+from .services.social import (
+    connect_google_account, connect_facebook_account,
+    connect_linkedin_account, connect_twitter_account,
+    connect_instagram_account, connect_tiktok_account,
+    connect_telegram_account
 )
 
 User = get_user_model()
@@ -75,55 +97,127 @@ class RegisterView(APIView):
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
-    Takes a set of user credentials and returns an access and refresh JSON web token pair.
+    Custom token view that returns JWT token pair.
     """
     serializer_class = CustomTokenObtainPairSerializer
 
     @swagger_auto_schema(
-        operation_description="Obtain JWT token pair with user credentials",
+        operation_summary="Login User",
+        operation_description="""
+        Authenticate user and obtain JWT token pair.
+        
+        Features:
+        - JWT token pair generation
+        - 2FA verification if enabled
+        - Token refresh capability
+        - Access token expiry: 1 hour
+        - Refresh token expiry: 24 hours
+        
+        Returns both access and refresh tokens for API authentication.
+        """,
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['email', 'password'],
+            properties={
+                'email': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    format='email',
+                    description='User email address'
+                ),
+                'password': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    format='password',
+                    description='User password'
+                ),
+                'two_factor_code': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='2FA code if enabled'
+                )
+            }
+        ),
         responses={
             200: openapi.Response(
-                description="JWT token pair obtained successfully",
+                description="Login successful",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
                     properties={
-                        'access': openapi.Schema(type=openapi.TYPE_STRING),
-                        'refresh': openapi.Schema(type=openapi.TYPE_STRING),
+                        'access': openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            description='JWT access token'
+                        ),
+                        'refresh': openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            description='JWT refresh token'
+                        ),
+                        'user': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            description='User profile information'
+                        )
                     }
                 )
             ),
-            401: openapi.Response(description="Invalid credentials")
-        }
+            400: 'Invalid credentials',
+            401: '2FA code required',
+            403: 'Account inactive'
+        },
+        tags=['Authentication']
     )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
 class Enable2FAView(generics.GenericAPIView):
     """
-    Enable Two-Factor Authentication for a user account.
+    Enable Two-Factor Authentication for user account.
     """
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = Enable2FASerializer
 
     @swagger_auto_schema(
-        operation_description="Enable 2FA for user account",
+        operation_summary="Enable 2FA",
+        operation_description="""
+        Enable Two-Factor Authentication for the user account.
+        
+        Features:
+        - TOTP-based 2FA
+        - QR code generation
+        - Backup codes generation
+        - Compatible with Google Authenticator
+        
+        Returns:
+        - QR code for scanning
+        - Secret key for manual entry
+        - One-time backup codes
+        
+        Store the backup codes securely - they won't be shown again.
+        """,
         responses={
             200: openapi.Response(
                 description="2FA enabled successfully",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
                     properties={
-                        'qr_code': openapi.Schema(type=openapi.TYPE_STRING),
-                        'secret': openapi.Schema(type=openapi.TYPE_STRING),
+                        'qr_code': openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            description='QR code data URL'
+                        ),
+                        'secret': openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            description='TOTP secret key'
+                        ),
                         'backup_codes': openapi.Schema(
                             type=openapi.TYPE_ARRAY,
-                            items=openapi.Schema(type=openapi.TYPE_STRING)
+                            items=openapi.Schema(
+                                type=openapi.TYPE_STRING
+                            ),
+                            description='One-time backup codes'
                         )
                     }
                 )
             ),
-            401: openapi.Response(description="Authentication credentials not provided")
-        }
+            401: 'Authentication required',
+            409: '2FA already enabled'
+        },
+        tags=['Authentication']
     )
     def post(self, request):
         user = request.user
@@ -145,22 +239,56 @@ class Verify2FAView(generics.GenericAPIView):
     serializer_class = Verify2FASerializer
 
     @swagger_auto_schema(
-        operation_description="Verify 2FA code and obtain tokens",
-        request_body=Verify2FASerializer,
+        operation_summary="Verify 2FA Code",
+        operation_description="""
+        Verify 2FA code and complete authentication.
+        
+        Accepts:
+        - TOTP code from authenticator app
+        - One-time backup code
+        
+        Returns JWT tokens upon successful verification.
+        Invalid attempts are rate limited.
+        """,
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['code'],
+            properties={
+                'code': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='6-digit TOTP code or backup code'
+                ),
+                'remember_device': openapi.Schema(
+                    type=openapi.TYPE_BOOLEAN,
+                    description='Remember device for 30 days'
+                )
+            }
+        ),
         responses={
             200: openapi.Response(
                 description="2FA verification successful",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
                     properties={
-                        'access': openapi.Schema(type=openapi.TYPE_STRING),
-                        'refresh': openapi.Schema(type=openapi.TYPE_STRING),
-                        'user': openapi.Schema(type=openapi.TYPE_OBJECT)
+                        'access': openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            description='JWT access token'
+                        ),
+                        'refresh': openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            description='JWT refresh token'
+                        ),
+                        'user': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            description='User profile information'
+                        )
                     }
                 )
             ),
-            400: openapi.Response(description="Invalid 2FA code")
-        }
+            400: 'Invalid 2FA code',
+            429: 'Too many attempts'
+        },
+        tags=['Authentication']
     )
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -288,12 +416,26 @@ class ValidateTokenView(generics.GenericAPIView):
     permission_classes = (permissions.AllowAny,)
 
     @swagger_auto_schema(
-        operation_description="Validate JWT token",
+        operation_summary="Validate Token",
+        operation_description="""
+        Validate JWT token and return user information.
+        
+        Features:
+        - Token validation
+        - Token expiry check
+        - User status check
+        - Profile information return
+        
+        Use this endpoint to verify token validity and get user data.
+        """,
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['token'],
             properties={
-                'token': openapi.Schema(type=openapi.TYPE_STRING)
+                'token': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='JWT access token to validate'
+                )
             }
         ),
         responses={
@@ -302,1414 +444,1362 @@ class ValidateTokenView(generics.GenericAPIView):
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
                     properties={
-                        'valid': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'user': openapi.Schema(type=openapi.TYPE_OBJECT)
+                        'valid': openapi.Schema(
+                            type=openapi.TYPE_BOOLEAN,
+                            description='Token validity status'
+                        ),
+                        'user': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            description='User profile information'
+                        )
                     }
                 )
             ),
-            401: openapi.Response(description="Token is invalid")
-        }
+            401: 'Token is invalid or expired'
+        },
+        tags=['Authentication']
     )
     def post(self, request):
         token = request.data.get('token')
         try:
             user = User.objects.get(access_token_jwt=token)
             if user.token_created_at and (datetime.now() - user.token_created_at).days < 1:
-                return Response({'valid': True, 'user': UserSerializer(user).data})
+                return Response({
+                    'valid': True,
+                    'user': UserSerializer(user).data
+                })
             return Response({'valid': False}, status=status.HTTP_401_UNAUTHORIZED)
         except User.DoesNotExist:
             return Response({'valid': False}, status=status.HTTP_401_UNAUTHORIZED)
 
 @swagger_auto_schema(
     method='post',
-    operation_description="Handle Google OAuth2 callback",
+    operation_summary="Register New User",
+    operation_description="""
+    Register a new user account.
+    
+    Features:
+    - Email verification
+    - Automatic free trial activation
+    - Optional business account setup
+    
+    A verification email will be sent to complete registration.
+    """,
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        required=['access_token'],
+        required=['email', 'password', 'username'],
         properties={
-            'access_token': openapi.Schema(type=openapi.TYPE_STRING)
+            'email': openapi.Schema(type=openapi.TYPE_STRING, format='email'),
+            'password': openapi.Schema(type=openapi.TYPE_STRING, format='password'),
+            'username': openapi.Schema(type=openapi.TYPE_STRING),
+            'is_business': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+            'company_name': openapi.Schema(type=openapi.TYPE_STRING),
+            'business_description': openapi.Schema(type=openapi.TYPE_STRING),
+            'website': openapi.Schema(type=openapi.TYPE_STRING, format='uri'),
+            'industry': openapi.Schema(type=openapi.TYPE_STRING)
         }
     ),
     responses={
-        200: openapi.Response(
-            description="Google authentication successful",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'tokens': openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            'refresh': openapi.Schema(type=openapi.TYPE_STRING),
-                            'access': openapi.Schema(type=openapi.TYPE_STRING)
-                        }
-                    ),
-                    'user': openapi.Schema(type=openapi.TYPE_OBJECT)
-                }
-            )
+        201: openapi.Response(
+            description="User registered successfully",
+            schema=UserSerializer
         ),
-        400: openapi.Response(description="Invalid Google token")
-    }
+        400: 'Invalid registration data',
+        409: 'Email already registered'
+    },
+    tags=['Authentication']
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@csrf_exempt
-def google_auth_callback(request):
-    """Handle Google OAuth2 callback"""
-    try:
-        data = json.loads(request.body)
-        access_token = data.get('access_token')
-        
-        # Verify token with Google
-        google_user_info = requests.get(
-            'https://www.googleapis.com/oauth2/v3/userinfo',
-            headers={'Authorization': f'Bearer {access_token}'}
-        ).json()
-        
-        if 'error' in google_user_info:
-            return JsonResponse({'error': 'Invalid Google token'}, status=400)
-        
-        email = google_user_info.get('email')
-        google_id = google_user_info.get('sub')
-        
-        user, created = User.objects.get_or_create(
-            google_id=google_id,
-            defaults={
-                'email': email,
-                'username': email,
-                'first_name': google_user_info.get('given_name', ''),
-                'last_name': google_user_info.get('family_name', ''),
-            }
-        )
-        
-        user.update_social_token('google', access_token)
-        
-        refresh = RefreshToken.for_user(user)
-        tokens = {
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        }
-        
-        return JsonResponse({
-            'tokens': tokens,
-            'user': {
-                'id': user.id,
-                'email': user.email,
-            }
-        })
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
-
-@swagger_auto_schema(
-    method='post',
-    operation_description="Handle Facebook OAuth2 callback",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        required=['access_token'],
-        properties={
-            'access_token': openapi.Schema(type=openapi.TYPE_STRING)
-        }
-    ),
-    responses={
-        200: openapi.Response(
-            description="Facebook authentication successful",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'tokens': openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            'refresh': openapi.Schema(type=openapi.TYPE_STRING),
-                            'access': openapi.Schema(type=openapi.TYPE_STRING)
-                        }
-                    ),
-                    'user': openapi.Schema(type=openapi.TYPE_OBJECT)
-                }
-            )
-        ),
-        400: openapi.Response(description="Invalid Facebook token")
-    }
-)
-@api_view(['POST'])
-@permission_classes([AllowAny])
-@csrf_exempt
-def facebook_auth_callback(request):
-    """Handle Facebook OAuth2 callback"""
-    try:
-        data = json.loads(request.body)
-        access_token = data.get('access_token')
-        
-        # Verify token with Facebook
-        fb_user_info = requests.get(
-            'https://graph.facebook.com/me',
-            params={
-                'fields': 'id,email,first_name,last_name',
-                'access_token': access_token
-            }
-        ).json()
-        
-        if 'error' in fb_user_info:
-            return JsonResponse({'error': 'Invalid Facebook token'}, status=400)
-        
-        email = fb_user_info.get('email')
-        facebook_id = fb_user_info.get('id')
-        
-        # Get or create user
-        user, created = User.objects.get_or_create(
-            facebook_id=facebook_id,
-            defaults={
-                'email': email,
-                'username': email,
-                'first_name': fb_user_info.get('first_name', ''),
-                'last_name': fb_user_info.get('last_name', ''),
-            }
-        )
-        
-        # Update user's Facebook token
-        user.update_social_token('facebook', access_token)
-        
-        # Generate JWT tokens
-        refresh = RefreshToken.for_user(user)
-        tokens = {
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        }
-        
-        return JsonResponse({
-            'tokens': tokens,
-            'user': {
-                'id': user.id,
-                'email': user.email,
-                'name': f'{user.first_name} {user.last_name}'.strip(),
-                'is_business': user.is_business,
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
-
-@swagger_auto_schema(
-    method='post',
-    operation_description="Handle LinkedIn OAuth2 callback",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        required=['access_token'],
-        properties={
-            'access_token': openapi.Schema(type=openapi.TYPE_STRING)
-        }
-    ),
-    responses={
-        200: openapi.Response(
-            description="LinkedIn authentication successful",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'tokens': openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            'refresh': openapi.Schema(type=openapi.TYPE_STRING),
-                            'access': openapi.Schema(type=openapi.TYPE_STRING)
-                        }
-                    ),
-                    'user': openapi.Schema(type=openapi.TYPE_OBJECT)
-                }
-            )
-        ),
-        400: openapi.Response(description="Invalid LinkedIn token")
-    }
-)
-@api_view(['POST'])
-@permission_classes([AllowAny])
-@csrf_exempt
-def linkedin_auth_callback(request):
-    """Handle LinkedIn OAuth2 callback"""
-    try:
-        data = json.loads(request.body)
-        access_token = data.get('access_token')
-        company_id = data.get('company_id')
-        
-        if not access_token or not company_id:
-            return Response({
-                'error': 'Missing required parameters'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Get company details
-        headers = {'Authorization': f'Bearer {access_token}'}
-        company_info = requests.get(
-            f'https://api.linkedin.com/v2/organizations/{company_id}',
-            headers=headers
-        ).json()
-        
-        if 'error' in company_info:
-            return Response({
-                'error': 'Invalid access token or company ID'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Get follower statistics
-        follower_stats = requests.get(
-            f'https://api.linkedin.com/v2/organizations/{company_id}/followingStatistics',
-            headers=headers
-        ).json()
-        
-        user = request.user
-        user.linkedin_company_id = company_id
-        user.linkedin_company_token = access_token
-        user.linkedin_company_name = company_info.get('localizedName')
-        user.linkedin_company_page = f"https://www.linkedin.com/company/{company_id}"
-        user.linkedin_company_followers = follower_stats.get('totalFollowerCount', 0)
-        user.has_linkedin_company = True
-        user.metrics_last_updated = datetime.now()
-        user.save()
-        
-        return Response({
-            'success': True,
-            'company': {
-                'id': company_id,
-                'name': user.linkedin_company_name,
-                'url': user.linkedin_company_page,
-                'followers': user.linkedin_company_followers
-            }
-        })
-    except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def unlink_social_account(request, platform):
-    """Unlink a social media account"""
-    try:
-        user = request.user
-        platform_id = f"{platform}_id"
-        platform_token = f"{platform}_access_token"
-        platform_expiry = f"{platform}_token_expiry"
-        
-        if hasattr(user, platform_id):
-            setattr(user, platform_id, None)
-            setattr(user, platform_token, None)
-            setattr(user, platform_expiry, None)
-            user.save()
-            
-            return JsonResponse({'message': f'{platform.title()} account unlinked successfully'})
-        else:
-            return JsonResponse({'error': 'Invalid platform'}, status=400)
-            
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_youtube(request):
-    """Connect YouTube account to existing user"""
-    try:
-        data = json.loads(request.body)
-        code = data.get('code')
-        redirect_uri = data.get('redirect_uri')
-        
-        # Exchange code for tokens
-        token_response = requests.post(
-            'https://oauth2.googleapis.com/token',
-            data={
-                'code': code,
-                'client_id': settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY,
-                'client_secret': settings.SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET,
-                'redirect_uri': redirect_uri,
-                'grant_type': 'authorization_code'
-            }
-        ).json()
-        
-        if 'error' in token_response:
-            return JsonResponse({'error': 'Invalid YouTube authorization code'}, status=400)
-        
-        access_token = token_response.get('access_token')
-        refresh_token = token_response.get('refresh_token')
-        expires_in = token_response.get('expires_in', 3600)
-        
-        # Get YouTube channel info
-        headers = {'Authorization': f'Bearer {access_token}'}
-        channel_response = requests.get(
-            'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
-            headers=headers
-        ).json()
-        
-        if 'error' in channel_response:
-            return JsonResponse({'error': 'Failed to fetch YouTube channel info'}, status=400)
-        
-        channel = channel_response.get('items', [{}])[0]
-        channel_id = channel.get('id')
-        channel_title = channel.get('snippet', {}).get('title')
-        
-        # Update user's YouTube info
-        user = request.user
-        user.youtube_id = channel_id
-        user.youtube_channel_id = channel_id
-        user.youtube_channel_title = channel_title
-        user.youtube_channel = f'https://www.youtube.com/channel/{channel_id}'
-        user.youtube_access_token = access_token
-        user.youtube_refresh_token = refresh_token
-        user.update_social_token('youtube', access_token, expires_in)
-        user.save()
-        
-        return JsonResponse({
-            'message': 'YouTube account connected successfully',
-            'channel': {
-                'id': channel_id,
-                'title': channel_title,
-                'url': user.youtube_channel
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_facebook(request):
-    """Connect Facebook account to existing user"""
-    try:
-        data = json.loads(request.body)
-        access_token = data.get('access_token')
-        
-        # Verify Facebook token and get user info
-        fb_user_info = requests.get(
-            'https://graph.facebook.com/me',
-            params={
-                'fields': 'id,email,name,picture',
-                'access_token': access_token
-            }
-        ).json()
-        
-        if 'error' in fb_user_info:
-            return JsonResponse({'error': 'Invalid Facebook token'}, status=400)
-        
-        facebook_id = fb_user_info.get('id')
-        
-        # Check if this Facebook account is already connected to another user
-        if User.objects.filter(facebook_id=facebook_id).exclude(id=request.user.id).exists():
-            return JsonResponse({'error': 'This Facebook account is already connected to another user'}, status=400)
-        
-        # Update user's Facebook info
-        user = request.user
-        user.facebook_id = facebook_id
-        user.facebook_page = f'https://facebook.com/{facebook_id}'
-        user.update_social_token('facebook', access_token)
-        user.save()
-        
-        return JsonResponse({
-            'message': 'Facebook account connected successfully',
-            'facebook_id': facebook_id,
-            'facebook_page': user.facebook_page
-        })
-        
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+def register_user(request):
+    """Register a new user"""
+    serializer = RegisterSerializer(data=request.data)
+    if serializer.is_valid():
+        user = serializer.save()
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def get_connected_accounts(request):
-    """Get user's connected social accounts"""
-    user = request.user
+@permission_classes([IsAuthenticated])
+@swagger_auto_schema(
+    operation_summary="Initialize Social OAuth",
+    operation_description="""
+    Initialize OAuth flow for social media platform connection.
     
-    connected_accounts = {
-        'google': bool(user.google_id),
-        'facebook': bool(user.facebook_id),
-        'linkedin': bool(user.linkedin_id),
-        'youtube': bool(user.youtube_id),
-        'telegram': bool(user.telegram_id),
-        'instagram': bool(user.instagram_id),
-        'twitter': bool(user.twitter_id),
-        'tiktok': bool(user.tiktok_id),
-        'accounts': {
-            'google': {
-                'connected': bool(user.google_id),
-                'email': user.email if user.google_id else None,
-                'token_valid': user.is_social_token_valid('google')
-            },
-            'facebook': {
-                'connected': bool(user.facebook_id),
-                'page_url': user.facebook_page if user.facebook_id else None,
-                'token_valid': user.is_social_token_valid('facebook')
-            },
-            'youtube': {
-                'connected': bool(user.youtube_id),
-                'channel_title': user.youtube_channel_title if user.youtube_id else None,
-                'channel_url': user.youtube_channel if user.youtube_id else None,
-                'token_valid': user.is_social_token_valid('youtube')
-            },
-            'telegram': {
-                'connected': bool(user.telegram_id),
-                'username': user.telegram_username if user.telegram_id else None,
-                'chat_id': user.telegram_chat_id if user.telegram_id else None,
-                'token_valid': user.is_social_token_valid('telegram')
-            },
-            'instagram': {
-                'connected': bool(user.instagram_id),
-                'username': user.instagram_handle if user.instagram_id else None,
-                'profile_url': user.instagram_profile_url if user.instagram_id else None,
-                'token_valid': user.is_social_token_valid('instagram')
-            },
-            'twitter': {
-                'connected': bool(user.twitter_id),
-                'username': user.twitter_handle if user.twitter_id else None,
-                'profile_url': user.twitter_profile_url if user.twitter_id else None,
-                'token_valid': user.is_social_token_valid('twitter')
-            },
-            'tiktok': {
-                'connected': bool(user.tiktok_id),
-                'username': user.tiktok_handle if user.tiktok_id else None,
-                'profile_url': user.tiktok_profile_url if user.tiktok_id else None,
-                'token_valid': user.is_social_token_valid('tiktok')
-            }
-        }
-    }
+    Supported Platforms:
+    - Google
+    - Facebook
+    - LinkedIn
+    - Twitter
+    - Instagram
+    - TikTok
+    - Telegram
     
-    return JsonResponse(connected_accounts)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_telegram(request):
-    """Connect Telegram account to existing user"""
-    try:
-        data = json.loads(request.body)
-        auth_data = data.get('auth_data')  # Telegram auth data from Widget
-        bot_token = settings.TELEGRAM_BOT_TOKEN
-        
-        # Verify Telegram auth data
-        auth_string = []
-        for key in sorted(auth_data.keys()):
-            if key != 'hash':
-                auth_string.append(f'{key}={auth_data[key]}')
-        
-        auth_string = '\n'.join(auth_string)
-        secret_key = hashlib.sha256(bot_token.encode()).digest()
-        hash = hmac.new(secret_key, auth_string.encode(), hashlib.sha256).hexdigest()
-        
-        if hash != auth_data['hash']:
-            return JsonResponse({'error': 'Invalid Telegram authentication'}, status=400)
-        
-        telegram_id = str(auth_data.get('id'))
-        username = auth_data.get('username', '')
-        first_name = auth_data.get('first_name', '')
-        
-        # Check if this Telegram account is already connected to another user
-        if User.objects.filter(telegram_id=telegram_id).exclude(id=request.user.id).exists():
-            return JsonResponse({'error': 'This Telegram account is already connected to another user'}, status=400)
-        
-        # Update user's Telegram info
-        user = request.user
-        user.telegram_id = telegram_id
-        user.telegram_username = username
-        user.telegram_chat_id = telegram_id  # Used for sending notifications
-        user.save()
-        
-        # Optional: Send welcome message via Telegram bot
-        try:
-            bot_url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
-            message = f'Hello {first_name}! Your Linkly account has been successfully connected.'
-            requests.post(bot_url, json={
-                'chat_id': telegram_id,
-                'text': message
-            })
-        except Exception as e:
-            # Log the error but don't fail the connection
-            print(f"Failed to send Telegram welcome message: {str(e)}")
-        
-        return JsonResponse({
-            'message': 'Telegram account connected successfully',
-            'telegram_data': {
-                'id': telegram_id,
-                'username': username,
-                'first_name': first_name
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_instagram(request):
-    """Connect Instagram account to existing user"""
-    try:
-        data = json.loads(request.body)
-        code = data.get('code')
-        redirect_uri = data.get('redirect_uri')
-        
-        # Exchange code for token
-        token_response = requests.post(
-            'https://api.instagram.com/oauth/access_token',
-            data={
-                'client_id': settings.INSTAGRAM_CLIENT_ID,
-                'client_secret': settings.INSTAGRAM_CLIENT_SECRET,
-                'grant_type': 'authorization_code',
-                'redirect_uri': redirect_uri,
-                'code': code
-            }
-        ).json()
-        
-        if 'error' in token_response:
-            return JsonResponse({'error': 'Invalid Instagram authorization code'}, status=400)
-        
-        access_token = token_response.get('access_token')
-        user_id = token_response.get('user_id')
-        
-        # Get user profile
-        profile_response = requests.get(
-            f'https://graph.instagram.com/me?fields=id,username&access_token={access_token}'
-        ).json()
-        
-        if 'error' in profile_response:
-            return JsonResponse({'error': 'Failed to fetch Instagram profile'}, status=400)
-        
-        instagram_id = profile_response.get('id')
-        username = profile_response.get('username')
-        
-        # Check if this Instagram account is already connected
-        if User.objects.filter(instagram_id=instagram_id).exclude(id=request.user.id).exists():
-            return JsonResponse({'error': 'This Instagram account is already connected to another user'}, status=400)
-        
-        # Update user's Instagram info
-        user = request.user
-        user.instagram_id = instagram_id
-        user.instagram_handle = username
-        user.instagram_profile_url = f'https://instagram.com/{username}'
-        user.instagram_access_token = access_token
-        user.update_social_token('instagram', access_token)
-        user.save()
-        
-        return JsonResponse({
-            'message': 'Instagram account connected successfully',
-            'instagram_data': {
-                'id': instagram_id,
-                'username': username,
-                'profile_url': user.instagram_profile_url
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_twitter(request):
-    """Connect Twitter/X account to existing user"""
-    try:
-        data = json.loads(request.body)
-        oauth_token = data.get('oauth_token')
-        oauth_verifier = data.get('oauth_verifier')
-        
-        # Exchange OAuth tokens
-        auth = tweepy.OAuthHandler(
-            settings.TWITTER_API_KEY,
-            settings.TWITTER_API_SECRET
+    Returns an authorization URL for the specified platform.
+    Business account connection requires additional scopes.
+    """,
+    manual_parameters=[
+        openapi.Parameter(
+            'platform',
+            openapi.IN_QUERY,
+            description="Social media platform",
+            type=openapi.TYPE_STRING,
+            enum=['google', 'facebook', 'linkedin', 'twitter', 'instagram', 'tiktok', 'telegram'],
+            required=True
+        ),
+        openapi.Parameter(
+            'business',
+            openapi.IN_QUERY,
+            description="Request business account access",
+            type=openapi.TYPE_BOOLEAN,
+            default=False
+        ),
+        openapi.Parameter(
+            'redirect_uri',
+            openapi.IN_QUERY,
+            description="OAuth redirect URI",
+            type=openapi.TYPE_STRING,
+            format='uri'
         )
-        auth.request_token = {'oauth_token': oauth_token, 'oauth_token_secret': oauth_verifier}
-        
-        try:
-            auth.get_access_token(oauth_verifier)
-        except tweepy.TweepError:
-            return JsonResponse({'error': 'Failed to verify Twitter credentials'}, status=400)
-        
-        access_token = auth.access_token
-        access_token_secret = auth.access_token_secret
-        
-        # Get user profile
-        api = tweepy.API(auth)
-        twitter_user = api.verify_credentials()
-        
-        twitter_id = str(twitter_user.id)
-        username = twitter_user.screen_name
-        
-        # Check if this Twitter account is already connected
-        if User.objects.filter(twitter_id=twitter_id).exclude(id=request.user.id).exists():
-            return JsonResponse({'error': 'This Twitter account is already connected to another user'}, status=400)
-        
-        # Update user's Twitter info
-        user = request.user
-        user.twitter_id = twitter_id
-        user.twitter_handle = username
-        user.twitter_profile_url = f'https://twitter.com/{username}'
-        user.twitter_access_token = access_token
-        user.twitter_access_token_secret = access_token_secret
-        user.update_social_token('twitter', access_token)
-        user.save()
-        
-        return JsonResponse({
-            'message': 'Twitter account connected successfully',
-            'twitter_data': {
-                'id': twitter_id,
-                'username': username,
-                'profile_url': user.twitter_profile_url
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_tiktok(request):
-    """Connect TikTok account to existing user"""
+    ],
+    responses={
+        200: openapi.Response(
+            description="OAuth URL generated successfully",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'auth_url': openapi.Schema(type=openapi.TYPE_STRING, format='uri')
+                }
+            )
+        ),
+        400: 'Invalid platform or parameters',
+        401: 'Authentication required',
+        403: 'Insufficient subscription plan'
+    },
+    tags=['Social Integration']
+)
+def init_oauth(request):
+    """Initialize OAuth flow for social platform"""
+    platform = request.query_params.get('platform')
+    business = request.query_params.get('business', 'false').lower() == 'true'
+    redirect_uri = request.query_params.get('redirect_uri')
+    
+    oauth_functions = {
+        'google': get_google_oauth_url,
+        'facebook': get_facebook_oauth_url,
+        'linkedin': get_linkedin_oauth_url,
+        'twitter': get_twitter_oauth_url,
+        'instagram': get_instagram_oauth_url,
+        'tiktok': get_tiktok_oauth_url,
+        'telegram': get_telegram_oauth_url
+    }
+    
+    if platform not in oauth_functions:
+        return Response(
+            {'error': 'Invalid platform'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
     try:
-        data = json.loads(request.body)
-        code = data.get('code')
-        
-        # Exchange code for token
-        token_response = requests.post(
-            'https://open-api.tiktok.com/oauth/access_token/',
-            params={
-                'client_key': settings.TIKTOK_CLIENT_KEY,
-                'client_secret': settings.TIKTOK_CLIENT_SECRET,
-                'code': code,
-                'grant_type': 'authorization_code'
-            }
-        ).json()
-        
-        if 'data' not in token_response or 'error' in token_response:
-            return JsonResponse({'error': 'Invalid TikTok authorization code'}, status=400)
-        
-        data = token_response['data']
-        access_token = data.get('access_token')
-        open_id = data.get('open_id')
-        
-        # Get user info
-        user_response = requests.get(
-            'https://open-api.tiktok.com/user/info/',
-            params={
-                'access_token': access_token,
-                'open_id': open_id,
-                'fields': ['open_id', 'union_id', 'avatar_url', 'display_name']
-            }
-        ).json()
-        
-        if 'data' not in user_response or 'error' in user_response:
-            return JsonResponse({'error': 'Failed to fetch TikTok user info'}, status=400)
-        
-        tiktok_data = user_response['data']
-        display_name = tiktok_data.get('display_name')
-        
-        # Check if this TikTok account is already connected
-        if User.objects.filter(tiktok_id=open_id).exclude(id=request.user.id).exists():
-            return JsonResponse({'error': 'This TikTok account is already connected to another user'}, status=400)
-        
-        # Update user's TikTok info
-        user = request.user
-        user.tiktok_id = open_id
-        user.tiktok_handle = display_name
-        user.tiktok_profile_url = f'https://tiktok.com/@{display_name}'
-        user.tiktok_access_token = access_token
-        user.update_social_token('tiktok', access_token)
-        user.save()
-        
-        return JsonResponse({
-            'message': 'TikTok account connected successfully',
-            'tiktok_data': {
-                'id': open_id,
-                'display_name': display_name,
-                'profile_url': user.tiktok_profile_url
-            }
-        })
-        
+        auth_url = oauth_functions[platform](
+            business=business,
+            redirect_uri=redirect_uri
+        )
+        return Response({'auth_url': auth_url})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_facebook_page(request):
-    """Connect a Facebook Business Page"""
-    try:
-        page_id = request.data.get('page_id')
-        access_token = request.data.get('access_token')
-        
-        if not page_id or not access_token:
-            return Response({
-                'error': 'Missing required parameters'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Verify page access token and get page details
-        page_info = requests.get(
-            f'https://graph.facebook.com/v18.0/{page_id}',
-            params={
-                'access_token': access_token,
-                'fields': 'name,category,fan_count,link'
-            }
-        ).json()
-        
-        if 'error' in page_info:
-            return Response({
-                'error': 'Invalid page access token or page ID'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        user = request.user
-        user.facebook_page_id = page_id
-        user.facebook_page_token = access_token
-        user.facebook_page_name = page_info.get('name')
-        user.facebook_page_category = page_info.get('category')
-        user.facebook_page = page_info.get('link')
-        user.facebook_page_followers = page_info.get('fan_count', 0)
-        user.has_facebook_business = True
-        user.metrics_last_updated = datetime.now()
-        user.save()
-        
-        return Response({
-            'success': True,
-            'page': {
-                'id': page_id,
-                'name': user.facebook_page_name,
-                'category': user.facebook_page_category,
-                'followers': user.facebook_page_followers,
-                'url': user.facebook_page
-            }
-        })
-    except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @swagger_auto_schema(
     method='post',
-    operation_description="Connect Instagram Business Account",
+    operation_summary="Connect Social Account",
+    operation_description="""
+    Connect a social media account using OAuth token.
+    
+    Features:
+    - Automatic token refresh setup
+    - Profile information sync
+    - Business account detection
+    - Analytics integration
+    
+    Token expiry and refresh schedules are handled automatically.
+    """,
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        required=['code', 'redirect_uri'],
+        required=['platform', 'access_token'],
         properties={
-            'code': openapi.Schema(type=openapi.TYPE_STRING),
-            'redirect_uri': openapi.Schema(type=openapi.TYPE_STRING)
+            'platform': openapi.Schema(
+                type=openapi.TYPE_STRING,
+                enum=['google', 'facebook', 'linkedin', 'twitter', 'instagram', 'tiktok', 'telegram']
+            ),
+            'access_token': openapi.Schema(type=openapi.TYPE_STRING),
+            'refresh_token': openapi.Schema(type=openapi.TYPE_STRING),
+            'expires_in': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'business': openapi.Schema(type=openapi.TYPE_BOOLEAN)
         }
     ),
     responses={
         200: openapi.Response(
-            description="Instagram Business Account connected successfully",
+            description="Account connected successfully",
             schema=openapi.Schema(
                 type=openapi.TYPE_OBJECT,
                 properties={
                     'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                    'account_info': openapi.Schema(type=openapi.TYPE_OBJECT)
+                    'platform': openapi.Schema(type=openapi.TYPE_STRING),
+                    'account_type': openapi.Schema(
+                        type=openapi.TYPE_STRING,
+                        enum=['personal', 'business']
+                    ),
+                    'profile': openapi.Schema(type=openapi.TYPE_OBJECT)
                 }
             )
         ),
-        400: openapi.Response(description="Invalid Instagram code")
-    }
+        400: 'Invalid token or platform',
+        401: 'Authentication required',
+        402: 'Subscription plan limit reached',
+        409: 'Account already connected'
+    },
+    tags=['Social Integration']
 )
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_instagram_business(request):
-    """Connect Instagram Business Account"""
-    try:
-        code = request.data.get('code')
-        redirect_uri = request.data.get('redirect_uri')
-        
-        if not code or not redirect_uri:
-            return Response({
-                'error': 'Missing required parameters'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Exchange code for token
-        token_response = requests.post(
-            'https://api.instagram.com/oauth/access_token',
-            data={
-                'client_id': settings.INSTAGRAM_CLIENT_ID,
-                'client_secret': settings.INSTAGRAM_CLIENT_SECRET,
-                'grant_type': 'authorization_code',
-                'redirect_uri': redirect_uri,
-                'code': code
-            }
-        ).json()
-        
-        if 'error' in token_response:
-            return Response({
-                'error': token_response['error_message']
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        access_token = token_response['access_token']
-        instagram_user_id = token_response['user_id']
-        
-        # Get user info
-        user_info = requests.get(
-            f'https://graph.instagram.com/v12.0/{instagram_user_id}',
-            params={
-                'fields': 'id,username,account_type,media_count',
-                'access_token': access_token
-            }
-        ).json()
-        
-        if user_info.get('account_type') != 'BUSINESS':
-            return Response({
-                'error': 'This endpoint requires an Instagram Business Account'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        user = request.user
-        user.instagram_business_id = instagram_user_id
-        user.instagram_business_name = user_info['username']
-        user.instagram_business_token = access_token
-        user.has_instagram_business = True
-        user.metrics_last_updated = datetime.now()
-        user.save()
-        
+@permission_classes([IsAuthenticated])
+def connect_social_account(request):
+    """Connect a social media account"""
+    platform = request.data.get('platform')
+    access_token = request.data.get('access_token')
+    refresh_token = request.data.get('refresh_token')
+    expires_in = request.data.get('expires_in')
+    business = request.data.get('business', False)
+    
+    if not platform or not access_token:
         return Response({
-            'success': True,
-            'account_info': {
-                'id': user.instagram_business_id,
-                'username': user.instagram_business_name,
-                'media_count': user_info.get('media_count', 0)
-            }
-        })
+            'error': 'Missing required parameters'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = request.user
+        
+        # Check subscription limits
+        connected_accounts = user.get_connected_accounts_count()
+        subscription = user.current_subscription
+        
+        if subscription and connected_accounts >= subscription.plan.social_accounts_limit:
+            return Response({
+                'error': 'Social accounts limit reached for your subscription plan'
+            }, status=status.HTTP_402_PAYMENT_REQUIRED)
+        
+        # Connect account based on platform
+        if platform == 'facebook':
+            result = user.connect_facebook(access_token, business)
+        elif platform == 'instagram':
+            result = user.connect_instagram(access_token, business)
+        elif platform == 'twitter':
+            result = user.connect_twitter(access_token, business)
+        elif platform == 'linkedin':
+            result = user.connect_linkedin(access_token, business)
+        elif platform == 'tiktok':
+            result = user.connect_tiktok(access_token, business)
+        elif platform == 'telegram':
+            result = user.connect_telegram(access_token)
+        else:
+            return Response({
+                'error': 'Invalid platform'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result)
         
     except Exception as e:
         return Response({
             'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_linkedin_company(request):
-    """Connect a LinkedIn Company Page"""
-    try:
-        access_token = request.data.get('access_token')
-        company_id = request.data.get('company_id')
-        
-        if not access_token or not company_id:
-            return Response({
-                'error': 'Missing required parameters'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Get company details
-        headers = {'Authorization': f'Bearer {access_token}'}
-        company_info = requests.get(
-            f'https://api.linkedin.com/v2/organizations/{company_id}',
-            headers=headers
-        ).json()
-        
-        if 'error' in company_info:
-            return Response({
-                'error': 'Invalid access token or company ID'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Get follower statistics
-        follower_stats = requests.get(
-            f'https://api.linkedin.com/v2/organizations/{company_id}/followingStatistics',
-            headers=headers
-        ).json()
-        
-        user = request.user
-        user.linkedin_company_id = company_id
-        user.linkedin_company_token = access_token
-        user.linkedin_company_name = company_info.get('localizedName')
-        user.linkedin_company_page = f"https://www.linkedin.com/company/{company_id}"
-        user.linkedin_company_followers = follower_stats.get('totalFollowerCount', 0)
-        user.has_linkedin_company = True
-        user.metrics_last_updated = datetime.now()
-        user.save()
-        
-        return Response({
-            'success': True,
-            'company': {
-                'id': company_id,
-                'name': user.linkedin_company_name,
-                'url': user.linkedin_company_page,
-                'followers': user.linkedin_company_followers
-            }
-        })
-    except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_youtube_brand(request):
-    """Connect a YouTube Brand Account"""
-    try:
-        access_token = request.data.get('access_token')
-        brand_id = request.data.get('brand_id')
-        
-        if not access_token or not brand_id:
-            return Response({
-                'error': 'Missing required parameters'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Get channel details
-        headers = {'Authorization': f'Bearer {access_token}'}
-        channel_info = requests.get(
-            'https://youtube.googleapis.com/youtube/v3/channels',
-            params={
-                'part': 'snippet,statistics',
-                'id': brand_id
-            },
-            headers=headers
-        ).json()
-        
-        if 'error' in channel_info:
-            return Response({
-                'error': 'Invalid access token or brand ID'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        channel = channel_info.get('items', [{}])[0]
-        snippet = channel.get('snippet', {})
-        statistics = channel.get('statistics', {})
-        
-        user = request.user
-        user.youtube_brand_id = brand_id
-        user.youtube_brand_token = access_token
-        user.youtube_brand_name = snippet.get('title')
-        user.youtube_channel = f"https://youtube.com/channel/{brand_id}"
-        user.youtube_subscribers = int(statistics.get('subscriberCount', 0))
-        user.has_youtube_brand = True
-        user.metrics_last_updated = datetime.now()
-        user.save()
-        
-        return Response({
-            'success': True,
-            'channel': {
-                'id': brand_id,
-                'name': user.youtube_brand_name,
-                'url': user.youtube_channel,
-                'subscribers': user.youtube_subscribers
-            }
-        })
-    except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_tiktok_business(request):
-    """Connect a TikTok Business Account"""
-    try:
-        code = request.data.get('code')
-        
-        if not code:
-            return Response({
-                'error': 'Missing authorization code'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Exchange code for access token
-        token_response = requests.post(
-            'https://open-api.tiktok.com/oauth/access_token/',
-            params={
-                'client_key': settings.TIKTOK_CLIENT_KEY,
-                'client_secret': settings.TIKTOK_CLIENT_SECRET,
-                'code': code,
-                'grant_type': 'authorization_code'
-            }
-        ).json()
-        
-        if 'error' in token_response:
-            return Response({
-                'error': 'Invalid authorization code'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        access_token = token_response.get('access_token')
-        open_id = token_response.get('open_id')
-        
-        # Get business account info
-        account_info = requests.get(
-            'https://open-api.tiktok.com/business/profile/info/',
-            params={
-                'access_token': access_token,
-                'open_id': open_id
-            }
-        ).json()
-        
-        user = request.user
-        user.tiktok_business_id = open_id
-        user.tiktok_business_token = access_token
-        user.tiktok_business_name = account_info.get('display_name')
-        user.tiktok_business_category = account_info.get('category')
-        user.tiktok_profile_url = f"https://tiktok.com/@{account_info.get('username')}"
-        user.tiktok_followers = account_info.get('follower_count', 0)
-        user.has_tiktok_business = True
-        user.metrics_last_updated = datetime.now()
-        user.save()
-        
-        return Response({
-            'success': True,
-            'account': {
-                'id': open_id,
-                'name': user.tiktok_business_name,
-                'category': user.tiktok_business_category,
-                'url': user.tiktok_profile_url,
-                'followers': user.tiktok_followers
-            }
-        })
-    except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @swagger_auto_schema(
     method='post',
-    operation_description="Connect Instagram Business Account",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        required=['access_token'],
-        properties={
-            'access_token': openapi.Schema(type=openapi.TYPE_STRING)
-        }
-    ),
-    responses={
-        200: openapi.Response(
-            description="Instagram Business Account connected successfully",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                    'account_info': openapi.Schema(type=openapi.TYPE_OBJECT)
-                }
-            )
-        ),
-        400: openapi.Response(description="Invalid access token")
-    }
-)
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def connect_telegram_channel(request):
-    """Connect a Telegram Channel"""
-    try:
-        channel_id = request.data.get('channel_id')
-        channel_name = request.data.get('channel_name')
-        
-        if not channel_id or not channel_name:
-            return Response({
-                'error': 'Missing required parameters'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Verify bot ownership and get channel info
-        bot_token = settings.TELEGRAM_BOT_TOKEN
-        channel_info = requests.get(
-            f'https://api.telegram.org/bot{bot_token}/getChat',
-            params={'chat_id': channel_id}
-        ).json()
-        
-        if not channel_info.get('ok'):
-            return Response({
-                'error': 'Invalid channel ID or bot is not an admin'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Get member count
-        member_count = requests.get(
-            f'https://api.telegram.org/bot{bot_token}/getChatMemberCount',
-            params={'chat_id': channel_id}
-        ).json()
-        
-        user = request.user
-        user.telegram_chat_id = channel_id
-        user.telegram_channel_name = channel_name
-        user.telegram_subscribers = member_count.get('result', 0)
-        user.has_telegram_channel = True
-        user.metrics_last_updated = datetime.now()
-        user.save()
-        
-        return Response({
-            'success': True,
-            'channel': {
-                'id': channel_id,
-                'name': channel_name,
-                'subscribers': user.telegram_subscribers
-            }
-        })
-    except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-@swagger_auto_schema(
-    method='post',
+    operation_summary="Create Subscription Checkout",
+    operation_description="""
+    Create a Stripe checkout session for subscription purchase.
+    
+    Features:
+    - Secure payment processing
+    - Automatic trial conversion
+    - Proration handling
+    - Coupon support
+    
+    The session URL will redirect to Stripe's hosted checkout page.
+    """,
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         required=['plan_id'],
         properties={
-            'plan_id': openapi.Schema(type=openapi.TYPE_STRING, description='ID of the subscription plan')
+            'plan_id': openapi.Schema(type=openapi.TYPE_STRING),
+            'coupon': openapi.Schema(type=openapi.TYPE_STRING),
+            'success_url': openapi.Schema(type=openapi.TYPE_STRING, format='uri'),
+            'cancel_url': openapi.Schema(type=openapi.TYPE_STRING, format='uri')
         }
     ),
     responses={
         200: openapi.Response(
-            description="Checkout session created successfully",
+            description="Checkout session created",
             schema=openapi.Schema(
                 type=openapi.TYPE_OBJECT,
                 properties={
-                    'url': openapi.Schema(type=openapi.TYPE_STRING, description='Checkout session URL'),
-                    'session_id': openapi.Schema(type=openapi.TYPE_STRING, description='Stripe session ID')
+                    'session_id': openapi.Schema(type=openapi.TYPE_STRING),
+                    'url': openapi.Schema(type=openapi.TYPE_STRING, format='uri')
                 }
             )
         ),
-        400: 'Invalid plan ID',
-        401: 'Authentication required'
-    }
+        400: 'Invalid plan or parameters',
+        401: 'Authentication required',
+        402: 'Payment required'
+    },
+    tags=['Subscriptions']
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_checkout_session(request):
-    """
-    Create a Stripe checkout session
-    """
-    stripe = get_stripe_instance()
-    
+    """Create a subscription checkout session"""
     try:
         plan_id = request.data.get('plan_id')
-        success_url = request.data.get('success_url', settings.STRIPE_SUCCESS_URL)
-        cancel_url = request.data.get('cancel_url', settings.STRIPE_CANCEL_URL)
-
-        # Get the subscription plan
-        try:
-            plan = SubscriptionPlan.objects.get(id=plan_id)
-        except SubscriptionPlan.DoesNotExist:
+        if not plan_id:
             return Response({
-                'error': 'Invalid subscription plan'
+                'error': 'Plan ID is required'
             }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Create Stripe checkout session
-        checkout_session = stripe.checkout.Session.create(
+        
+        plan = SubscriptionPlan.objects.get(id=plan_id)
+        stripe = get_stripe_instance()
+        
+        # Create checkout session
+        session = stripe.checkout.Session.create(
             customer_email=request.user.email,
             payment_method_types=['card'],
             line_items=[{
-                'price_data': {
-                    'currency': 'usd',
-                    'product_data': {
-                        'name': f'Linkly {plan.name} Plan',
-                        'description': f'Upgrade to {plan.name} Plan',
-                    },
-                    'unit_amount': int(plan.price * 100),  # Convert to cents
-                },
+                'price': plan.stripe_price_id,
                 'quantity': 1,
             }],
-            mode='payment',
-            success_url=success_url,
-            cancel_url=cancel_url,
+            mode='subscription',
+            success_url=request.data.get('success_url', 'https://linkly.com/success'),
+            cancel_url=request.data.get('cancel_url', 'https://linkly.com/cancel'),
             metadata={
                 'user_id': request.user.id,
-                'plan_id': plan.id,
+                'plan_id': plan.id
             }
         )
-
+        
         return Response({
-            'session_id': checkout_session.id,
-            'url': checkout_session.url
+            'session_id': session.id,
+            'url': session.url
         })
+        
+    except SubscriptionPlan.DoesNotExist:
+        return Response({
+            'error': 'Invalid plan ID'
+        }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({
             'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @swagger_auto_schema(
-    method='post',
-    operation_description="Handle Stripe webhook events for subscription updates",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'type': openapi.Schema(type=openapi.TYPE_STRING, description='Stripe event type'),
-            'data': openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'object': openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        description='Event object data'
-                    )
-                }
-            )
-        }
-    ),
+    method='get',
+    operation_summary="Get Connected Accounts",
+    operation_description="""
+    Get list of all connected social media accounts.
+    
+    Returns:
+    - Connected platforms
+    - Account types (personal/business)
+    - Profile information
+    - Analytics access status
+    - Last sync timestamps
+    """,
     responses={
         200: openapi.Response(
-            description="Webhook processed successfully",
+            description="Connected accounts retrieved successfully",
             schema=openapi.Schema(
                 type=openapi.TYPE_OBJECT,
                 properties={
-                    'status': openapi.Schema(type=openapi.TYPE_STRING, description='Success status')
-                }
-            )
-        ),
-        400: 'Invalid webhook data',
-        401: 'Invalid Stripe signature'
-    },
-    security=[],  # No authentication required for webhook
-)
-@csrf_exempt
-@api_view(['POST'])
-def stripe_webhook(request):
-    """Handle Stripe webhook events"""
-    payload = request.body
-    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
-
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
-        )
-    except ValueError as e:
-        return Response({'error': 'Invalid payload'}, status=status.HTTP_400_BAD_REQUEST)
-    except stripe.error.SignatureVerificationError as e:
-        return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
-
-    if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
-        
-        # Get user and plan from metadata
-        user_id = session.get('metadata', {}).get('user_id')
-        plan_id = session.get('metadata', {}).get('plan_id')
-        
-        try:
-            user = User.objects.get(id=user_id)
-            plan = SubscriptionPlan.objects.get(id=plan_id)
-            
-            # Create new subscription
-            subscription = user.subscribe_to_plan(
-                plan=plan,
-                payment_method='stripe'
-            )
-            
-            # Send confirmation email
-            send_mail(
-                'Subscription Upgraded Successfully',
-                f'Your subscription has been upgraded to {plan.name} plan.',
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                fail_silently=True,
-            )
-            
-        except (User.DoesNotExist, SubscriptionPlan.DoesNotExist) as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    return Response({'status': 'success'})
-
-@swagger_auto_schema(
-    operation_description="Get current subscription status and details",
-    responses={
-        200: openapi.Response('Subscription details retrieved successfully',
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'is_active': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                    'plan': openapi.Schema(type=openapi.TYPE_STRING),
-                    'features': openapi.Schema(
+                    'accounts': openapi.Schema(
                         type=openapi.TYPE_ARRAY,
-                        items=openapi.Schema(type=openapi.TYPE_STRING)
+                        items=openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'platform': openapi.Schema(type=openapi.TYPE_STRING),
+                                'account_type': openapi.Schema(
+                                    type=openapi.TYPE_STRING,
+                                    enum=['personal', 'business']
+                                ),
+                                'profile': openapi.Schema(type=openapi.TYPE_OBJECT),
+                                'analytics_enabled': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'last_synced': openapi.Schema(type=openapi.TYPE_STRING, format='date-time')
+                            }
+                        )
                     ),
-                    'expires_at': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+                    'total_count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'limit': openapi.Schema(type=openapi.TYPE_INTEGER)
                 }
             )
         ),
         401: 'Authentication required'
-    }
+    },
+    tags=['Social Integration']
 )
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_connected_accounts(request):
+    """Get all connected social media accounts"""
+    user = request.user
+    subscription = user.current_subscription
+    
+    accounts = []
+    
+    # Facebook
+    if user.facebook_id:
+        accounts.append({
+            'platform': 'facebook',
+            'account_type': 'business' if user.has_facebook_business else 'personal',
+            'profile': {
+                'id': user.facebook_id,
+                'name': user.facebook_page_name if user.has_facebook_business else None,
+                'followers': user.facebook_page_followers if user.has_facebook_business else None
+            },
+            'analytics_enabled': user.has_facebook_business and subscription and subscription.plan.has_analytics,
+            'last_synced': user.last_sync.get('facebook')
+        })
+    
+    # Instagram
+    if user.instagram_id:
+        accounts.append({
+            'platform': 'instagram',
+            'account_type': 'business' if user.has_instagram_business else 'personal',
+            'profile': {
+                'id': user.instagram_id,
+                'username': user.instagram_handle,
+                'business_name': user.instagram_business_name if user.has_instagram_business else None,
+                'followers': user.instagram_business_followers if user.has_instagram_business else None
+            },
+            'analytics_enabled': user.has_instagram_business and subscription and subscription.plan.has_analytics,
+            'last_synced': user.last_sync.get('instagram')
+        })
+    
+    # Add other platforms...
+    
+    return Response({
+        'accounts': accounts,
+        'total_count': len(accounts),
+        'limit': subscription.plan.social_accounts_limit if subscription else 0
+    })
+
 class SubscriptionStatusView(APIView):
-    """View to check subscription status and details"""
+    """
+    View to retrieve subscription status for the current user.
+    """
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="Get current user's subscription status",
+        operation_summary="Get Subscription Status",
+        operation_description="""
+        Get current user's subscription status including:
+        - Current plan details
+        - Trial status
+        - Days remaining
+        - Features access
+        - Usage limits
+        """,
         responses={
             200: openapi.Response(
                 description="Subscription status retrieved successfully",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
                     properties={
-                        'is_active': openapi.Schema(type=openapi.TYPE_BOOLEAN, description='Whether subscription is active'),
-                        'plan': openapi.Schema(type=openapi.TYPE_STRING, description='Current subscription plan'),
-                        'expires_at': openapi.Schema(type=openapi.TYPE_STRING, format='date-time', description='Subscription expiry date')
+                        'status': openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            enum=['ACTIVE', 'EXPIRED', 'CANCELLED', 'TRIAL', 'PENDING']
+                        ),
+                        'plan': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'name': openapi.Schema(type=openapi.TYPE_STRING),
+                                'price': openapi.Schema(type=openapi.TYPE_NUMBER),
+                                'features': openapi.Schema(
+                                    type=openapi.TYPE_OBJECT,
+                                    properties={
+                                        'analytics': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                        'advanced_analytics': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                        'content_calendar': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                        'team_collaboration': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                        'competitor_analysis': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                        'api_access': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                        'dedicated_support': openapi.Schema(type=openapi.TYPE_BOOLEAN)
+                                    }
+                                ),
+                                'limits': openapi.Schema(
+                                    type=openapi.TYPE_OBJECT,
+                                    properties={
+                                        'social_accounts': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                        'ai_captions': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                        'team_members': openapi.Schema(type=openapi.TYPE_INTEGER)
+                                    }
+                                )
+                            }
+                        ),
+                        'is_trial': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'days_remaining': openapi.Schema(type=openapi.TYPE_STRING),
+                        'start_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+                        'end_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+                        'auto_renew': openapi.Schema(type=openapi.TYPE_BOOLEAN)
                     }
                 )
             ),
-            401: 'Authentication required'
-        }
+            401: 'Authentication credentials not provided'
+        },
+        tags=['Subscriptions']
     )
     def get(self, request):
+        """Get subscription status for current user"""
         user = request.user
-        current_subscription = user.current_subscription
+        subscription = user.current_subscription
 
-        response_data = {
-            'is_active': False,
-            'plan': None,
-            'features': {
-                'social_accounts_limit': 0,
-                'ai_caption_limit': 0,
-                'has_analytics': False,
-                'has_advanced_analytics': False,
-                'has_content_calendar': False,
-                'has_team_collaboration': False,
-                'has_competitor_analysis': False,
-                'has_api_access': False,
-                'has_dedicated_support': False,
-            },
-            'expires_at': None
-        }
-
-        if current_subscription and current_subscription.is_active():
-            plan = current_subscription.plan
-            response_data.update({
-                'is_active': True,
-                'plan': plan.name,
-                'features': {
-                    'social_accounts_limit': plan.social_accounts_limit,
-                    'ai_caption_limit': plan.ai_caption_limit,
-                    'has_analytics': plan.has_analytics,
-                    'has_advanced_analytics': plan.has_advanced_analytics,
-                    'has_content_calendar': plan.has_content_calendar,
-                    'has_team_collaboration': plan.has_team_collaboration,
-                    'has_competitor_analysis': plan.has_competitor_analysis,
-                    'has_api_access': plan.has_api_access,
-                    'has_dedicated_support': plan.has_dedicated_support,
-                },
-                'expires_at': current_subscription.expires_at
+        if not subscription:
+            return Response({
+                'status': 'NONE',
+                'plan': None,
+                'is_trial': False,
+                'days_remaining': '0',
+                'start_date': None,
+                'end_date': None,
+                'auto_renew': False
             })
 
-        return Response(response_data)
+        plan = subscription.plan
+        return Response({
+            'status': subscription.status,
+            'plan': {
+                'name': plan.get_name_display(),
+                'price': float(plan.price),
+                'features': {
+                    'analytics': plan.has_analytics,
+                    'advanced_analytics': plan.has_advanced_analytics,
+                    'content_calendar': plan.has_content_calendar,
+                    'team_collaboration': plan.has_team_collaboration,
+                    'competitor_analysis': plan.has_competitor_analysis,
+                    'api_access': plan.has_api_access,
+                    'dedicated_support': plan.has_dedicated_support
+                },
+                'limits': {
+                    'social_accounts': plan.social_accounts_limit,
+                    'ai_captions': plan.ai_caption_limit,
+                    'team_members': plan.team_member_limit
+                }
+            },
+            'is_trial': subscription.is_trial,
+            'days_remaining': subscription.days_remaining(),
+            'start_date': subscription.start_date,
+            'end_date': subscription.end_date,
+            'auto_renew': subscription.auto_renew
+        })
 
 @swagger_auto_schema(
     method='get',
-    operation_description="Get list of available subscription plans",
+    operation_summary="Google OAuth Callback",
+    operation_description="""
+    Handle Google OAuth callback and connect account.
+    
+    Exchanges authorization code for access token and connects the Google account.
+    """,
+    manual_parameters=[
+        openapi.Parameter(
+            'code',
+            openapi.IN_QUERY,
+            description="Authorization code from Google",
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+        openapi.Parameter(
+            'state',
+            openapi.IN_QUERY,
+            description="State parameter for security verification",
+            type=openapi.TYPE_STRING,
+            required=False
+        )
+    ],
     responses={
         200: openapi.Response(
-            description="Available plans retrieved successfully",
+            description="Account connected successfully",
+            schema=SocialConnectionSerializer
+        ),
+        400: 'Invalid authorization code',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def google_auth_callback(request):
+    """Handle Google OAuth callback"""
+    code = request.query_params.get('code')
+    if not code:
+        return Response(
+            {'error': 'Authorization code is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        result = connect_google_account(request.user, code)
+        return Response(result)
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+@swagger_auto_schema(
+    method='get',
+    operation_summary="Facebook OAuth Callback",
+    operation_description="""
+    Handle Facebook OAuth callback and connect account.
+    
+    Exchanges authorization code for access token and connects the Facebook account.
+    """,
+    manual_parameters=[
+        openapi.Parameter(
+            'code',
+            openapi.IN_QUERY,
+            description="Authorization code from Facebook",
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+        openapi.Parameter(
+            'state',
+            openapi.IN_QUERY,
+            description="State parameter for security verification",
+            type=openapi.TYPE_STRING,
+            required=False
+        )
+    ],
+    responses={
+        200: openapi.Response(
+            description="Account connected successfully",
+            schema=SocialConnectionSerializer
+        ),
+        400: 'Invalid authorization code',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def facebook_auth_callback(request):
+    """Handle Facebook OAuth callback"""
+    code = request.query_params.get('code')
+    if not code:
+        return Response(
+            {'error': 'Authorization code is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        result = connect_facebook_account(request.user, code)
+        return Response(result)
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+@swagger_auto_schema(
+    method='get',
+    operation_summary="LinkedIn OAuth Callback",
+    operation_description="""
+    Handle LinkedIn OAuth callback and connect account.
+    
+    Exchanges authorization code for access token and connects the LinkedIn account.
+    """,
+    manual_parameters=[
+        openapi.Parameter(
+            'code',
+            openapi.IN_QUERY,
+            description="Authorization code from LinkedIn",
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+        openapi.Parameter(
+            'state',
+            openapi.IN_QUERY,
+            description="State parameter for security verification",
+            type=openapi.TYPE_STRING,
+            required=False
+        )
+    ],
+    responses={
+        200: openapi.Response(
+            description="Account connected successfully",
+            schema=SocialConnectionSerializer
+        ),
+        400: 'Invalid authorization code',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def linkedin_auth_callback(request):
+    """Handle LinkedIn OAuth callback"""
+    code = request.query_params.get('code')
+    if not code:
+        return Response(
+            {'error': 'Authorization code is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        result = connect_linkedin_account(request.user, code)
+        return Response(result)
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Unlink Social Account",
+    operation_description="""
+    Unlink a connected social media account.
+    
+    Removes the connection and associated tokens for the specified platform.
+    """,
+    responses={
+        200: openapi.Response(
+            description="Account unlinked successfully",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    'message': openapi.Schema(type=openapi.TYPE_STRING)
+                }
+            )
+        ),
+        400: 'Invalid platform',
+        401: 'Authentication required',
+        404: 'Account not connected'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def unlink_social_account(request, platform):
+    """Unlink a social media account"""
+    user = request.user
+    
+    if platform == 'facebook':
+        user.facebook_id = None
+        user.facebook_access_token = None
+        user.has_facebook_business = False
+    elif platform == 'instagram':
+        user.instagram_id = None
+        user.instagram_access_token = None
+        user.has_instagram_business = False
+    elif platform == 'twitter':
+        user.twitter_id = None
+        user.twitter_access_token = None
+        user.twitter_access_secret = None
+    elif platform == 'linkedin':
+        user.linkedin_id = None
+        user.linkedin_access_token = None
+        user.has_linkedin_company = False
+    elif platform == 'tiktok':
+        user.tiktok_id = None
+        user.tiktok_access_token = None
+        user.has_tiktok_business = False
+    elif platform == 'telegram':
+        user.telegram_id = None
+        user.telegram_username = None
+        user.has_telegram_channel = False
+    else:
+        return Response(
+            {'error': 'Invalid platform'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    user.save()
+    return Response({
+        'success': True,
+        'message': f'{platform.title()} account unlinked successfully'
+    })
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect YouTube Account",
+    operation_description="Connect a YouTube account using OAuth token",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid token',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_youtube(request):
+    """Connect YouTube account"""
+    try:
+        result = request.user.connect_youtube(request.data.get('access_token'))
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect Facebook Account",
+    operation_description="Connect a Facebook account using OAuth token",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid token',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_facebook(request):
+    """Connect Facebook account"""
+    try:
+        result = request.user.connect_facebook(request.data.get('access_token'))
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect Telegram Account",
+    operation_description="Connect a Telegram account using Bot API token",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid token',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_telegram(request):
+    """Connect Telegram account"""
+    try:
+        result = request.user.connect_telegram(request.data.get('access_token'))
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect Instagram Account",
+    operation_description="Connect an Instagram account using OAuth token",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid token',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_instagram(request):
+    """Connect Instagram account"""
+    try:
+        result = request.user.connect_instagram(request.data.get('access_token'))
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect Twitter Account",
+    operation_description="Connect a Twitter account using OAuth token",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid token',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_twitter(request):
+    """Connect Twitter account"""
+    try:
+        result = request.user.connect_twitter(
+            request.data.get('access_token'),
+            request.data.get('access_token_secret')
+        )
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect TikTok Account",
+    operation_description="Connect a TikTok account using OAuth token",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid token',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_tiktok(request):
+    """Connect TikTok account"""
+    try:
+        result = request.user.connect_tiktok(request.data.get('access_token'))
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect Facebook Page",
+    operation_description="Connect a Facebook business page",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid page ID or access',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_facebook_page(request):
+    """Connect Facebook business page"""
+    try:
+        result = request.user.connect_facebook_page(
+            request.data.get('page_id'),
+            request.data.get('access_token')
+        )
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect Instagram Business",
+    operation_description="Connect an Instagram business account",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid account ID or access',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_instagram_business(request):
+    """Connect Instagram business account"""
+    try:
+        result = request.user.connect_instagram_business(
+            request.data.get('account_id'),
+            request.data.get('access_token')
+        )
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect LinkedIn Company",
+    operation_description="Connect a LinkedIn company page",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid company ID or access',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_linkedin_company(request):
+    """Connect LinkedIn company page"""
+    try:
+        result = request.user.connect_linkedin_company(
+            request.data.get('company_id'),
+            request.data.get('access_token')
+        )
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect YouTube Brand",
+    operation_description="Connect a YouTube brand account",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid brand account or access',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_youtube_brand(request):
+    """Connect YouTube brand account"""
+    try:
+        result = request.user.connect_youtube_brand(
+            request.data.get('brand_id'),
+            request.data.get('access_token')
+        )
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect TikTok Business",
+    operation_description="Connect a TikTok business account",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid account or access',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_tiktok_business(request):
+    """Connect TikTok business account"""
+    try:
+        result = request.user.connect_tiktok_business(
+            request.data.get('account_id'),
+            request.data.get('access_token')
+        )
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='post',
+    operation_summary="Connect Telegram Channel",
+    operation_description="Connect a Telegram channel",
+    responses={
+        200: SocialAccountSerializer,
+        400: 'Invalid channel or access',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def connect_telegram_channel(request):
+    """Connect Telegram channel"""
+    try:
+        result = request.user.connect_telegram_channel(
+            request.data.get('channel_id'),
+            request.data.get('access_token')
+        )
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@csrf_exempt
+@api_view(['POST'])
+@swagger_auto_schema(
+    operation_summary="Stripe Webhook Handler",
+    operation_description="""
+    Handle Stripe webhook events for subscription management.
+    
+    Events handled:
+    - checkout.session.completed
+    - customer.subscription.updated
+    - customer.subscription.deleted
+    - invoice.paid
+    - invoice.payment_failed
+    
+    Updates subscription status and user access based on webhook events.
+    """,
+    responses={
+        200: openapi.Response(
+            description="Webhook processed successfully",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'status': openapi.Schema(type=openapi.TYPE_STRING)
+                }
+            )
+        ),
+        400: 'Invalid webhook data',
+        401: 'Invalid signature'
+    },
+    tags=['Subscriptions']
+)
+def stripe_webhook(request):
+    """Handle Stripe webhook events"""
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+    
+    try:
+        # Verify webhook signature
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+        )
+        
+        # Handle the event
+        if event.type == 'checkout.session.completed':
+            session = event.data.object
+            handle_checkout_session(session)
+            
+        elif event.type == 'customer.subscription.updated':
+            subscription = event.data.object
+            handle_subscription_updated(subscription)
+            
+        elif event.type == 'customer.subscription.deleted':
+            subscription = event.data.object
+            handle_subscription_deleted(subscription)
+            
+        elif event.type == 'invoice.paid':
+            invoice = event.data.object
+            handle_invoice_paid(invoice)
+            
+        elif event.type == 'invoice.payment_failed':
+            invoice = event.data.object
+            handle_invoice_failed(invoice)
+            
+        return JsonResponse({'status': 'success'})
+        
+    except ValueError as e:
+        return JsonResponse({'error': 'Invalid payload'}, status=400)
+    except stripe.error.SignatureVerificationError as e:
+        return JsonResponse({'error': 'Invalid signature'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+def handle_checkout_session(session):
+    """Handle successful checkout session completion"""
+    user_id = session.metadata.get('user_id')
+    plan_id = session.metadata.get('plan_id')
+    
+    try:
+        user = User.objects.get(id=user_id)
+        plan = SubscriptionPlan.objects.get(id=plan_id)
+        
+        # Create or update subscription
+        subscription = Subscription.objects.create(
+            user=user,
+            plan=plan,
+            stripe_subscription_id=session.subscription,
+            status='ACTIVE',
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=30),
+            auto_renew=True
+        )
+        
+        # Update user's stripe customer ID if not set
+        if not user.stripe_customer_id:
+            user.stripe_customer_id = session.customer
+            user.save()
+            
+    except (User.DoesNotExist, SubscriptionPlan.DoesNotExist) as e:
+        # Log error for investigation
+        print(f"Error processing checkout session: {str(e)}")
+
+def handle_subscription_updated(stripe_subscription):
+    """Handle subscription update events"""
+    try:
+        subscription = Subscription.objects.get(
+            stripe_subscription_id=stripe_subscription.id
+        )
+        
+        # Update subscription status
+        subscription.status = stripe_subscription.status.upper()
+        subscription.current_period_end = datetime.fromtimestamp(
+            stripe_subscription.current_period_end
+        )
+        subscription.save()
+        
+    except Subscription.DoesNotExist:
+        # Log error for investigation
+        print(f"Subscription not found: {stripe_subscription.id}")
+
+def handle_subscription_deleted(stripe_subscription):
+    """Handle subscription deletion events"""
+    try:
+        subscription = Subscription.objects.get(
+            stripe_subscription_id=stripe_subscription.id
+        )
+        
+        # Mark subscription as cancelled
+        subscription.status = 'CANCELLED'
+        subscription.auto_renew = False
+        subscription.save()
+        
+    except Subscription.DoesNotExist:
+        # Log error for investigation
+        print(f"Subscription not found: {stripe_subscription.id}")
+
+def handle_invoice_paid(invoice):
+    """Handle successful invoice payment"""
+    subscription_id = invoice.subscription
+    if subscription_id:
+        try:
+            subscription = Subscription.objects.get(
+                stripe_subscription_id=subscription_id
+            )
+            
+            # Update subscription status and dates
+            subscription.status = 'ACTIVE'
+            subscription.start_date = datetime.fromtimestamp(
+                invoice.period_start
+            )
+            subscription.end_date = datetime.fromtimestamp(
+                invoice.period_end
+            )
+            subscription.save()
+            
+        except Subscription.DoesNotExist:
+            # Log error for investigation
+            print(f"Subscription not found: {subscription_id}")
+
+def handle_invoice_failed(invoice):
+    """Handle failed invoice payment"""
+    subscription_id = invoice.subscription
+    if subscription_id:
+        try:
+            subscription = Subscription.objects.get(
+                stripe_subscription_id=subscription_id
+            )
+            
+            # Mark subscription as past due
+            subscription.status = 'PAST_DUE'
+            subscription.save()
+            
+            # Notify user of payment failure
+            send_payment_failed_notification(subscription.user, invoice)
+            
+        except Subscription.DoesNotExist:
+            # Log error for investigation
+            print(f"Subscription not found: {subscription_id}")
+
+def send_payment_failed_notification(user, invoice):
+    """Send payment failure notification email"""
+    try:
+        send_mail(
+            subject='Payment Failed - Action Required',
+            message=f"""
+            Dear {user.get_full_name()},
+            
+            Your payment for the subscription renewal has failed. Please update your payment method to avoid service interruption.
+            
+            Amount due: ${invoice.amount_due / 100:.2f}
+            Due date: {datetime.fromtimestamp(invoice.due_date).strftime('%Y-%m-%d')}
+            
+            To update your payment method, please visit:
+            {settings.FRONTEND_URL}/billing/update
+            
+            If you need assistance, please contact our support team.
+            
+            Best regards,
+            Linkly Team
+            """,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=True
+        )
+    except Exception as e:
+        # Log error for investigation
+        print(f"Error sending payment failed notification: {str(e)}")
+
+@swagger_auto_schema(
+    method='get',
+    operation_summary="Get Available Plans",
+    operation_description="""
+    Get list of available subscription plans.
+    
+    Returns:
+    - Plan details
+    - Features included
+    - Usage limits
+    - Pricing information
+    - Trial availability
+    """,
+    responses={
+        200: openapi.Response(
+            description="Plans retrieved successfully",
             schema=openapi.Schema(
                 type=openapi.TYPE_ARRAY,
                 items=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
                     properties={
-                        'id': openapi.Schema(type=openapi.TYPE_STRING, description='Plan ID'),
-                        'name': openapi.Schema(type=openapi.TYPE_STRING, description='Plan name'),
-                        'price': openapi.Schema(type=openapi.TYPE_NUMBER, description='Monthly price in USD'),
+                        'id': openapi.Schema(type=openapi.TYPE_STRING),
+                        'name': openapi.Schema(type=openapi.TYPE_STRING),
+                        'description': openapi.Schema(type=openapi.TYPE_STRING),
+                        'price': openapi.Schema(type=openapi.TYPE_NUMBER),
+                        'interval': openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            enum=['month', 'year']
+                        ),
                         'features': openapi.Schema(
-                            type=openapi.TYPE_ARRAY,
-                            items=openapi.Schema(type=openapi.TYPE_STRING),
-                            description='List of features included in the plan'
-                        )
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'analytics': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'advanced_analytics': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'content_calendar': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'team_collaboration': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'competitor_analysis': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'api_access': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'dedicated_support': openapi.Schema(type=openapi.TYPE_BOOLEAN)
+                            }
+                        ),
+                        'limits': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'social_accounts': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'ai_captions': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'team_members': openapi.Schema(type=openapi.TYPE_INTEGER)
+                            }
+                        ),
+                        'trial_days': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'popular': openapi.Schema(type=openapi.TYPE_BOOLEAN)
                     }
                 )
             )
         )
-    }
+    },
+    tags=['Subscriptions']
 )
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def available_plans(request):
-    """Get all available subscription plans"""
-    plans = SubscriptionPlan.objects.filter(is_active=True).exclude(name='FREE_TRIAL')
+    """Get list of available subscription plans"""
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price')
     
-    return Response([{
-        'id': plan.id,
-        'name': plan.name,
-        'price': float(plan.price),
-        'social_accounts_limit': plan.social_accounts_limit,
-        'ai_caption_limit': plan.ai_caption_limit,
-        'features': {
-            'analytics': plan.has_analytics,
-            'advanced_analytics': plan.has_advanced_analytics,
-            'content_calendar': plan.has_content_calendar,
-            'team_collaboration': plan.has_team_collaboration,
-            'competitor_analysis': plan.has_competitor_analysis,
-            'api_access': plan.has_api_access,
-            'dedicated_support': plan.has_dedicated_support,
-        }
-    } for plan in plans])
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_stripe_config(request):
-    """
-    Safely expose the publishable key to the frontend
-    """
-    return Response({
-        'publishableKey': get_stripe_public_key()
-    }) 
+    plans_data = []
+    for plan in plans:
+        plans_data.append({
+            'id': str(plan.id),
+            'name': plan.get_name_display(),
+            'description': plan.description,
+            'price': float(plan.price),
+            'interval': plan.billing_interval,
+            'features': {
+                'analytics': plan.has_analytics,
+                'advanced_analytics': plan.has_advanced_analytics,
+                'content_calendar': plan.has_content_calendar,
+                'team_collaboration': plan.has_team_collaboration,
+                'competitor_analysis': plan.has_competitor_analysis,
+                'api_access': plan.has_api_access,
+                'dedicated_support': plan.has_dedicated_support
+            },
+            'limits': {
+                'social_accounts': plan.social_accounts_limit,
+                'ai_captions': plan.ai_caption_limit,
+                'team_members': plan.team_member_limit
+            },
+            'trial_days': plan.trial_days,
+            'popular': plan.is_popular,
+            'stripe_price_id': plan.stripe_price_id
+        })
+    
+    return Response(plans_data)
 
 
