@@ -27,7 +27,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             '--admin-password',
-            default=os.getenv('ADMIN_PASSWORD', 'Admin@2024!'),
+            default=os.getenv('ADMIN_PASSWORD', 'Admin@2025!'),
             help='Password for the admin user'
         )
         parser.add_argument(

@@ -25,6 +25,7 @@ python-social-auth[django]
 django-allauth==0.57.0
 django-jazzmin==2.6.0
 drf-yasg==1.21.7
+setuptools>=69.0.2
 
 # Subscription and Payment
 stripe==7.11.0
