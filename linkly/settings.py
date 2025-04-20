@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 import dj_database_url
+import socket
 
 # Load environment variables
 load_dotenv()
@@ -16,11 +17,25 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
+def get_ngrok_url():
+    """Get the ngrok URL from environment or try to detect it"""
+    ngrok_url = os.getenv('NGROK_URL')
+    if ngrok_url:
+        return ngrok_url.replace('https://', '').replace('http://', '')
+    return None
+
+# Add ngrok URL to allowed hosts if available
+NGROK_URL = get_ngrok_url()
 ALLOWED_HOSTS = [
     'linkly-production.up.railway.app',
+    'c175-102-217-65-14.ngrok-free.app',
     'localhost',
     '127.0.0.1',
+    '.ngrok-free.app',  # Allow all ngrok subdomains
 ]
+
+if NGROK_URL:
+    ALLOWED_HOSTS.append(NGROK_URL)
 
 # Security Settings
 SECURE_SSL_REDIRECT = not DEBUG
@@ -29,21 +44,24 @@ SECURE_HSTS_SECONDS = 31536000  # 1 year
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 
-# Allow credentials (if using authentication)
+# CORS Settings
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
 CORS_ALLOW_CREDENTIALS = True
 
-# CORS and CSRF Settings
-CORS_ALLOWED_ORIGINS = [
-    "https://linkly-production.up.railway.app",
-    "http://localhost:5174",
-    "http://localhost:3000",
-]
+# If not in debug mode, specify allowed origins
+if not DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        "https://linkly-production.up.railway.app",
+        "https://c175-102-217-65-14.ngrok-free.app",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:5174",
+    ]
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://linkly-production.up.railway.app",
-]
+    if NGROK_URL:
+        CORS_ALLOWED_ORIGINS.append(f"https://{NGROK_URL}")
 
-# Allow specific headers
+# CORS Headers Configuration
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -56,11 +74,26 @@ CORS_ALLOW_HEADERS = [
     "x-requested-with",
 ]
 
-# Session and Cookie Settings
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+CORS_EXPOSE_HEADERS = ["content-type", "x-csrftoken"]
+
+# CSRF Settings
+CSRF_TRUSTED_ORIGINS = [
+    "https://linkly-production.up.railway.app",
+    "https://c175-102-217-65-14.ngrok-free.app",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:5174",
+]
+
+if NGROK_URL:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{NGROK_URL}")
+
+# Cookie Settings
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = True
-CSRF_COOKIE_SAMESITE = 'Lax'  # Changed from 'None' for better security
+CSRF_COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'
+SESSION_COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'
 
 # Application definition
 INSTALLED_APPS = [
