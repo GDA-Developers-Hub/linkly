@@ -6,53 +6,13 @@ import logging
 import base64
 import hashlib
 import secrets
+from ..utils.oauth import (
+    store_oauth_state,
+    build_authorization_url,
+    get_platform_config
+)
 
 logger = logging.getLogger('oauth')
-
-def get_google_oauth_url(business=False, redirect_uri=None):
-    """Generate OAuth URL for Google"""
-    scope = 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email'
-    if business:
-        scope += ' https://www.googleapis.com/auth/youtube.readonly'
-    
-    params = {
-        'client_id': settings.GOOGLE_CLIENT_ID,
-        'redirect_uri': redirect_uri or settings.GOOGLE_REDIRECT_URI,
-        'scope': scope,
-        'response_type': 'code',
-        'access_type': 'offline',
-        'prompt': 'consent'
-    }
-    return f'https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}'
-
-def get_facebook_oauth_url(business=False, redirect_uri=None):
-    """Generate OAuth URL for Facebook"""
-    scope = 'email,public_profile'
-    if business:
-        scope += ',pages_show_list,pages_read_engagement,instagram_basic'
-    
-    params = {
-        'client_id': settings.FACEBOOK_CLIENT_ID,
-        'redirect_uri': redirect_uri or settings.FACEBOOK_REDIRECT_URI,
-        'scope': scope,
-        'response_type': 'code'
-    }
-    return f'https://www.facebook.com/v18.0/dialog/oauth?{urllib.parse.urlencode(params)}'
-
-def get_linkedin_oauth_url(business=False, redirect_uri=None):
-    """Generate OAuth URL for LinkedIn"""
-    scope = 'r_liteprofile r_emailaddress'
-    if business:
-        scope += ' r_organization_social w_organization_social rw_organization_admin'
-    
-    params = {
-        'client_id': settings.LINKEDIN_CLIENT_ID,
-        'redirect_uri': redirect_uri or settings.LINKEDIN_REDIRECT_URI,
-        'scope': scope,
-        'response_type': 'code',
-        'state': 'random_state_string'
-    }
-    return f'https://www.linkedin.com/oauth/v2/authorization?{urllib.parse.urlencode(params)}'
 
 def generate_code_verifier():
     """Generate a code verifier for PKCE"""
@@ -63,76 +23,79 @@ def generate_code_challenge(verifier):
     sha256 = hashlib.sha256(verifier.encode('utf-8')).digest()
     return base64.urlsafe_b64encode(sha256).decode('utf-8').rstrip('=')
 
-def get_twitter_oauth_url(business=False, redirect_uri=None):
-    """Generate OAuth URL for Twitter"""
-    # Generate PKCE values
-    code_verifier = generate_code_verifier()
-    code_challenge = generate_code_challenge(code_verifier)
-    
-    # Generate state
-    state = secrets.token_urlsafe(16)
-    
-    params = {
-        'client_id': settings.TWITTER_CLIENT_ID,
-        'redirect_uri': redirect_uri or f"{settings.OAUTH2_REDIRECT_URI}/oauth-callback/twitter",
-        'response_type': 'code',
-        'scope': 'tweet.read users.read follows.read offline.access',
-        'state': state,
-        'code_challenge': code_challenge,
-        'code_challenge_method': 'S256'
-    }
-    
-    if business:
-        params['scope'] += ' tweet.write follows.write'
-    
-    # Store these values in session or cache for later verification
-    # You'll need to implement this part based on your session/cache setup
-    
+def generate_state():
+    """Generate a secure state parameter"""
+    return secrets.token_urlsafe(16)
+
+def get_google_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
+    """Get Google OAuth URL."""
+    platform = 'google'
+    state = store_oauth_state(platform)
+    auth_url, code_verifier = build_authorization_url(platform, redirect_uri, state)
     return {
-        'auth_url': f'https://twitter.com/i/oauth2/authorize?{urllib.parse.urlencode(params)}',
-        'code_verifier': code_verifier,
-        'state': state
+        'auth_url': auth_url,
+        'session_key': state
     }
 
-def get_instagram_oauth_url(business=False, redirect_uri=None):
-    """Generate OAuth URL for Instagram"""
-    scope = 'basic'
-    if business:
-        # Instagram Business requires Facebook authentication
-        return get_facebook_oauth_url(business=True, redirect_uri=redirect_uri)
-    
-    params = {
-        'client_id': settings.INSTAGRAM_CLIENT_ID,
-        'redirect_uri': redirect_uri or settings.INSTAGRAM_REDIRECT_URI,
-        'scope': scope,
-        'response_type': 'code'
+def get_facebook_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
+    """Get Facebook OAuth URL."""
+    platform = 'facebook'
+    state = store_oauth_state(platform)
+    auth_url, _ = build_authorization_url(platform, redirect_uri, state)
+    return {
+        'auth_url': auth_url,
+        'session_key': state
     }
-    return f'https://api.instagram.com/oauth/authorize?{urllib.parse.urlencode(params)}'
 
-def get_tiktok_oauth_url(business=False, redirect_uri=None):
-    """Generate OAuth URL for TikTok"""
-    scope = 'user.info.basic'
-    if business:
-        scope += ' video.list user.info.stats'
-    
-    params = {
-        'client_key': settings.TIKTOK_CLIENT_KEY,
-        'redirect_uri': redirect_uri or settings.TIKTOK_REDIRECT_URI,
-        'scope': scope,
-        'response_type': 'code',
-        'state': 'random_state_string'
+def get_linkedin_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
+    """Get LinkedIn OAuth URL."""
+    platform = 'linkedin'
+    state = store_oauth_state(platform)
+    auth_url, _ = build_authorization_url(platform, redirect_uri, state)
+    return {
+        'auth_url': auth_url,
+        'session_key': state
     }
-    return f'https://www.tiktok.com/auth/authorize/?{urllib.parse.urlencode(params)}'
 
-def get_telegram_oauth_url(business=False, redirect_uri=None):
-    """Generate OAuth URL for Telegram"""
-    # Telegram uses a different authentication flow through their Bot API
-    params = {
-        'bot_id': settings.TELEGRAM_BOT_USERNAME,
-        'origin': redirect_uri or settings.TELEGRAM_REDIRECT_URI,
-        'request_access': 'write' if business else 'read'
+def get_twitter_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
+    """Get Twitter OAuth URL."""
+    platform = 'twitter'
+    state = store_oauth_state(platform)
+    auth_url, code_verifier = build_authorization_url(platform, redirect_uri, state)
+    return {
+        'auth_url': auth_url,
+        'session_key': state
     }
-    return f'https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start={urllib.parse.urlencode(params)}'
+
+def get_instagram_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
+    """Get Instagram OAuth URL."""
+    platform = 'instagram'
+    state = store_oauth_state(platform)
+    auth_url, _ = build_authorization_url(platform, redirect_uri, state)
+    return {
+        'auth_url': auth_url,
+        'session_key': state
+    }
+
+def get_tiktok_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
+    """Get TikTok OAuth URL."""
+    platform = 'tiktok'
+    state = store_oauth_state(platform)
+    auth_url, code_verifier = build_authorization_url(platform, redirect_uri, state)
+    return {
+        'auth_url': auth_url,
+        'session_key': state
+    }
+
+def get_telegram_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
+    """Get Telegram OAuth URL."""
+    platform = 'telegram'
+    state = store_oauth_state(platform)
+    auth_url, _ = build_authorization_url(platform, redirect_uri, state)
+    return {
+        'auth_url': auth_url,
+        'session_key': state
+    }
 
 def refresh_google_token(refresh_token: str) -> Dict[str, str]:
     """Refresh Google OAuth token."""

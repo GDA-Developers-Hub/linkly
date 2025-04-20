@@ -10,82 +10,86 @@ from .models import User, Subscription, SubscriptionPlan
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
-    connected_platforms = serializers.SerializerMethodField()
-    subscription_status = serializers.SerializerMethodField()
+    """User model serializer."""
+    password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'username', 'is_business', 'company_name', 
-                 'phone_number', 'profile_picture', 'instagram_handle', 
-                 'twitter_handle', 'linkedin_profile', 'youtube_channel', 
-                 'facebook_page', 'tiktok_handle', 'business_description', 
-                 'website', 'industry', 'two_factor_enabled', 'connected_platforms', 'subscription_status')
-        read_only_fields = ('id', 'two_factor_enabled', 'connected_platforms', 'subscription_status')
+        fields = ('id', 'email', 'password', 'first_name', 'last_name', 'is_active')
+        read_only_fields = ('id', 'is_active')
 
-    def get_connected_platforms(self, obj):
-        platforms = []
-        
-        # Check each platform
-        if obj.facebook_id:
-            platforms.append({
-                'platform': 'facebook',
-                'connected': True,
-                'profile_url': obj.facebook_page or '',
-                'handle': obj.facebook_page_name or '',
-                'followers': obj.facebook_page_followers,
-                'is_business': obj.has_facebook_business,
-                'last_synced': obj.get_last_sync('facebook')
-            })
-        
-        if obj.instagram_id:
-            platforms.append({
-                'platform': 'instagram',
-                'connected': True,
-                'profile_url': obj.instagram_profile_url or '',
-                'handle': obj.instagram_handle or '',
-                'followers': obj.instagram_business_followers,
-                'is_business': obj.has_instagram_business,
-                'last_synced': obj.get_last_sync('instagram')
-            })
-        
-        # Add similar blocks for other platforms
-        platform_checks = [
-            ('twitter', 'twitter_id', 'twitter_profile_url', 'twitter_handle', 'twitter_followers'),
-            ('linkedin', 'linkedin_id', 'linkedin_profile', 'linkedin_company_name', 'linkedin_company_followers'),
-            ('youtube', 'youtube_id', 'youtube_channel', 'youtube_channel_title', 'youtube_subscribers'),
-            ('tiktok', 'tiktok_id', 'tiktok_profile_url', 'tiktok_handle', 'tiktok_followers'),
-            ('telegram', 'telegram_id', 'telegram_username', 'telegram_channel_name', 'telegram_subscribers')
-        ]
-        
-        for platform, id_field, url_field, handle_field, followers_field in platform_checks:
-            if getattr(obj, id_field):
-                platforms.append({
-                    'platform': platform,
-                    'connected': True,
-                    'profile_url': getattr(obj, url_field) or '',
-                    'handle': getattr(obj, handle_field) or '',
-                    'followers': getattr(obj, followers_field),
-                    'is_business': getattr(obj, f'has_{platform}_business', False),
-                    'last_synced': obj.get_last_sync(platform)
-                })
-        
-        return platforms
+    def create(self, validated_data):
+        user = User.objects.create_user(**validated_data)
+        return user
 
-    def get_subscription_status(self, obj):
-        if not obj.current_subscription:
-            return {
-                'status': 'NONE',
-                'plan': None,
-                'days_remaining': '0',
-                'is_trial': False
-            }
-        
-        return {
-            'status': obj.current_subscription.status,
-            'plan': obj.current_subscription.plan.name,
-            'days_remaining': obj.current_subscription.days_remaining(),
-            'is_trial': obj.current_subscription.is_trial
-        }
+class UserProfileSerializer(serializers.ModelSerializer):
+    """User profile serializer."""
+    class Meta:
+        model = User
+        fields = (
+            'id', 'email', 'first_name', 'last_name', 'company_name',
+            'website', 'industry', 'phone_number', 'country',
+            'profile_picture', 'timezone', 'date_joined'
+        )
+        read_only_fields = ('id', 'email', 'date_joined')
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Custom token obtain pair serializer."""
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        data['user'] = UserSerializer(self.user).data
+        return data
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """Change password serializer."""
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, min_length=8)
+
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Old password is incorrect")
+        return value
+
+    def save(self, **kwargs):
+        user = self.context['request'].user
+        user.set_password(self.validated_data['new_password'])
+        user.save()
+        return user
+
+class TwoFactorSerializer(serializers.Serializer):
+    """2FA serializer."""
+    token = serializers.CharField(required=True, min_length=6, max_length=6)
+
+class SubscriptionSerializer(serializers.ModelSerializer):
+    """Subscription serializer."""
+    plan_name = serializers.CharField(source='plan.name', read_only=True)
+    features = serializers.JSONField(source='plan.features', read_only=True)
+    price = serializers.DecimalField(source='plan.price', max_digits=10, decimal_places=2, read_only=True)
+    interval = serializers.CharField(source='plan.interval', read_only=True)
+    status = serializers.CharField(read_only=True)
+    
+    class Meta:
+        model = Subscription
+        fields = (
+            'id', 'plan_name', 'features', 'price', 'interval',
+            'status', 'start_date', 'end_date', 'is_active',
+            'is_trial', 'trial_end_date'
+        )
+        read_only_fields = fields
+
+class SocialAccountSerializer(serializers.ModelSerializer):
+    """Social account serializer."""
+    class Meta:
+        model = User
+        fields = (
+            'google_id', 'facebook_id', 'twitter_id', 'linkedin_id',
+            'instagram_id', 'tiktok_id', 'telegram_id',
+            'has_facebook_business', 'has_instagram_business',
+            'has_linkedin_company', 'has_twitter_business',
+            'has_tiktok_business', 'has_telegram_channel'
+        )
+        read_only_fields = fields
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -111,24 +115,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Create user with provided username
         user = User.objects.create_user(**validated_data)
         return user
-
-class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        user = self.user
-        
-        # Check if 2FA is enabled
-        if user.two_factor_enabled:
-            data['requires_2fa'] = True
-            data['user_id'] = user.id
-            # Don't include tokens yet
-            return data
-            
-        # If 2FA is not enabled, include user data and tokens
-        data['user'] = UserSerializer(user).data
-        # Store tokens in user model for Node.js compatibility
-        user.update_jwt_tokens(data['access'], data['refresh'])
-        return data
 
 class Verify2FASerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
@@ -160,10 +146,6 @@ class Enable2FASerializer(serializers.Serializer):
         img.save(buffered, format="PNG")
         return base64.b64encode(buffered.getvalue()).decode()
 
-class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True, validators=[validate_password])
-
 class UpdateUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -185,11 +167,10 @@ class SocialConnectionSerializer(serializers.Serializer):
     redirect_uri = serializers.CharField(required=False)
     business_account = serializers.BooleanField(default=False)
 
-class SocialAccountSerializer(serializers.Serializer):
-    platform = serializers.CharField()
-    connected = serializers.BooleanField()
-    profile_url = serializers.CharField()
-    handle = serializers.CharField()
-    followers = serializers.IntegerField()
-    is_business = serializers.BooleanField()
-    last_synced = serializers.CharField() 
+    def validate(self, attrs):
+        # Implement platform-specific validation
+        return attrs
+
+    def create(self, validated_data):
+        # Implement platform-specific connection creation
+        return validated_data 

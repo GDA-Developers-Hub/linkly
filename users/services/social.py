@@ -7,6 +7,19 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 import tweepy
 from django.utils import timezone
+from django.core.cache import cache
+import logging
+from typing import Dict, Any
+from .exceptions import (
+    OAuthError,
+    TokenExchangeError,
+    ProfileFetchError,
+    StateVerificationError,
+    PKCEVerificationError
+)
+from ..utils.oauth import get_platform_config, verify_oauth_state, get_stored_code_verifier
+
+logger = logging.getLogger('social')
 
 class SocialConnectionError(Exception):
     pass
@@ -490,255 +503,201 @@ def update_user_social_data(user, platform, data):
     except Exception as e:
         raise SocialConnectionError(f'Failed to update user data: {str(e)}')
 
-def connect_google_account(user, auth_code, redirect_uri=None, business=False):
-    """Connect Google account to user"""
-    try:
-        # Exchange auth code for tokens
-        tokens = exchange_google_code(auth_code, redirect_uri)
-        if not tokens:
-            raise SocialConnectionError('Failed to exchange Google auth code')
+def exchange_code_for_token(platform: str, code: str, redirect_uri: str, code_verifier: str = None) -> Dict:
+    """Exchange authorization code for access token."""
+    config = get_platform_config(platform)
+    
+    data = {
+        'client_id': config['client_id'],
+        'client_secret': config['client_secret'],
+        'code': code,
+        'redirect_uri': redirect_uri,
+        'grant_type': 'authorization_code'
+    }
+    
+    if code_verifier:
+        data['code_verifier'] = code_verifier
+    
+    response = requests.post(config['token_url'], data=data)
+    if not response.ok:
+        raise TokenExchangeError(f"Failed to exchange code for {platform}: {response.text}")
+    
+    return response.json()
 
-        # Fetch user data
-        user_data = fetch_google_user_data(tokens['access_token'])
-        if not user_data:
-            raise SocialConnectionError('Failed to fetch Google user data')
+def connect_google_account(user, code: str, session_key: str, state: str) -> Dict:
+    """Connect Google account."""
+    verify_oauth_state(state)
+    code_verifier = get_stored_code_verifier(state)
+    
+    token_data = exchange_code_for_token('google', code, settings.GOOGLE_REDIRECT_URI, code_verifier)
+    
+    # Get user profile
+    headers = {'Authorization': f"Bearer {token_data['access_token']}"}
+    response = requests.get('https://www.googleapis.com/oauth2/v2/userinfo', headers=headers)
+    if not response.ok:
+        raise ProfileFetchError("Failed to fetch Google profile")
+    
+    profile = response.json()
+    
+    # Update user
+    user.google_id = profile['id']
+    user.google_access_token = token_data['access_token']
+    if 'refresh_token' in token_data:
+        user.google_refresh_token = token_data['refresh_token']
+    user.save()
+    
+    return {
+        'success': True,
+        'platform': 'google',
+        'profile': profile
+    }
 
-        # Update user's Google tokens
-        user.google_access_token = tokens.get('access_token')
-        user.google_refresh_token = tokens.get('refresh_token')
-        user.google_id = user_data.get('sub')
-        user.update_social_token('google', tokens['access_token'], tokens.get('expires_in', 3600))
+def connect_facebook_account(user, code: str, session_key: str, state: str) -> Dict:
+    """Connect Facebook account."""
+    verify_oauth_state(state)
+    
+    token_data = exchange_code_for_token('facebook', code, settings.FACEBOOK_REDIRECT_URI)
+    
+    # Get user profile
+    params = {
+        'fields': 'id,name,email',
+        'access_token': token_data['access_token']
+    }
+    response = requests.get('https://graph.facebook.com/v12.0/me', params=params)
+    if not response.ok:
+        raise ProfileFetchError("Failed to fetch Facebook profile")
+    
+    profile = response.json()
+    
+    # Update user
+    user.facebook_id = profile['id']
+    user.facebook_access_token = token_data['access_token']
+    user.save()
+    
+    return {
+        'success': True,
+        'platform': 'facebook',
+        'profile': profile
+    }
 
-        if business:
-            user.google_business_connected = True
+def connect_linkedin_account(user, code: str, session_key: str, state: str) -> Dict:
+    """Connect LinkedIn account."""
+    verify_oauth_state(state)
+    
+    token_data = exchange_code_for_token('linkedin', code, settings.LINKEDIN_REDIRECT_URI)
+    
+    # Get user profile
+    headers = {'Authorization': f"Bearer {token_data['access_token']}"}
+    response = requests.get('https://api.linkedin.com/v2/me', headers=headers)
+    if not response.ok:
+        raise ProfileFetchError("Failed to fetch LinkedIn profile")
+    
+    profile = response.json()
+    
+    # Update user
+    user.linkedin_id = profile['id']
+    user.linkedin_access_token = token_data['access_token']
+    user.save()
+    
+    return {
+        'success': True,
+        'platform': 'linkedin',
+        'profile': profile
+    }
 
-        # Update user profile data
-        update_user_social_data(user, 'google', user_data)
+def connect_twitter_account(user, code: str, session_key: str, state: str) -> Dict:
+    """Connect Twitter account."""
+    verify_oauth_state(state)
+    code_verifier = get_stored_code_verifier(state)
+    
+    token_data = exchange_code_for_token('twitter', code, settings.TWITTER_REDIRECT_URI, code_verifier)
+    
+    # Get user profile
+    headers = {'Authorization': f"Bearer {token_data['access_token']}"}
+    response = requests.get('https://api.twitter.com/2/users/me', headers=headers)
+    if not response.ok:
+        raise ProfileFetchError("Failed to fetch Twitter profile")
+    
+    profile = response.json()
+    
+    # Update user
+    user.twitter_id = profile['data']['id']
+    user.twitter_access_token = token_data['access_token']
+    if 'refresh_token' in token_data:
+        user.twitter_refresh_token = token_data['refresh_token']
+    user.save()
+    
+    return {
+        'success': True,
+        'platform': 'twitter',
+        'profile': profile['data']
+    }
 
-        return {
-            'success': True,
-            'user_id': user.google_id,
-            'email': user_data.get('email')
-        }
+def connect_instagram_account(user, code: str, session_key: str, state: str) -> Dict:
+    """Connect Instagram account."""
+    verify_oauth_state(state)
+    
+    token_data = exchange_code_for_token('instagram', code, settings.INSTAGRAM_REDIRECT_URI)
+    
+    # Get user profile
+    params = {
+        'fields': 'id,username',
+        'access_token': token_data['access_token']
+    }
+    response = requests.get('https://graph.instagram.com/me', params=params)
+    if not response.ok:
+        raise ProfileFetchError("Failed to fetch Instagram profile")
+    
+    profile = response.json()
+    
+    # Update user
+    user.instagram_id = profile['id']
+    user.instagram_access_token = token_data['access_token']
+    user.save()
+    
+    return {
+        'success': True,
+        'platform': 'instagram',
+        'profile': profile
+    }
 
-    except Exception as e:
-        raise SocialConnectionError(f'Failed to connect Google account: {str(e)}')
+def connect_tiktok_account(user, code: str, session_key: str, state: str) -> Dict:
+    """Connect TikTok account."""
+    verify_oauth_state(state)
+    code_verifier = get_stored_code_verifier(state)
+    
+    token_data = exchange_code_for_token('tiktok', code, settings.TIKTOK_REDIRECT_URI, code_verifier)
+    
+    # Get user profile
+    headers = {'Authorization': f"Bearer {token_data['access_token']}"}
+    response = requests.get('https://open.tiktokapis.com/v2/user/info/', headers=headers)
+    if not response.ok:
+        raise ProfileFetchError("Failed to fetch TikTok profile")
+    
+    profile = response.json()
+    
+    # Update user
+    user.tiktok_id = profile['data']['user']['id']
+    user.tiktok_access_token = token_data['access_token']
+    user.save()
+    
+    return {
+        'success': True,
+        'platform': 'tiktok',
+        'profile': profile['data']['user']
+    }
 
-def connect_facebook_account(user, auth_code, redirect_uri=None, business=False):
-    """Connect Facebook account to user"""
-    try:
-        # Exchange auth code for tokens
-        tokens = exchange_facebook_code(auth_code, redirect_uri)
-        if not tokens:
-            raise SocialConnectionError('Failed to exchange Facebook auth code')
-
-        # Fetch user data
-        user_data = fetch_facebook_user_data(tokens['access_token'])
-        if not user_data:
-            raise SocialConnectionError('Failed to fetch Facebook user data')
-
-        # Update user's Facebook tokens
-        user.facebook_access_token = tokens['access_token']
-        user.facebook_id = user_data['profile'].get('id')
-        user.update_social_token('facebook', tokens['access_token'])
-
-        if business and user_data.get('pages'):
-            user.has_facebook_business = True
-
-        # Update user profile data
-        update_user_social_data(user, 'facebook', user_data)
-
-        return {
-            'success': True,
-            'user_id': user.facebook_id,
-            'pages': user_data.get('pages', [])
-        }
-
-    except Exception as e:
-        raise SocialConnectionError(f'Failed to connect Facebook account: {str(e)}')
-
-def connect_linkedin_account(user, auth_code, redirect_uri=None, business=False):
-    """Connect LinkedIn account to user"""
-    try:
-        # Exchange auth code for tokens
-        tokens = exchange_linkedin_code(auth_code, redirect_uri)
-        if not tokens:
-            raise SocialConnectionError('Failed to exchange LinkedIn auth code')
-
-        # Fetch user data
-        user_data = fetch_linkedin_user_data(tokens['access_token'])
-        if not user_data:
-            raise SocialConnectionError('Failed to fetch LinkedIn user data')
-
-        # Update user's LinkedIn tokens
-        user.linkedin_access_token = tokens['access_token']
-        user.linkedin_id = user_data['profile'].get('id')
-        user.update_social_token('linkedin', tokens['access_token'])
-
-        if business and user_data.get('companies'):
-            user.has_linkedin_company = True
-
-        # Update user profile data
-        update_user_social_data(user, 'linkedin', user_data)
-
-        return {
-            'success': True,
-            'user_id': user.linkedin_id,
-            'companies': user_data.get('companies', [])
-        }
-
-    except Exception as e:
-        raise SocialConnectionError(f'Failed to connect LinkedIn account: {str(e)}')
-
-def connect_twitter_account(user, auth_code, redirect_uri=None, business=False):
-    """Connect Twitter account to user"""
-    try:
-        # Exchange auth code for tokens
-        tokens = exchange_twitter_code(auth_code, redirect_uri)
-        if not tokens:
-            raise SocialConnectionError('Failed to exchange Twitter auth code')
-
-        # Fetch user data
-        user_data = fetch_twitter_user_data(
-            tokens['access_token'],
-            tokens.get('access_token_secret', '')
-        )
-        if not user_data:
-            raise SocialConnectionError('Failed to fetch Twitter user data')
-
-        # Update user's Twitter tokens
-        user.twitter_access_token = tokens['access_token']
-        user.twitter_access_token_secret = tokens.get('access_token_secret')
-        user.twitter_id = user_data['id']
-        user.update_social_token('twitter', tokens['access_token'])
-
-        if business:
-            user.has_twitter_business = True
-
-        # Update user profile data
-        update_user_social_data(user, 'twitter', user_data)
-
-        return {
-            'success': True,
-            'user_id': user.twitter_id,
-            'username': user_data['username']
-        }
-
-    except Exception as e:
-        raise SocialConnectionError(f'Failed to connect Twitter account: {str(e)}')
-
-def connect_instagram_account(user, auth_code, redirect_uri=None, business=False):
-    """Connect Instagram account to user"""
-    try:
-        if business:
-            # Instagram Business uses Facebook authentication
-            tokens = exchange_facebook_code(auth_code, redirect_uri)
-            if not tokens:
-                raise SocialConnectionError('Failed to exchange Facebook auth code for Instagram Business')
-        else:
-            tokens = exchange_instagram_code(auth_code, redirect_uri)
-            if not tokens:
-                raise SocialConnectionError('Failed to exchange Instagram auth code')
-
-        # Fetch user data
-        user_data = fetch_instagram_user_data(tokens['access_token'])
-        if not user_data:
-            raise SocialConnectionError('Failed to fetch Instagram user data')
-
-        # Update user's Instagram tokens
-        if business:
-            user.instagram_business_token = tokens['access_token']
-            user.instagram_business_id = user_data['profile'].get('id')
-            user.has_instagram_business = True
-        else:
-            user.instagram_access_token = tokens['access_token']
-            user.instagram_id = user_data['profile'].get('id')
-
-        user.update_social_token('instagram', tokens['access_token'])
-
-        # Update user profile data
-        update_user_social_data(user, 'instagram', user_data)
-
-        return {
-            'success': True,
-            'user_id': user.instagram_business_id if business else user.instagram_id,
-            'username': user_data['profile'].get('username')
-        }
-
-    except Exception as e:
-        raise SocialConnectionError(f'Failed to connect Instagram account: {str(e)}')
-
-def connect_tiktok_account(user, auth_code, redirect_uri=None, business=False):
-    """Connect TikTok account to user"""
-    try:
-        # Exchange auth code for tokens
-        tokens = exchange_tiktok_code(auth_code, redirect_uri)
-        if not tokens:
-            raise SocialConnectionError('Failed to exchange TikTok auth code')
-
-        # Fetch user data
-        user_data = fetch_tiktok_user_data(
-            tokens['access_token'],
-            tokens.get('open_id')
-        )
-        if not user_data:
-            raise SocialConnectionError('Failed to fetch TikTok user data')
-
-        # Update user's TikTok tokens
-        user.tiktok_access_token = tokens['access_token']
-        user.tiktok_id = tokens.get('open_id')
-        user.update_social_token('tiktok', tokens['access_token'])
-
-        if business:
-            user.has_tiktok_business = True
-
-        # Update user profile data
-        update_user_social_data(user, 'tiktok', user_data)
-
-        return {
-            'success': True,
-            'user_id': user.tiktok_id,
-            'username': user_data.get('display_name')
-        }
-
-    except Exception as e:
-        raise SocialConnectionError(f'Failed to connect TikTok account: {str(e)}')
-
-def connect_telegram_account(user, auth_data, redirect_uri=None, business=False):
-    """Connect Telegram account to user"""
-    try:
-        # Verify Telegram authentication data
-        if not verify_telegram_data(auth_data):
-            raise SocialConnectionError('Invalid Telegram authentication data')
-
-        # Get user's Telegram ID
-        telegram_id = auth_data.get('id')
-        if not telegram_id:
-            raise SocialConnectionError('Telegram ID not found in auth data')
-
-        # Fetch channel data if it's a business account
-        if business:
-            channel_data = fetch_telegram_channel_data(telegram_id)
-            if not channel_data:
-                raise SocialConnectionError('Failed to fetch Telegram channel data')
-
-        # Update user's Telegram info
-        user.telegram_id = telegram_id
-        user.telegram_username = auth_data.get('username')
-        user.telegram_chat_id = telegram_id
-
-        if business:
-            user.has_telegram_channel = True
-            update_user_social_data(user, 'telegram', channel_data)
-
-        user.update_last_sync('telegram')
-        user.save()
-
-        return {
-            'success': True,
-            'user_id': user.telegram_id,
-            'username': user.telegram_username
-        }
-
-    except Exception as e:
-        raise SocialConnectionError(f'Failed to connect Telegram account: {str(e)}') 
+def connect_telegram_account(user, code: str, session_key: str, state: str) -> Dict:
+    """Connect Telegram account."""
+    verify_oauth_state(state)
+    
+    # Telegram uses a different authentication flow through their Bot API
+    # The code parameter here is actually the user's Telegram ID
+    user.telegram_id = code
+    user.save()
+    
+    return {
+        'success': True,
+        'platform': 'telegram',
+        'profile': {'id': code}
+    } 

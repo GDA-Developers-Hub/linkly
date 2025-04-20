@@ -51,6 +51,7 @@ CORS_ALLOW_CREDENTIALS = True
 # If not in debug mode, specify allowed origins
 if not DEBUG:
     CORS_ALLOWED_ORIGINS = [
+        "https://godigitalafrica-admin.web.app",
         "https://linkly-production.up.railway.app",
         "https://c175-102-217-65-14.ngrok-free.app",
         "http://localhost:3000",
@@ -275,13 +276,13 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 
 # Webhook and Redirect URLs
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
-STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'http://localhost:3000/billing/success')
-STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'http://localhost:3000/billing/cancel')
+STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'https://godigitalafrica-admin.web.app/billing/success')
+STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'https://godigitalafrica-admin.web.app/billing/cancel')
 
 
 
 # OAuth2 Redirect URIs
-OAUTH2_REDIRECT_URI = os.environ.get('FRONTEND_URL', 'http://localhost:3001')
+OAUTH2_REDIRECT_URI = os.environ.get('FRONTEND_URL', 'https://godigitalafrica-admin.web.app')
 
 # Jazzmin Settings
 JAZZMIN_SETTINGS = {
