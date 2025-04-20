@@ -1,9 +1,11 @@
-from whitenoise.storage import CompressedManifestStaticFilesStorage
+from whitenoise.storage import CompressedStaticFilesStorage
 
-class CustomWhiteNoiseStorage(CompressedManifestStaticFilesStorage):
-    def hashed_name(self, name, content=None, filename=None):
+class CustomWhiteNoiseStorage(CompressedStaticFilesStorage):
+    def url(self, name, **kwargs):
         try:
-            return super().hashed_name(name, content, filename)
+            return super().url(name, **kwargs)
         except ValueError:
-            # If the file is missing (like source maps), return the original name
-            return name 
+            # If the file is a source map that doesn't exist, return an empty string
+            if name.endswith('.map'):
+                return ''
+            raise 
