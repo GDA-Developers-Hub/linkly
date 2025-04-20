@@ -28,11 +28,14 @@ def get_ngrok_url():
 NGROK_URL = get_ngrok_url()
 ALLOWED_HOSTS = [
     'linkly-production.up.railway.app',
-    'c175-102-217-65-14.ngrok-free.app',
     'localhost',
     '127.0.0.1',
-    '.ngrok-free.app',  # Allow all ngrok subdomains
+    '.railway.app'  # Allow all Railway subdomains
 ]
+
+# Add any additional hosts from environment variable
+if os.getenv('ADDITIONAL_ALLOWED_HOSTS'):
+    ALLOWED_HOSTS.extend(os.getenv('ADDITIONAL_ALLOWED_HOSTS').split(','))
 
 if NGROK_URL:
     ALLOWED_HOSTS.append(NGROK_URL)
@@ -45,22 +48,17 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 
 # CORS Settings
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
 
-# If not in debug mode, specify allowed origins
 if not DEBUG:
     CORS_ALLOWED_ORIGINS = [
         "https://godigitalafrica-admin.web.app",
         "https://linkly-production.up.railway.app",
-        "https://c175-102-217-65-14.ngrok-free.app",
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:5174",
     ]
-
-    if NGROK_URL:
-        CORS_ALLOWED_ORIGINS.append(f"https://{NGROK_URL}")
+    
+    if os.getenv('ADDITIONAL_CORS_ORIGINS'):
+        CORS_ALLOWED_ORIGINS.extend(os.getenv('ADDITIONAL_CORS_ORIGINS').split(','))
 
 # CORS Headers Configuration
 CORS_ALLOW_HEADERS = [
@@ -79,15 +77,15 @@ CORS_EXPOSE_HEADERS = ["content-type", "x-csrftoken"]
 
 # CSRF Settings
 CSRF_TRUSTED_ORIGINS = [
-    "https://linkly-production.up.railway.app",
-    "https://c175-102-217-65-14.ngrok-free.app",
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:5174",
+    'https://linkly-production.up.railway.app',
+    'https://godigitalafrica-admin.web.app',
 ]
 
-if NGROK_URL:
-    CSRF_TRUSTED_ORIGINS.append(f"https://{NGROK_URL}")
+if os.getenv('ADDITIONAL_CSRF_ORIGINS'):
+    CSRF_TRUSTED_ORIGINS.extend(os.getenv('ADDITIONAL_CSRF_ORIGINS').split(','))
+
+# Add Railway domain to CSRF trusted origins
+CSRF_TRUSTED_ORIGINS.extend([f'https://{host}' for host in ALLOWED_HOSTS if '.railway.app' in host])
 
 # Cookie Settings
 SESSION_COOKIE_SECURE = not DEBUG
@@ -150,10 +148,9 @@ TEMPLATES = [
 WSGI_APPLICATION = 'linkly.wsgi.application'
 
 # Database
-DATABASE_URL = "postgresql://postgres:hiTrOJnkqeRbIFiIGcynBHzvWBExIbkQ@metro.proxy.rlwy.net:30172/railway"
 DATABASES = {
     'default': dj_database_url.config(
-        default=DATABASE_URL,
+        default=os.getenv('DATABASE_URL'),
         conn_max_age=600
     )
 }
@@ -180,8 +177,8 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATICFILES_STORAGE = 'linkly.storage.CustomWhiteNoiseStorage'
-
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+WHITENOISE_MAX_AGE = 31536000  # 1 year
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
@@ -215,9 +212,6 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
 }
-
-
-
 
 # Email settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -277,8 +271,6 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'https://godigitalafrica-admin.web.app/billing/success')
 STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'https://godigitalafrica-admin.web.app/billing/cancel')
-
-
 
 # Jazzmin Settings
 JAZZMIN_SETTINGS = {

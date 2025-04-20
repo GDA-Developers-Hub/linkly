@@ -14,5 +14,4 @@ from whitenoise import WhiteNoise
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'linkly.settings')
 
 application = get_wsgi_application()
-application = WhiteNoise(application, root='staticfiles')
-application.add_files('staticfiles', prefix='more-files/') 
+application = WhiteNoise(application, root='staticfiles') 
