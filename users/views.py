@@ -581,13 +581,25 @@ def register_user(request):
 )
 def init_oauth(request):
     """Initialize OAuth flow for social media platforms"""
+    # Debug logging
+    print(f"Auth header: {request.headers.get('Authorization', 'No Auth header')}")
+    print(f"User authenticated: {request.user.is_authenticated}")
+    
     platform = request.GET.get('platform')
     redirect_uri = request.GET.get('redirect_uri')
     
     if not platform or not redirect_uri:
         return Response({
-            'error': 'Platform and redirect_uri are required'
+            'error': 'Platform and redirect_uri are required',
+            'platform': platform,
+            'redirect_uri': redirect_uri
         }, status=status.HTTP_400_BAD_REQUEST)
+    
+    if not request.user.is_authenticated:
+        return Response({
+            'error': 'Authentication required',
+            'detail': 'Please provide a valid JWT token'
+        }, status=status.HTTP_401_UNAUTHORIZED)
     
     try:
         # Get the appropriate OAuth URL based on platform
@@ -607,7 +619,9 @@ def init_oauth(request):
             auth_url = get_telegram_auth_url()
         else:
             return Response({
-                'error': 'Invalid platform'
+                'error': 'Invalid platform',
+                'platform': platform,
+                'supported_platforms': ['facebook', 'google', 'linkedin', 'twitter', 'instagram', 'tiktok', 'telegram']
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Store OAuth state in Redis with user ID
@@ -622,14 +636,22 @@ def init_oauth(request):
                 },
                 timeout=3600  # 1 hour expiry
             )
+            
+            # Debug logging
+            print(f"Stored state in cache: {state}")
+            print(f"User ID: {request.user.id}")
+            print(f"Platform: {platform}")
+            print(f"Redirect URI: {redirect_uri}")
         
         return Response({
-            'auth_url': auth_url
+            'auth_url': auth_url,
+            'state': state  # Include state in response for debugging
         })
         
     except Exception as e:
         return Response({
-            'error': str(e)
+            'error': str(e),
+            'detail': 'An error occurred during OAuth initialization'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @swagger_auto_schema(

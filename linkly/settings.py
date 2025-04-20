@@ -228,45 +228,38 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
 # Social Authentication Settings
-SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.environ.get('GOOGLE_OAUTH2_CLIENT_ID', '')
-SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.environ.get('GOOGLE_OAUTH2_CLIENT_SECRET', '')
-SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = [
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/userinfo.profile',
-]
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 
-SOCIAL_AUTH_FACEBOOK_KEY = os.environ.get('FACEBOOK_APP_ID', '')
-SOCIAL_AUTH_FACEBOOK_SECRET = os.environ.get('FACEBOOK_APP_SECRET', '')
-SOCIAL_AUTH_FACEBOOK_SCOPE = ['email']
-SOCIAL_AUTH_FACEBOOK_PROFILE_EXTRA_PARAMS = {
-    'fields': 'id,name,email,picture'
-}
+# Facebook Settings
+FACEBOOK_CLIENT_ID = os.getenv('FACEBOOK_CLIENT_ID') or os.getenv('FACEBOOK_APP_ID')
+FACEBOOK_CLIENT_SECRET = os.getenv('FACEBOOK_CLIENT_SECRET') or os.getenv('FACEBOOK_APP_SECRET')
 
-SOCIAL_AUTH_LINKEDIN_OAUTH2_KEY = os.environ.get('LINKEDIN_CLIENT_ID', '')
-SOCIAL_AUTH_LINKEDIN_OAUTH2_SECRET = os.environ.get('LINKEDIN_CLIENT_SECRET', '')
-SOCIAL_AUTH_LINKEDIN_OAUTH2_SCOPE = ['r_liteprofile', 'r_emailaddress']
-SOCIAL_AUTH_LINKEDIN_OAUTH2_FIELD_SELECTORS = ['emailAddress', 'formatted-name', 'public-profile-url', 'picture-url']
+LINKEDIN_CLIENT_ID = os.getenv('LINKEDIN_CLIENT_ID')
+LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET')
+
+# Twitter Settings
+TWITTER_CLIENT_ID = os.getenv('TWITTER_API_KEY')
+TWITTER_CLIENT_SECRET = os.getenv('TWITTER_API_SECRET')
+TWITTER_ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN')
+TWITTER_ACCESS_TOKEN_SECRET = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
 
 # Instagram Settings
-INSTAGRAM_CLIENT_ID = os.environ.get('INSTAGRAM_CLIENT_ID', '')
-INSTAGRAM_CLIENT_SECRET = os.environ.get('INSTAGRAM_CLIENT_SECRET', '')
-INSTAGRAM_SCOPE = ['basic', 'public_content']
-
-# Twitter/X Settings
-TWITTER_CLIENT_ID = os.environ.get('TWITTER_API_KEY', '')  # Using API Key as Client ID
-TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_API_SECRET', '')  # Using API Secret as Client Secret
-TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN', '')
-TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN', '')
-TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET', '')
+INSTAGRAM_CLIENT_ID = os.getenv('INSTAGRAM_CLIENT_ID')
+INSTAGRAM_CLIENT_SECRET = os.getenv('INSTAGRAM_CLIENT_SECRET')
 
 # TikTok Settings
-TIKTOK_CLIENT_KEY = os.environ.get('TIKTOK_CLIENT_KEY', '')
-TIKTOK_CLIENT_SECRET = os.environ.get('TIKTOK_CLIENT_SECRET', '')
+TIKTOK_CLIENT_ID = os.getenv('TIKTOK_CLIENT_KEY')
+TIKTOK_CLIENT_SECRET = os.getenv('TIKTOK_CLIENT_SECRET')
+
+# Legacy TikTok credentials (if still needed)
+TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY')
 
 # Telegram Settings
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_BOT_USERNAME = os.environ.get('TELEGRAM_BOT_USERNAME', '')
-TELEGRAM_WEBHOOK_URL = os.environ.get('TELEGRAM_WEBHOOK_URL', '')  # For production
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+
+# OAuth2 Settings
+OAUTH2_REDIRECT_URI = os.getenv('FRONTEND_URL', 'https://godigitalafrica-admin.web.app')
 
 # =========================================
 # STRIPE CONFIGURATION
@@ -280,9 +273,6 @@ STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'https://godigitalafri
 STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'https://godigitalafrica-admin.web.app/billing/cancel')
 
 
-
-# OAuth2 Redirect URIs
-OAUTH2_REDIRECT_URI = os.environ.get('FRONTEND_URL', 'https://godigitalafrica-admin.web.app')
 
 # Jazzmin Settings
 JAZZMIN_SETTINGS = {
