@@ -9,7 +9,7 @@ from ..services.oauth import (
     get_google_oauth_url, get_facebook_oauth_url,
     get_linkedin_oauth_url, get_twitter_oauth_url,
     get_instagram_oauth_url, get_tiktok_oauth_url,
-    get_telegram_oauth_url
+    get_telegram_oauth_url, get_youtube_oauth_url
 )
 from ..services.social import (
     connect_google_account, connect_facebook_account,
@@ -30,7 +30,7 @@ from ..services.exceptions import (
             openapi.IN_QUERY,
             description="Social platform to connect with",
             type=openapi.TYPE_STRING,
-            enum=['google', 'facebook', 'linkedin', 'twitter', 'instagram', 'tiktok', 'telegram']
+            enum=['google', 'facebook', 'linkedin', 'twitter', 'instagram', 'tiktok', 'telegram', 'youtube']
         ),
         openapi.Parameter(
             'business',
@@ -53,8 +53,10 @@ from ..services.exceptions import (
                 type=openapi.TYPE_OBJECT,
                 properties={
                     'auth_url': openapi.Schema(type=openapi.TYPE_STRING),
-                    'session_key': openapi.Schema(type=openapi.TYPE_STRING)
-                }
+                    'state': openapi.Schema(type=openapi.TYPE_STRING),
+                    'code_verifier': openapi.Schema(type=openapi.TYPE_STRING)
+                },
+                required=['auth_url', 'state']
             )
         ),
         400: 'Invalid platform or parameters',
@@ -66,16 +68,12 @@ from ..services.exceptions import (
 def init_oauth(request):
     """Initialize OAuth flow for social platform"""
     platform = request.query_params.get('platform')
-    business = request.query_params.get('business', 'false').lower() == 'true'
     redirect_uri = request.query_params.get('redirect_uri')
     
-    # Check business feature access
-    if business and request.user.is_authenticated:
-        subscription = request.user.current_subscription
-        if not subscription or not subscription.plan.has_business_features:
-            return Response({
-                'error': 'Business features require a premium subscription'
-            }, status=status.HTTP_403_FORBIDDEN)
+    if not platform or not redirect_uri:
+        return Response({
+            'error': 'Platform and redirect_uri are required'
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     # Get OAuth URL generator
     oauth_functions = {
@@ -85,19 +83,18 @@ def init_oauth(request):
         'twitter': get_twitter_oauth_url,
         'instagram': get_instagram_oauth_url,
         'tiktok': get_tiktok_oauth_url,
-        'telegram': get_telegram_oauth_url
+        'telegram': get_telegram_oauth_url,
+        'youtube': get_youtube_oauth_url
     }
     
     if platform not in oauth_functions:
         return Response({
-            'error': 'Invalid platform'
+            'error': 'Invalid platform',
+            'supported_platforms': list(oauth_functions.keys())
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        result = oauth_functions[platform](
-            business=business,
-            redirect_uri=redirect_uri
-        )
+        result = oauth_functions[platform](redirect_uri=redirect_uri)
         return Response(result)
     except Exception as e:
         return Response({
@@ -217,8 +214,22 @@ def linkedin_callback(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def twitter_callback(request):
-    """Handle Twitter OAuth callback"""
-    return oauth_callback(request, 'twitter')
+    """Handle Twitter OAuth 1.0a callback"""
+    oauth_token = request.GET.get('oauth_token')
+    oauth_verifier = request.GET.get('oauth_verifier')
+    
+    if not oauth_token or not oauth_verifier:
+        return Response({
+            'error': 'Missing required parameters'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        result = connect_twitter_account(request.user, oauth_token, oauth_verifier)
+        return Response(result)
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

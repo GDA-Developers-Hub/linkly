@@ -239,10 +239,16 @@ LINKEDIN_CLIENT_ID = os.getenv('LINKEDIN_CLIENT_ID')
 LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET')
 
 # Twitter Settings
-TWITTER_CLIENT_ID = os.getenv('TWITTER_API_KEY')
-TWITTER_CLIENT_SECRET = os.getenv('TWITTER_API_SECRET')
-TWITTER_ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN')
-TWITTER_ACCESS_TOKEN_SECRET = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
+TWITTER_CLIENT_ID = os.environ.get('TWITTER_CLIENT_ID') or os.environ.get('TWITTER_API_KEY', 'ejv3lQRQc923gdN6DMsyDkykJ')
+TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_CLIENT_SECRET') or os.environ.get('TWITTER_API_SECRET', '2taxaldg80OqT5ATGYsePjsmavyRLm8SD8NAKDHNDjL5aQvZBY')
+TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN')
+TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN')
+TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET')
+TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'https://godigitalafrica-admin.web.app/oauth-callback/twitter')
+
+# For backwards compatibility
+TWITTER_API_KEY = TWITTER_CLIENT_ID
+TWITTER_API_SECRET = TWITTER_CLIENT_SECRET
 
 # Instagram Settings
 INSTAGRAM_CLIENT_ID = os.getenv('INSTAGRAM_CLIENT_ID')
@@ -483,4 +489,9 @@ CACHE_TTL = 60 * 15
 
 # Redis as session backend
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_CACHE_ALIAS = 'default' 
+SESSION_CACHE_ALIAS = 'default'
+
+# Twitter API Configuration
+TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY')
+TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET')
+TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'http://localhost:3000/oauth-callback/twitter') 

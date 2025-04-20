@@ -47,6 +47,14 @@ def get_platform_config(platform: str) -> Dict:
             'scopes': ['openid', 'email', 'profile'],
             'uses_pkce': True
         },
+        'youtube': {
+            'client_id': settings.GOOGLE_CLIENT_ID,
+            'client_secret': settings.GOOGLE_CLIENT_SECRET,
+            'auth_url': 'https://accounts.google.com/o/oauth2/v2/auth',
+            'token_url': 'https://oauth2.googleapis.com/token',
+            'scopes': ['https://www.googleapis.com/auth/youtube.readonly'],
+            'uses_pkce': True
+        },
         'facebook': {
             'client_id': settings.FACEBOOK_CLIENT_ID,
             'client_secret': settings.FACEBOOK_CLIENT_SECRET,
@@ -85,6 +93,14 @@ def get_platform_config(platform: str) -> Dict:
             'auth_url': 'https://www.tiktok.com/auth/authorize/',
             'token_url': 'https://open-api.tiktok.com/oauth/access_token/',
             'scopes': ['user.info.basic'],
+            'uses_pkce': False
+        },
+        'telegram': {
+            'client_id': settings.TELEGRAM_BOT_TOKEN.split(':')[0] if settings.TELEGRAM_BOT_TOKEN else None,
+            'client_secret': settings.TELEGRAM_BOT_TOKEN.split(':')[1] if settings.TELEGRAM_BOT_TOKEN else None,
+            'auth_url': 'https://oauth.telegram.org/auth',
+            'token_url': None,  # Telegram uses a different auth flow
+            'scopes': [],  # Telegram doesn't use OAuth scopes
             'uses_pkce': False
         }
     }

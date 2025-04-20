@@ -3,12 +3,7 @@ Views package initialization.
 This makes the views directory a proper Python package.
 """
 
-from .auth import (
-    RegisterView,
-    CustomTokenObtainPairView,
-    ChangePasswordView,
-    ValidateTokenView
-)
+from .auth import *
 from .profile import (
     UpdateProfileView,
     UserProfileView
@@ -22,24 +17,23 @@ from .subscription import (
     available_plans,
     create_checkout_session
 )
-from .oauth import (
-    init_oauth,
-    oauth_callback,
-    google_callback,
-    facebook_callback,
-    linkedin_callback,
-    twitter_callback,
-    instagram_callback,
-    tiktok_callback,
-    telegram_callback,
-    unlink_social_account
+from .oauth import *
+from .social import (
+    connect_google,
+    connect_facebook,
+    connect_linkedin,
+    connect_twitter,
+    connect_instagram,
+    connect_tiktok,
+    connect_telegram,
+    connect_facebook_page,
+    connect_instagram_business,
+    connect_linkedin_company,
+    connect_tiktok_business,
+    connect_telegram_channel
 )
 
 __all__ = [
-    'RegisterView',
-    'CustomTokenObtainPairView',
-    'ChangePasswordView',
-    'ValidateTokenView',
     'UpdateProfileView',
     'UserProfileView',
     'Enable2FAView',
@@ -47,14 +41,16 @@ __all__ = [
     'SubscriptionStatusView',
     'available_plans',
     'create_checkout_session',
-    'init_oauth',
-    'oauth_callback',
-    'google_callback',
-    'facebook_callback',
-    'linkedin_callback',
-    'twitter_callback',
-    'instagram_callback',
-    'tiktok_callback',
-    'telegram_callback',
-    'unlink_social_account'
+    'connect_google',
+    'connect_facebook',
+    'connect_linkedin',
+    'connect_twitter',
+    'connect_instagram',
+    'connect_tiktok',
+    'connect_telegram',
+    'connect_facebook_page',
+    'connect_instagram_business',
+    'connect_linkedin_company',
+    'connect_tiktok_business',
+    'connect_telegram_channel'
 ] 

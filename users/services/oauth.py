@@ -11,6 +11,7 @@ from ..utils.oauth import (
     build_authorization_url,
     get_platform_config
 )
+import time
 
 logger = logging.getLogger('oauth')
 
@@ -37,15 +38,45 @@ def get_google_oauth_url(business: bool = False, redirect_uri: str = None) -> Di
         'session_key': state
     }
 
-def get_facebook_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
-    """Get Facebook OAuth URL."""
-    platform = 'facebook'
-    state = store_oauth_state(platform)
-    auth_url, _ = build_authorization_url(platform, redirect_uri, state)
-    return {
-        'auth_url': auth_url,
-        'session_key': state
-    }
+def get_facebook_oauth_url(redirect_uri=None, business: bool = False):
+    """
+    Generate Facebook OAuth2 URL with PKCE
+    """
+    from django.conf import settings
+    from urllib.parse import urlencode
+    import secrets
+    
+    logger = logging.getLogger('social')
+    
+    try:
+        # Use provided redirect URI or default
+        oauth_redirect_uri = redirect_uri or settings.OAUTH2_REDIRECT_URI
+        
+        # Generate state parameter for security
+        state = secrets.token_urlsafe(32)
+        
+        # Required parameters
+        params = {
+            'client_id': settings.FACEBOOK_CLIENT_ID,
+            'redirect_uri': oauth_redirect_uri,
+            'state': state,
+            'scope': 'email,public_profile,pages_show_list' if business else 'email,public_profile',
+            'response_type': 'code',
+        }
+        
+        # Build authorization URL
+        auth_url = f"https://www.facebook.com/v12.0/dialog/oauth?{urlencode(params)}"
+        
+        logger.info("Generated Facebook OAuth URL successfully")
+        
+        return {
+            'auth_url': auth_url,
+            'state': state
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating Facebook OAuth URL: {str(e)}")
+        raise ValueError(f"Failed to generate Facebook OAuth URL: {str(e)}")
 
 def get_linkedin_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
     """Get LinkedIn OAuth URL."""
@@ -57,15 +88,129 @@ def get_linkedin_oauth_url(business: bool = False, redirect_uri: str = None) -> 
         'session_key': state
     }
 
-def get_twitter_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
-    """Get Twitter OAuth URL."""
-    platform = 'twitter'
-    state = store_oauth_state(platform)
-    auth_url, code_verifier = build_authorization_url(platform, redirect_uri, state)
-    return {
-        'auth_url': auth_url,
-        'session_key': state
-    }
+def get_twitter_oauth_url(redirect_uri=None, business: bool = False):
+    """
+    Generate Twitter OAuth2 URL with PKCE
+    """
+    import logging
+    from django.conf import settings
+    from urllib.parse import urlencode
+    import secrets
+    import hashlib
+    import base64
+    
+    logger = logging.getLogger('social')
+    
+    try:
+        # Use provided redirect URI or default
+        oauth_redirect_uri = redirect_uri or settings.TWITTER_CALLBACK_URL
+        
+        # Ensure we have client credentials
+        if not settings.TWITTER_CLIENT_ID or not settings.TWITTER_CLIENT_SECRET:
+            raise ValueError("Twitter client credentials are not configured")
+        
+        # Generate PKCE code verifier and challenge
+        code_verifier = secrets.token_urlsafe(96)
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode('utf-8')).digest()
+        ).decode('utf-8').rstrip('=')
+        
+        # Generate state parameter
+        state = secrets.token_urlsafe(32)
+        
+        # Required parameters
+        params = {
+            'client_id': settings.TWITTER_CLIENT_ID,
+            'redirect_uri': oauth_redirect_uri,
+            'state': state,
+            'scope': 'tweet.read users.read offline.access tweet.write' if business else 'tweet.read users.read offline.access',
+            'response_type': 'code',
+            'code_challenge': code_challenge,
+            'code_challenge_method': 'S256'
+        }
+        
+        # Build authorization URL
+        auth_url = f"https://twitter.com/i/oauth2/authorize?{urlencode(params)}"
+        
+        logger.info("Generated Twitter OAuth URL successfully")
+        
+        return {
+            'auth_url': auth_url,
+            'state': state,
+            'code_verifier': code_verifier
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating Twitter OAuth URL: {str(e)}")
+        raise ValueError(f"Failed to generate Twitter OAuth URL: {str(e)}")
+
+def connect_twitter_account(user, code: str, state: str, code_verifier: str) -> Dict:
+    """
+    Connect Twitter account using OAuth 2.0 token
+    """
+    import logging
+    import tweepy
+    from django.conf import settings
+    from ..models import SocialAccount
+    from datetime import datetime, timezone
+    
+    logger = logging.getLogger('social')
+    
+    try:
+        # Initialize OAuth 2.0 client
+        client = tweepy.Client(
+            consumer_key=settings.TWITTER_CLIENT_ID,
+            consumer_secret=settings.TWITTER_CLIENT_SECRET,
+            return_type=dict
+        )
+        
+        # Exchange code for access token
+        token_response = client.fetch_token(
+            "https://api.twitter.com/2/oauth2/token",
+            code=code,
+            redirect_uri=settings.OAUTH2_REDIRECT_URI,
+            code_verifier=code_verifier
+        )
+        
+        # Get access token and refresh token
+        access_token = token_response['access_token']
+        refresh_token = token_response.get('refresh_token')
+        
+        # Initialize client with access token
+        client = tweepy.Client(bearer_token=access_token)
+        
+        # Get user profile information
+        me = client.get_me(user_fields=['profile_image_url', 'description', 'public_metrics'])
+        twitter_id = me['data']['id']
+        twitter_username = me['data']['username']
+        
+        # Update or create social account
+        social_account, created = SocialAccount.objects.update_or_create(
+            user=user,
+            platform='twitter',
+            defaults={
+                'platform_id': twitter_id,
+                'username': twitter_username,
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'profile_data': me['data'],
+                'last_sync': datetime.now(timezone.utc)
+            }
+        )
+        
+        logger.info(f"Successfully connected Twitter account for user {user.id}")
+        
+        return {
+            'success': True,
+            'account_id': social_account.id,
+            'platform': 'twitter',
+            'username': twitter_username,
+            'profile_data': me['data']
+        }
+        
+    except Exception as e:
+        logger.error(f"Error connecting Twitter account: {str(e)}")
+        raise ValueError(f"Failed to connect Twitter account: {str(e)}")
 
 def get_instagram_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
     """Get Instagram OAuth URL."""
@@ -87,15 +232,84 @@ def get_tiktok_oauth_url(business: bool = False, redirect_uri: str = None) -> Di
         'session_key': state
     }
 
-def get_telegram_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
+def get_youtube_oauth_url(redirect_uri=None, business: bool = False):
+    """Get YouTube OAuth URL (uses Google OAuth)."""
+    platform = 'youtube'
+    state = store_oauth_state(platform)
+    
+    try:
+        # Use provided redirect URI or default
+        oauth_redirect_uri = redirect_uri or settings.OAUTH2_REDIRECT_URI
+        
+        # Generate PKCE code verifier and challenge
+        code_verifier = secrets.token_urlsafe(96)
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode('utf-8')).digest()
+        ).decode('utf-8').rstrip('=')
+        
+        # Required parameters
+        params = {
+            'client_id': settings.GOOGLE_CLIENT_ID,
+            'redirect_uri': oauth_redirect_uri,
+            'response_type': 'code',
+            'scope': 'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl' if business else 'https://www.googleapis.com/auth/youtube.readonly',
+            'access_type': 'offline',
+            'state': state,
+            'code_challenge': code_challenge,
+            'code_challenge_method': 'S256',
+            'include_granted_scopes': 'true'
+        }
+        
+        # Build authorization URL
+        auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
+        
+        return {
+            'auth_url': auth_url,
+            'state': state,
+            'code_verifier': code_verifier
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating YouTube OAuth URL: {str(e)}")
+        raise ValueError(f"Failed to generate YouTube OAuth URL: {str(e)}")
+
+def get_telegram_oauth_url(redirect_uri=None, business: bool = False):
     """Get Telegram OAuth URL."""
     platform = 'telegram'
     state = store_oauth_state(platform)
-    auth_url, _ = build_authorization_url(platform, redirect_uri, state)
-    return {
-        'auth_url': auth_url,
-        'session_key': state
-    }
+    
+    try:
+        # Use provided redirect URI or default
+        oauth_redirect_uri = redirect_uri or settings.OAUTH2_REDIRECT_URI
+        
+        if not settings.TELEGRAM_BOT_TOKEN:
+            raise ValueError("Telegram bot token is not configured")
+        
+        # Generate secure hash
+        bot_token = settings.TELEGRAM_BOT_TOKEN
+        auth_date = str(int(time.time()))
+        
+        # Required parameters
+        params = {
+            'bot_id': bot_token.split(':')[0],
+            'origin': oauth_redirect_uri,
+            'embed': '1',
+            'return_to': oauth_redirect_uri,
+            'auth_date': auth_date,
+            'state': state
+        }
+        
+        # Build authorization URL
+        auth_url = f"https://oauth.telegram.org/auth?{urllib.parse.urlencode(params)}"
+        
+        return {
+            'auth_url': auth_url,
+            'state': state
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating Telegram OAuth URL: {str(e)}")
+        raise ValueError(f"Failed to generate Telegram OAuth URL: {str(e)}")
 
 def refresh_google_token(refresh_token: str) -> Dict[str, str]:
     """Refresh Google OAuth token."""
@@ -166,29 +380,6 @@ def refresh_linkedin_token(refresh_token: str) -> Dict[str, str]:
     except Exception as e:
         logger.error(f"LinkedIn token refresh failed: {str(e)}")
         raise TokenRefreshError(f"LinkedIn token refresh failed: {str(e)}")
-
-def refresh_twitter_token(refresh_token: str) -> Dict[str, str]:
-    """Refresh Twitter OAuth2 token."""
-    try:
-        response = requests.post(
-            'https://api.twitter.com/2/oauth2/token',
-            data={
-                'refresh_token': refresh_token,
-                'grant_type': 'refresh_token',
-                'client_id': settings.TWITTER_CLIENT_ID,
-                'client_secret': settings.TWITTER_CLIENT_SECRET
-            }
-        )
-        response.raise_for_status()
-        data = response.json()
-        return {
-            'access_token': data['access_token'],
-            'refresh_token': data['refresh_token'],
-            'expires_in': data.get('expires_in', 7200)
-        }
-    except Exception as e:
-        logger.error(f"Twitter token refresh failed: {str(e)}")
-        raise TokenRefreshError(f"Twitter token refresh failed: {str(e)}")
 
 def refresh_instagram_token(refresh_token: str) -> Dict[str, str]:
     """Refresh Instagram OAuth token."""

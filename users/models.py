@@ -5,6 +5,7 @@ import pyotp
 import uuid
 from datetime import datetime, timedelta
 from django.utils import timezone
+import logging
 
 class SubscriptionPlan(models.Model):
     PLAN_TYPES = [
@@ -361,37 +362,382 @@ class User(AbstractUser):
         self.save()
 
     def get_last_sync(self, platform):
-        """Get last sync time for a platform"""
+        """Get the last sync time for a platform"""
         return self.last_sync.get(platform)
 
-    def update_last_sync(self, platform):
-        """Update the last sync timestamp for a platform"""
-        sync_field = f'last_sync_{platform.lower()}'
-        if hasattr(self, sync_field):
-            setattr(self, sync_field, timezone.now())
-            self.save(update_fields=[sync_field])
-
-    def get_last_sync(self, platform):
-        """Get the last sync time for a platform in a human-readable format"""
-        sync_field = f'last_sync_{platform.lower()}'
-        last_sync = getattr(self, sync_field) if hasattr(self, sync_field) else None
+    def connect_twitter(self, access_token, access_token_secret):
+        """Connect Twitter account using OAuth tokens"""
+        import tweepy
+        from django.conf import settings
         
-        if not last_sync:
-            return 'Never'
+        try:
+            # First, create OAuth 1.0a User Handler
+            auth = tweepy.OAuthHandler(
+                settings.TWITTER_API_KEY,
+                settings.TWITTER_API_SECRET
+            )
+            auth.set_access_token(access_token, access_token_secret)
             
-        now = timezone.now()
-        diff = now - last_sync
+            # Create API v1.1 instance for compatibility
+            api = tweepy.API(auth)
+            
+            # Verify credentials using v1.1 endpoint
+            user_info = api.verify_credentials()
+            
+            if not user_info:
+                logging.error("Failed to verify Twitter credentials")
+                return {
+                    'success': False,
+                    'error': 'Could not verify Twitter credentials'
+                }
+            
+            # Store Twitter account info
+            self.twitter_id = str(user_info.id)
+            self.twitter_handle = user_info.screen_name
+            self.twitter_profile_url = f"https://twitter.com/{user_info.screen_name}"
+            self.twitter_followers = user_info.followers_count
+            self.twitter_access_token = access_token
+            self.twitter_access_token_secret = access_token_secret
+            
+            # Create v2 client for additional data if needed
+            client = tweepy.Client(
+                consumer_key=settings.TWITTER_API_KEY,
+                consumer_secret=settings.TWITTER_API_SECRET,
+                access_token=access_token,
+                access_token_secret=access_token_secret
+            )
+            
+            try:
+                # Try to get additional user data from v2 API
+                user_v2 = client.get_me()
+                if user_v2.data:
+                    # Update with any additional v2 data if available
+                    pass
+            except Exception as e:
+                # Log v2 error but don't fail the whole connection
+                logging.warning(f"Failed to get v2 user data: {str(e)}")
+            
+            self.save()
+            
+            return {
+                'success': True,
+                'profile': {
+                    'id': self.twitter_id,
+                    'handle': self.twitter_handle,
+                    'profile_url': self.twitter_profile_url,
+                    'followers': self.twitter_followers
+                }
+            }
+            
+        except Exception as e:
+            logging.error(f"Twitter connection error: {str(e)}")
+            return {
+                'success': False,
+                'error': f"Twitter API Error: {str(e)}"
+            }
+
+    def connect_facebook(self, access_token):
+        """Connect Facebook account using OAuth token"""
+        import facebook
+        from django.conf import settings
         
-        if diff.days > 0:
-            return f'{diff.days} days ago'
-        elif diff.seconds >= 3600:
-            hours = diff.seconds // 3600
-            return f'{hours} hours ago'
-        elif diff.seconds >= 60:
-            minutes = diff.seconds // 60
-            return f'{minutes} minutes ago'
-        else:
-            return 'Just now'
+        try:
+            # Initialize Facebook Graph API client
+            graph = facebook.GraphAPI(access_token=access_token)
+            
+            # Get user info
+            user_info = graph.get_object('me', fields='id,name,link')
+            
+            # Store Facebook account info
+            self.facebook_id = user_info['id']
+            self.facebook_access_token = access_token
+            self.facebook_token_expiry = timezone.now() + timedelta(days=60)  # Facebook tokens typically expire in 60 days
+            self.save()
+            
+            return {
+                'success': True,
+                'profile': {
+                    'id': self.facebook_id,
+                    'name': user_info.get('name'),
+                    'profile_url': user_info.get('link')
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def connect_linkedin(self, access_token):
+        """Connect LinkedIn account using OAuth token"""
+        from linkedin import linkedin
+        from django.conf import settings
+        
+        try:
+            # Initialize LinkedIn API client
+            authentication = linkedin.LinkedInAuthentication(
+                settings.LINKEDIN_CLIENT_ID,
+                settings.LINKEDIN_CLIENT_SECRET,
+                settings.LINKEDIN_REDIRECT_URI,
+                ['r_liteprofile']
+            )
+            authentication.token = access_token
+            application = linkedin.LinkedInApplication(authentication)
+            
+            # Get user profile
+            profile = application.get_profile()
+            
+            # Store LinkedIn account info
+            self.linkedin_id = profile['id']
+            self.linkedin_access_token = access_token
+            self.linkedin_token_expiry = timezone.now() + timedelta(days=60)
+            self.linkedin_profile = profile.get('siteStandardProfileRequest', {}).get('url')
+            self.save()
+            
+            return {
+                'success': True,
+                'profile': {
+                    'id': self.linkedin_id,
+                    'profile_url': self.linkedin_profile
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def connect_instagram(self, access_token):
+        """Connect Instagram account using OAuth token"""
+        import requests
+        from django.conf import settings
+        
+        try:
+            # Get user info from Instagram Graph API
+            response = requests.get(
+                'https://graph.instagram.com/me',
+                params={
+                    'fields': 'id,username',
+                    'access_token': access_token
+                }
+            )
+            user_info = response.json()
+            
+            # Store Instagram account info
+            self.instagram_id = user_info['id']
+            self.instagram_handle = user_info['username']
+            self.instagram_profile_url = f"https://instagram.com/{user_info['username']}"
+            self.instagram_access_token = access_token
+            self.instagram_token_expiry = timezone.now() + timedelta(days=60)
+            self.save()
+            
+            return {
+                'success': True,
+                'profile': {
+                    'id': self.instagram_id,
+                    'handle': self.instagram_handle,
+                    'profile_url': self.instagram_profile_url
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def connect_tiktok(self, access_token):
+        """Connect TikTok account using OAuth token"""
+        import requests
+        from django.conf import settings
+        
+        try:
+            # Get user info from TikTok API
+            response = requests.get(
+                'https://open-api.tiktok.com/user/info/',
+                params={
+                    'access_token': access_token,
+                    'fields': 'open_id,union_id,avatar_url,display_name'
+                }
+            )
+            user_info = response.json()['data']
+            
+            # Store TikTok account info
+            self.tiktok_id = user_info['open_id']
+            self.tiktok_handle = user_info['display_name']
+            self.tiktok_access_token = access_token
+            self.tiktok_token_expiry = timezone.now() + timedelta(days=1)  # TikTok tokens expire in 24 hours
+            self.save()
+            
+            return {
+                'success': True,
+                'profile': {
+                    'id': self.tiktok_id,
+                    'handle': self.tiktok_handle
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def connect_telegram(self, chat_id, username):
+        """Connect Telegram account"""
+        try:
+            # Store Telegram account info
+            self.telegram_id = str(chat_id)
+            self.telegram_username = username
+            self.telegram_chat_id = str(chat_id)
+            self.save()
+            
+            return {
+                'success': True,
+                'profile': {
+                    'id': self.telegram_id,
+                    'username': self.telegram_username,
+                    'chat_id': self.telegram_chat_id
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def disconnect_twitter(self):
+        """Disconnect Twitter account"""
+        self.twitter_id = None
+        self.twitter_handle = None
+        self.twitter_profile_url = None
+        self.twitter_followers = None
+        self.twitter_access_token = None
+        self.twitter_access_token_secret = None
+        self.twitter_token_expiry = None
+        self.save()
+        return {'success': True}
+
+    def disconnect_facebook(self):
+        """Disconnect Facebook account"""
+        self.facebook_id = None
+        self.facebook_access_token = None
+        self.facebook_token_expiry = None
+        self.save()
+        return {'success': True}
+
+    def disconnect_linkedin(self):
+        """Disconnect LinkedIn account"""
+        self.linkedin_id = None
+        self.linkedin_access_token = None
+        self.linkedin_token_expiry = None
+        self.linkedin_profile = None
+        self.save()
+        return {'success': True}
+
+    def disconnect_instagram(self):
+        """Disconnect Instagram account"""
+        self.instagram_id = None
+        self.instagram_handle = None
+        self.instagram_profile_url = None
+        self.instagram_access_token = None
+        self.instagram_token_expiry = None
+        self.save()
+        return {'success': True}
+
+    def disconnect_tiktok(self):
+        """Disconnect TikTok account"""
+        self.tiktok_id = None
+        self.tiktok_handle = None
+        self.tiktok_access_token = None
+        self.tiktok_token_expiry = None
+        self.save()
+        return {'success': True}
+
+    def disconnect_telegram(self):
+        """Disconnect Telegram account"""
+        self.telegram_id = None
+        self.telegram_username = None
+        self.telegram_chat_id = None
+        self.save()
+        return {'success': True}
+
+    def get_connected_platforms(self):
+        """Get a list of all connected social media platforms"""
+        connected = []
+        
+        if self.twitter_id:
+            connected.append({
+                'platform': 'twitter',
+                'id': self.twitter_id,
+                'handle': self.twitter_handle,
+                'profile_url': self.twitter_profile_url,
+                'followers': self.twitter_followers,
+                'last_sync': self.get_last_sync('twitter')
+            })
+            
+        if self.facebook_id:
+            connected.append({
+                'platform': 'facebook',
+                'id': self.facebook_id,
+                'last_sync': self.get_last_sync('facebook')
+            })
+            
+        if self.linkedin_id:
+            connected.append({
+                'platform': 'linkedin',
+                'id': self.linkedin_id,
+                'profile_url': self.linkedin_profile,
+                'last_sync': self.get_last_sync('linkedin')
+            })
+            
+        if self.instagram_id:
+            connected.append({
+                'platform': 'instagram',
+                'id': self.instagram_id,
+                'handle': self.instagram_handle,
+                'profile_url': self.instagram_profile_url,
+                'last_sync': self.get_last_sync('instagram')
+            })
+            
+        if self.tiktok_id:
+            connected.append({
+                'platform': 'tiktok',
+                'id': self.tiktok_id,
+                'handle': self.tiktok_handle,
+                'last_sync': self.get_last_sync('tiktok')
+            })
+            
+        if self.telegram_id:
+            connected.append({
+                'platform': 'telegram',
+                'id': self.telegram_id,
+                'username': self.telegram_username,
+                'chat_id': self.telegram_chat_id,
+                'last_sync': self.get_last_sync('telegram')
+            })
+            
+        return connected
+
+    def is_platform_connected(self, platform):
+        """Check if a specific platform is connected"""
+        platform = platform.lower()
+        if platform == 'twitter':
+            return bool(self.twitter_id)
+        elif platform == 'facebook':
+            return bool(self.facebook_id)
+        elif platform == 'linkedin':
+            return bool(self.linkedin_id)
+        elif platform == 'instagram':
+            return bool(self.instagram_id)
+        elif platform == 'tiktok':
+            return bool(self.tiktok_id)
+        elif platform == 'telegram':
+            return bool(self.telegram_id)
+        return False
 
     class Meta:
         db_table = 'auth_user' 

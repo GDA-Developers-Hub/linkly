@@ -21,7 +21,19 @@ from .views import (
     unlink_social_account,
     SubscriptionStatusView,
     available_plans,
-    create_checkout_session
+    create_checkout_session,
+    connect_google,
+    connect_facebook,
+    connect_linkedin,
+    connect_twitter,
+    connect_instagram,
+    connect_tiktok,
+    connect_telegram,
+    connect_facebook_page,
+    connect_instagram_business,
+    connect_linkedin_company,
+    connect_tiktok_business,
+    connect_telegram_channel
 )
 
 # OAuth URLs
@@ -40,6 +52,22 @@ urlpatterns = [
     path('auth/callback/instagram/', instagram_callback, name='instagram-callback'),
     path('auth/callback/tiktok/', tiktok_callback, name='tiktok-callback'),
     path('auth/callback/telegram/', telegram_callback, name='telegram-callback'),
+    
+    # Connect endpoints for personal accounts
+    path('connect/google/', connect_google, name='connect-google'),
+    path('connect/facebook/', connect_facebook, name='connect-facebook'),
+    path('connect/linkedin/', connect_linkedin, name='connect-linkedin'),
+    path('connect/twitter/', connect_twitter, name='connect-twitter'),
+    path('connect/instagram/', connect_instagram, name='connect-instagram'),
+    path('connect/tiktok/', connect_tiktok, name='connect-tiktok'),
+    path('connect/telegram/', connect_telegram, name='connect-telegram'),
+    
+    # Connect endpoints for business accounts
+    path('connect/facebook/page/', connect_facebook_page, name='connect-facebook-page'),
+    path('connect/instagram/business/', connect_instagram_business, name='connect-instagram-business'),
+    path('connect/linkedin/company/', connect_linkedin_company, name='connect-linkedin-company'),
+    path('connect/tiktok/business/', connect_tiktok_business, name='connect-tiktok-business'),
+    path('connect/telegram/channel/', connect_telegram_channel, name='connect-telegram-channel'),
     
     # Unlink social account
     path('auth/unlink/<str:platform>/', unlink_social_account, name='unlink-social'),
