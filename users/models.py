@@ -114,6 +114,13 @@ class User(AbstractUser):
     industry = models.CharField(max_length=100, blank=True, null=True)
     
     # Subscription fields
+    current_subscription = models.ForeignKey(
+        'Subscription',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='current_user'
+    )
     has_used_trial = models.BooleanField(default=False)
     
     # JWT token fields

@@ -520,7 +520,7 @@ def register_user(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])  # Allow both authenticated and unauthenticated users
 @swagger_auto_schema(
     operation_summary="Initialize Social OAuth",
     operation_description="""
@@ -573,7 +573,6 @@ def register_user(request):
             )
         ),
         400: 'Invalid platform or parameters',
-        401: 'Authentication required',
         403: 'Insufficient subscription plan'
     },
     tags=['Social Integration']
@@ -583,6 +582,13 @@ def init_oauth(request):
     platform = request.query_params.get('platform')
     business = request.query_params.get('business', 'false').lower() == 'true'
     redirect_uri = request.query_params.get('redirect_uri')
+    
+    # Check if business features are requested by an unauthenticated user
+    if business and not request.user.is_authenticated:
+        return Response(
+            {'error': 'Authentication required for business features'},
+            status=status.HTTP_403_FORBIDDEN
+        )
     
     oauth_functions = {
         'google': get_google_oauth_url,
