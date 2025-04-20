@@ -16,32 +16,51 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*']  # Update this with your actual domains in production
+ALLOWED_HOSTS = [
+    'linkly-production.up.railway.app',
+    'localhost',
+    '127.0.0.1',
+]
+
+# Security Settings
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
 
 # Allow credentials (if using authentication)
 CORS_ALLOW_CREDENTIALS = True
 
-
-# Allow requests from your React frontend (Update this with your frontend URL)
+# CORS and CSRF Settings
+CORS_ALLOWED_ORIGINS = [
+    "https://linkly-production.up.railway.app",
+    "http://localhost:5174",
+    "http://localhost:3000",
+]
 
 CSRF_TRUSTED_ORIGINS = [
     "https://linkly-production.up.railway.app",
-    "https://c175-102-217-65-14.ngrok-free.app",
 ]
 
 # Allow specific headers
-CORS_ALLOW_HEADERS = ["*"]
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5174",
-    "http://localhost:3000",
-    "https://linkly-production.up.railway.app",
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
-SESSION_COOKIE_SECURE = True  # Enable in production
-CSRF_COOKIE_SECURE = True  # Enable in production
+# Session and Cookie Settings
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = True
-CSRF_COOKIE_SAMESITE = 'None'  # Adjust based on your frontend setup
+CSRF_COOKIE_SAMESITE = 'Lax'  # Changed from 'None' for better security
 
 # Application definition
 INSTALLED_APPS = [
