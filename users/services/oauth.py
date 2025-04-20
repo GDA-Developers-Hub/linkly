@@ -3,6 +3,9 @@ import urllib.parse
 import requests
 from typing import Dict
 import logging
+import base64
+import hashlib
+import secrets
 
 logger = logging.getLogger('oauth')
 
@@ -51,20 +54,45 @@ def get_linkedin_oauth_url(business=False, redirect_uri=None):
     }
     return f'https://www.linkedin.com/oauth/v2/authorization?{urllib.parse.urlencode(params)}'
 
+def generate_code_verifier():
+    """Generate a code verifier for PKCE"""
+    return secrets.token_urlsafe(32)
+
+def generate_code_challenge(verifier):
+    """Generate a code challenge for PKCE"""
+    sha256 = hashlib.sha256(verifier.encode('utf-8')).digest()
+    return base64.urlsafe_b64encode(sha256).decode('utf-8').rstrip('=')
+
 def get_twitter_oauth_url(business=False, redirect_uri=None):
     """Generate OAuth URL for Twitter"""
-    scope = 'tweet.read users.read'
-    if business:
-        scope += ' account.follow.read account.follows.read'
+    # Generate PKCE values
+    code_verifier = generate_code_verifier()
+    code_challenge = generate_code_challenge(code_verifier)
+    
+    # Generate state
+    state = secrets.token_urlsafe(16)
     
     params = {
         'client_id': settings.TWITTER_CLIENT_ID,
-        'redirect_uri': redirect_uri or settings.TWITTER_REDIRECT_URI,
-        'scope': scope,
+        'redirect_uri': redirect_uri or f"{settings.OAUTH2_REDIRECT_URI}/oauth-callback/twitter",
         'response_type': 'code',
-        'state': 'random_state_string'
+        'scope': 'tweet.read users.read follows.read offline.access',
+        'state': state,
+        'code_challenge': code_challenge,
+        'code_challenge_method': 'S256'
     }
-    return f'https://twitter.com/i/oauth2/authorize?{urllib.parse.urlencode(params)}'
+    
+    if business:
+        params['scope'] += ' tweet.write follows.write'
+    
+    # Store these values in session or cache for later verification
+    # You'll need to implement this part based on your session/cache setup
+    
+    return {
+        'auth_url': f'https://twitter.com/i/oauth2/authorize?{urllib.parse.urlencode(params)}',
+        'code_verifier': code_verifier,
+        'state': state
+    }
 
 def get_instagram_oauth_url(business=False, redirect_uri=None):
     """Generate OAuth URL for Instagram"""

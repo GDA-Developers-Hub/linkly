@@ -252,9 +252,11 @@ INSTAGRAM_CLIENT_SECRET = os.environ.get('INSTAGRAM_CLIENT_SECRET', '')
 INSTAGRAM_SCOPE = ['basic', 'public_content']
 
 # Twitter/X Settings
-TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY', '')
-TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
+TWITTER_CLIENT_ID = os.environ.get('TWITTER_API_KEY', '')  # Using API Key as Client ID
+TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_API_SECRET', '')  # Using API Secret as Client Secret
 TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN', '')
+TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN', '')
+TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET', '')
 
 # TikTok Settings
 TIKTOK_CLIENT_KEY = os.environ.get('TIKTOK_CLIENT_KEY', '')
@@ -278,8 +280,8 @@ STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'http://localhost:3000/b
 
 
 
-# OAuth2 Redirect URIs (update these with your domain)
-OAUTH2_REDIRECT_URI = os.environ.get('OAUTH2_REDIRECT_URI', 'http://localhost:8000')
+# OAuth2 Redirect URIs
+OAUTH2_REDIRECT_URI = os.environ.get('FRONTEND_URL', 'http://localhost:3001')
 
 # Jazzmin Settings
 JAZZMIN_SETTINGS = {

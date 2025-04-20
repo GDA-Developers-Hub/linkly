@@ -59,6 +59,8 @@ from .services.social import (
     connect_instagram_account, connect_tiktok_account,
     connect_telegram_account
 )
+from django.core.cache import cache
+import secrets
 
 User = get_user_model()
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -520,7 +522,7 @@ def register_user(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])  # Allow both authenticated and unauthenticated users
+@permission_classes([AllowAny])
 @swagger_auto_schema(
     operation_summary="Initialize Social OAuth",
     operation_description="""
@@ -607,11 +609,34 @@ def init_oauth(request):
         )
     
     try:
-        auth_url = oauth_functions[platform](
+        result = oauth_functions[platform](
             business=business,
             redirect_uri=redirect_uri
         )
-        return Response({'auth_url': auth_url})
+        
+        # Handle platforms that require PKCE (like Twitter)
+        if isinstance(result, dict) and 'code_verifier' in result:
+            # Generate a unique key for this OAuth attempt
+            session_key = f"oauth_{platform}_{secrets.token_urlsafe(16)}"
+            
+            # Store PKCE values in cache
+            cache.set(
+                session_key,
+                {
+                    'code_verifier': result['code_verifier'],
+                    'state': result['state'],
+                    'redirect_uri': redirect_uri
+                },
+                timeout=300  # 5 minutes expiry
+            )
+            
+            return Response({
+                'auth_url': result['auth_url'],
+                'session_key': session_key
+            })
+        
+        return Response({'auth_url': result})
+        
     except Exception as e:
         return Response(
             {'error': str(e)},
