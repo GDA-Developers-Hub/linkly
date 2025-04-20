@@ -1,462 +1,334 @@
-# Developer Documentation
+# Linkly Developer Documentation
 
-## Architecture Overview
+## 🏗️ Architecture Overview
 
-Linkly is built with a Django backend and uses several key components:
+### Tech Stack
+- **Backend**: Django + Django REST Framework
+- **Database**: PostgreSQL
+- **Cache**: Redis
+- **Task Queue**: Celery
+- **Authentication**: JWT + OAuth2
+- **API Documentation**: Swagger/OpenAPI
 
-- **Django REST Framework**: For building the REST API
-- **PostgreSQL**: Primary database
-- **Redis**: For caching and Celery task queue
-- **Celery**: For background tasks and scheduled jobs
-- **Stripe**: Payment processing
-- **JWT**: Authentication
-- **Swagger/OpenAPI**: API documentation
-
-## Project Structure
-
+### Project Structure
 ```
 linkly/
-├── backend/             # Django project settings
-├── users/              # User management and authentication
-│   ├── models.py       # User and social account models
-│   ├── views.py        # Authentication and user views
-│   ├── serializers.py  # API serializers
-│   ├── services/       # Business logic
-│   │   ├── oauth.py    # OAuth URL generation
-│   │   └── social.py   # Social account connection
-│   └── urls.py         # API endpoints
-├── social/             # Social media integration
-├── subscriptions/      # Subscription and payment handling
-├── analytics/          # Analytics and reporting
-├── static/             # Static files
-├── templates/          # HTML templates
-└── tests/              # Test suite
+├── users/                 # User management app
+│   ├── models/           # Database models
+│   ├── views/            # API views
+│   ├── serializers/      # DRF serializers
+│   ├── services/         # Business logic
+│   └── utils/            # Helper functions
+├── social/               # Social media integration
+│   ├── models/          
+│   ├── services/         # Platform-specific services
+│   └── utils/            # OAuth utilities
+├── subscriptions/        # Subscription management
+│   ├── models/
+│   ├── services/         # Stripe integration
+│   └── webhooks/         # Payment webhooks
+└── core/                 # Core functionality
+    ├── middleware/
+    ├── permissions/
+    └── utils/
 ```
 
-## Development Setup
+## 🔄 OAuth2 Implementation
 
-1. **Clone and Setup**
-```bash
-git clone https://github.com/GDA-Developers-Hub/linkly.git
-cd linkly
-python -m venv env
-source env/bin/activate  # Linux/Mac
-.\env\Scripts\activate  # Windows
-pip install -r requirements.txt
+### Flow Overview
+1. User initiates OAuth flow via `/auth/init/`
+2. Backend generates PKCE challenge and state
+3. User is redirected to provider
+4. Provider redirects back with code
+5. Backend exchanges code for tokens
+6. Tokens are stored securely
+
+### PKCE Implementation
+```python
+def generate_pkce_pair():
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).decode().rstrip('=')
+    return code_verifier, code_challenge
 ```
 
-2. **Database Setup**
+### State Parameter
+```python
+def generate_oauth_state():
+    return secrets.token_urlsafe(32)
+```
+
+### Token Storage
+- Access tokens stored in Redis
+- Refresh tokens in encrypted database field
+- Session data with short TTL
+
+## 🔐 Security Guidelines
+
+### Authentication
+1. JWT tokens with short expiry
+2. Refresh token rotation
+3. 2FA implementation
+4. Rate limiting on auth endpoints
+
+### Data Protection
+1. Input validation on all endpoints
+2. SQL injection prevention
+3. XSS protection
+4. CSRF protection
+
+### OAuth Security
+1. PKCE for all providers
+2. State parameter validation
+3. Secure token storage
+4. Scope validation
+
+## 📡 API Development
+
+### Endpoint Structure
+```
+/api/
+├── auth/                  # Authentication
+│   ├── register/
+│   ├── login/
+│   ├── refresh/
+│   └── validate/
+├── social/                # Social Media
+│   ├── connect/
+│   ├── disconnect/
+│   └── status/
+└── subscription/          # Subscriptions
+    ├── plans/
+    ├── checkout/
+    └── webhook/
+```
+
+### Response Format
+```json
+{
+    "status": "success",
+    "data": {},
+    "message": "Operation successful",
+    "meta": {
+        "pagination": {},
+        "filters": {}
+    }
+}
+```
+
+### Error Format
+```json
+{
+    "status": "error",
+    "error": {
+        "code": "ERROR_CODE",
+        "message": "Human readable message",
+        "details": {}
+    }
+}
+```
+
+## 🧪 Testing Guidelines
+
+### Test Structure
+```
+tests/
+├── unit/                 # Unit tests
+├── integration/          # Integration tests
+└── e2e/                 # End-to-end tests
+```
+
+### Running Tests
 ```bash
-# Create PostgreSQL database
-createdb linkly
+# Run all tests
+python manage.py test
+
+# Run specific test file
+python manage.py test tests.unit.test_oauth
+
+# Run with coverage
+coverage run manage.py test
+coverage report
+```
+
+### Mock OAuth Providers
+```python
+@mock.patch('social.services.oauth.GoogleOAuth')
+def test_google_oauth_flow(mock_oauth):
+    mock_oauth.return_value.get_authorization_url.return_value = 'http://mock-url'
+    # Test implementation
+```
+
+## 🔄 Git Workflow
+
+### Branch Naming
+- `feature/`: New features
+- `bugfix/`: Bug fixes
+- `hotfix/`: Critical fixes
+- `release/`: Release preparation
+
+### Commit Messages
+```
+type(scope): description
+
+[optional body]
+
+[optional footer]
+```
+
+Types:
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation
+- `style`: Formatting
+- `refactor`: Code restructuring
+- `test`: Adding tests
+- `chore`: Maintenance
+
+### Pull Request Process
+1. Create feature branch
+2. Write tests
+3. Update documentation
+4. Create PR with description
+5. Pass CI/CD checks
+6. Get code review
+7. Merge to development
+
+## 📦 Deployment
+
+### Prerequisites
+- Docker
+- Docker Compose
+- AWS CLI (for production)
+
+### Local Development
+```bash
+# Build containers
+docker-compose build
+
+# Start services
+docker-compose up
 
 # Run migrations
-python manage.py migrate
+docker-compose exec web python manage.py migrate
 ```
 
-3. **Create Test Data**
+### Production Deployment
 ```bash
-# Load subscription plans
-python manage.py loaddata subscription_plans
+# Build production image
+docker build -t linkly:latest .
 
-# Create test user
-python manage.py createsuperuser
+# Push to registry
+docker push registry.example.com/linkly:latest
+
+# Deploy to Kubernetes
+kubectl apply -f k8s/
 ```
 
-## Social Authentication Implementation
+## 🔍 Monitoring
 
-### OAuth Flow Architecture
+### Logging
+- Use `logging` module
+- Structured JSON logs
+- Log levels: DEBUG, INFO, WARNING, ERROR
+- Correlation IDs for request tracking
 
-The social authentication system uses a unified approach for handling multiple platforms. Here's how it works:
+### Metrics
+- Request latency
+- Error rates
+- OAuth success rates
+- Subscription conversions
+- API usage by endpoint
 
-1. **OAuth Initialization**
-   ```python
-   @api_view(['GET'])
-   @permission_classes([IsAuthenticated])
-   def init_oauth(request):
-       """
-       Unified OAuth initialization for all platforms.
-       Query params:
-       - platform: The social platform (google, facebook, etc.)
-       - business: Boolean for business account access
-       - redirect_uri: Optional custom redirect URI
-       """
-       platform = request.query_params.get('platform')
-       business = request.query_params.get('business', 'false').lower() == 'true'
-       redirect_uri = request.query_params.get('redirect_uri')
-       # Returns platform-specific authorization URL
-   ```
+### Health Checks
+- Database connectivity
+- Redis availability
+- OAuth provider status
+- Stripe API status
 
-2. **Platform-Specific Callbacks**
-   ```python
-   @api_view(['GET'])
-   @permission_classes([IsAuthenticated])
-   def google_auth_callback(request):
-       """Handle Google OAuth callback"""
-       code = request.query_params.get('code')
-       # Exchange code for tokens
-   ```
+## 🎯 Performance Optimization
 
-3. **Account Connection**
-   ```python
-   def connect_social_account(user, platform, tokens, is_business=False):
-       """
-       Connect social account to user profile.
-       - Stores OAuth tokens
-       - Syncs profile information
-       - Sets up token refresh if supported
-       """
-   ```
+### Caching Strategy
+1. Redis for:
+   - OAuth tokens
+   - User sessions
+   - API responses
+   - Rate limiting
 
-### Database Schema
+2. Cache invalidation:
+   - Time-based expiry
+   - Event-based invalidation
+   - Soft invalidation
 
+### Database Optimization
+1. Indexing strategy
+2. Query optimization
+3. Connection pooling
+4. Read replicas
+
+### API Optimization
+1. Pagination
+2. Field filtering
+3. Response compression
+4. Background tasks
+
+## 📚 Documentation Guidelines
+
+### Code Documentation
 ```python
-class User(AbstractUser):
-    # Social account fields
-    google_account = JSONField(null=True)
-    facebook_account = JSONField(null=True)
-    linkedin_account = JSONField(null=True)
-    twitter_account = JSONField(null=True)
-    instagram_account = JSONField(null=True)
-    tiktok_account = JSONField(null=True)
-    telegram_account = JSONField(null=True)
-```
-
-### OAuth URL Generation
-
-The `oauth_utils.py` module contains platform-specific URL generators:
-
-```python
-def get_oauth_url(platform, business=False, redirect_uri=None):
+def function_name(param1: str, param2: int) -> Dict[str, Any]:
     """
-    Generate OAuth URL for specified platform.
-    
+    Short description of function.
+
     Args:
-        platform (str): Social media platform
-        business (bool): Request business account access
-        redirect_uri (str): Optional custom redirect URI
-    
+        param1: Description of param1
+        param2: Description of param2
+
     Returns:
-        str: Authorization URL
+        Dict containing processed data
+
+    Raises:
+        ValueError: If params are invalid
     """
-    settings = get_oauth_settings(platform)
-    
-    scopes = settings['scopes']
-    if business:
-        scopes.extend(settings['business_scopes'])
-        
-    params = {
-        'client_id': settings['client_id'],
-        'redirect_uri': redirect_uri or settings['redirect_uri'],
-        'scope': ' '.join(scopes),
-        'response_type': 'code',
-        'state': generate_state_token()
-    }
-    
-    return f"{settings['auth_url']}?{urlencode(params)}"
-```
-
-### Token Management
-
-1. **Token Storage**
-   - Tokens are encrypted before storage
-   - Refresh tokens are handled automatically
-   - Token rotation is implemented where supported
-
-2. **Token Refresh**
-   ```python
-   def refresh_oauth_token(user, platform):
-       """
-       Refresh OAuth access token if expired.
-       Implements platform-specific refresh logic.
-       """
-   ```
-
-### Error Handling
-
-Custom exceptions for OAuth-related errors:
-
-```python
-class OAuthError(Exception):
-    """Base exception for OAuth errors"""
-    pass
-
-class TokenExchangeError(OAuthError):
-    """Error during code-to-token exchange"""
-    pass
-
-class ProfileFetchError(OAuthError):
-    """Error fetching user profile"""
-    pass
-
-class TokenRefreshError(OAuthError):
-    """Error refreshing OAuth token"""
-    pass
-```
-
-### Testing
-
-1. **Unit Tests**
-   ```python
-   class OAuthTests(TestCase):
-       def test_oauth_initialization(self):
-           """Test OAuth URL generation"""
-           response = self.client.get('/api/auth/init/', {'platform': 'google'})
-           self.assertEqual(response.status_code, 200)
-           self.assertIn('auth_url', response.data)
-
-       def test_oauth_callback(self):
-           """Test OAuth callback handling"""
-           response = self.client.get('/api/auth/google/callback/', {'code': 'test_code'})
-           self.assertEqual(response.status_code, 200)
-   ```
-
-2. **Integration Tests**
-   ```python
-   class SocialIntegrationTests(TestCase):
-       def test_google_connection(self):
-           """Test complete Google OAuth flow"""
-           # Initialize OAuth
-           init_response = self.client.get('/api/auth/init/', {'platform': 'google'})
-           # Mock OAuth callback
-           callback_response = self.client.get('/api/auth/google/callback/', {'code': 'test_code'})
-           # Verify connection
-           self.assertTrue(self.user.google_account is not None)
-   ```
-
-### Security Considerations
-
-1. **Token Security**
-   - Access tokens are encrypted at rest
-   - Refresh tokens use additional encryption
-   - Token rotation is implemented where supported
-
-2. **State Validation**
-   ```python
-   def validate_oauth_state(request_state, stored_state):
-       """
-       Validate OAuth state parameter to prevent CSRF.
-       Implements time-based expiration and one-time use.
-       """
-   ```
-
-3. **Scope Management**
-   - Minimal scope requests by default
-   - Business scopes require subscription check
-   - Scope elevation requires re-authentication
-
-### Rate Limiting
-
-```python
-@method_decorator(ratelimit(key='user', rate='5/m', method=['GET']), name='get')
-def init_oauth(request):
-    """Rate limited to 5 requests per minute per user"""
-```
-
-### Monitoring
-
-1. **OAuth Metrics**
-   - Connection success/failure rates
-   - Token refresh success/failure rates
-   - API quota usage per platform
-
-2. **Logging**
-   ```python
-   logger = logging.getLogger('oauth')
-   logger.info('OAuth initialized', extra={
-       'platform': platform,
-       'user_id': user.id,
-       'business': business
-   })
-   ```
-
-### Webhook Handling
-
-```python
-def handle_oauth_webhook(request, platform):
-    """
-    Handle platform-specific OAuth webhooks.
-    - Token revocation
-    - Account disconnection
-    - Permission changes
-    """
-```
-
-## Code Style Guidelines
-
-We follow PEP 8 with some modifications:
-
-- Line length: 100 characters
-- Use double quotes for strings
-- Use trailing commas in multi-line structures
-
-### Code Formatting
-
-```bash
-# Install development tools
-pip install black isort flake8
-
-# Format code
-black .
-isort .
-
-# Check style
-flake8
-```
-
-## API Development
-
-### Adding New Endpoints
-
-1. Create serializer in `serializers.py`:
-```python
-from rest_framework import serializers
-
-class SocialAccountSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = [
-            'google_business_connected',
-            'facebook_business_connected',
-            'linkedin_business_connected',
-            'twitter_business_connected',
-            'instagram_business_connected',
-            'tiktok_business_connected',
-            'telegram_business_connected'
-        ]
-```
-
-2. Create view in `views.py`:
-```python
-from rest_framework import viewsets
-
-class SocialAccountViewSet(viewsets.ModelViewSet):
-    serializer_class = SocialAccountSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        return User.objects.filter(id=self.request.user.id)
-```
-
-3. Add URL in `urls.py`:
-```python
-path('social-accounts/', 
-     SocialAccountViewSet.as_view({'get': 'list', 'post': 'create'}))
 ```
 
 ### API Documentation
+- Use OpenAPI/Swagger
+- Include examples
+- Document error responses
+- Maintain changelog
 
-Use Swagger decorators for documentation:
-
-```python
-@swagger_auto_schema(
-    operation_description="Connect a social media account",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'code': openapi.Schema(type=openapi.TYPE_STRING),
-            'redirect_uri': openapi.Schema(type=openapi.TYPE_STRING),
-            'business': openapi.Schema(type=openapi.TYPE_BOOLEAN)
-        },
-        required=['code']
-    ),
-    responses={
-        200: "{'status': 'success'}",
-        400: "{'error': 'error message'}",
-        401: "{'detail': 'Authentication credentials not provided'}"
-    }
-)
-def connect_social_account(request, platform):
-    # Implementation
-    pass
-```
-
-## Security Best Practices
-
-1. **Token Storage**
-   - Never store tokens in plaintext
-   - Use encryption for sensitive data
-   - Implement token rotation
-
-2. **OAuth Security**
-   - Validate redirect URIs
-   - Use state parameter
-   - Implement PKCE for mobile apps
-
-3. **API Security**
-   - Rate limiting
-   - Input validation
-   - CORS configuration
-
-4. **Error Handling**
-   - Don't expose sensitive info in errors
-   - Log security events
-   - Monitor failed attempts
-
-## Deployment
-
-1. **Environment Setup**
-```bash
-# Set production environment
-export DJANGO_SETTINGS_MODULE=linkly.settings.production
-
-# Configure SSL
-python manage.py check --deploy
-```
-
-2. **Database Migration**
-```bash
-python manage.py migrate --noinput
-```
-
-3. **Static Files**
-```bash
-python manage.py collectstatic --noinput
-```
-
-4. **Security Headers**
-```python
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-```
-
-## Monitoring
-
-1. **Error Tracking**
-   - Sentry integration
-   - Custom error logging
-
-2. **Performance Monitoring**
-   - New Relic
-   - Django Debug Toolbar
-
-3. **Security Monitoring**
-   - Failed login attempts
-   - API usage patterns
-   - Token revocations
-
-## Contributing
+## 🤝 Contributing Guidelines
 
 1. Fork the repository
-2. Create a feature branch
+2. Create feature branch
 3. Write tests
-4. Implement changes
-5. Run linters and tests
-6. Submit pull request
+4. Update documentation
+5. Submit pull request
 
-### Pull Request Guidelines
+### Code Style
+- Follow PEP 8
+- Use type hints
+- Maximum line length: 88
+- Use Black for formatting
 
-- Follow code style
-- Include tests
-- Update documentation
-- One feature per PR
-- Clear commit messages
+### Review Process
+1. Automated checks
+2. Code review
+3. Documentation review
+4. Security review
+5. Performance review
 
-## Support
+## 📞 Support
 
-- Technical Documentation: [docs.linkly.com/developers](https://docs.linkly.com/developers)
-- API Reference: [docs.linkly.com/api](https://docs.linkly.com/api)
-- Developer Discord: [discord.gg/linkly-dev](https://discord.gg/linkly-dev) 
+### Developer Resources
+- API Documentation: `/api/docs/`
+- Technical Docs: `/docs/`
+- Developer Discord: [Join](https://discord.gg/yourdiscord)
+
+### Getting Help
+- GitHub Issues
+- Developer Forum
+- Stack Overflow Tag
+- Email Support 

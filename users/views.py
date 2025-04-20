@@ -522,7 +522,7 @@ def register_user(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @swagger_auto_schema(
     operation_summary="Initialize Social OAuth",
     operation_description="""
@@ -580,68 +580,57 @@ def register_user(request):
     tags=['Social Integration']
 )
 def init_oauth(request):
-    """Initialize OAuth flow for social platform"""
-    platform = request.query_params.get('platform')
-    business = request.query_params.get('business', 'false').lower() == 'true'
-    redirect_uri = request.query_params.get('redirect_uri')
+    """Initialize OAuth flow for social media platforms"""
+    platform = request.GET.get('platform')
+    redirect_uri = request.GET.get('redirect_uri')
     
-    # Check if business features are requested by an unauthenticated user
-    if business and not request.user.is_authenticated:
-        return Response(
-            {'error': 'Authentication required for business features'},
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    oauth_functions = {
-        'google': get_google_oauth_url,
-        'facebook': get_facebook_oauth_url,
-        'linkedin': get_linkedin_oauth_url,
-        'twitter': get_twitter_oauth_url,
-        'instagram': get_instagram_oauth_url,
-        'tiktok': get_tiktok_oauth_url,
-        'telegram': get_telegram_oauth_url
-    }
-    
-    if platform not in oauth_functions:
-        return Response(
-            {'error': 'Invalid platform'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    if not platform or not redirect_uri:
+        return Response({
+            'error': 'Platform and redirect_uri are required'
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        result = oauth_functions[platform](
-            business=business,
-            redirect_uri=redirect_uri
-        )
+        # Get the appropriate OAuth URL based on platform
+        if platform == 'facebook':
+            auth_url = get_facebook_auth_url(redirect_uri)
+        elif platform == 'google':
+            auth_url = get_google_auth_url()
+        elif platform == 'linkedin':
+            auth_url = get_linkedin_auth_url()
+        elif platform == 'twitter':
+            auth_url, request_token = get_twitter_auth_url()
+        elif platform == 'instagram':
+            auth_url = get_instagram_auth_url()
+        elif platform == 'tiktok':
+            auth_url = get_tiktok_auth_url()
+        elif platform == 'telegram':
+            auth_url = get_telegram_auth_url()
+        else:
+            return Response({
+                'error': 'Invalid platform'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Handle platforms that require PKCE (like Twitter)
-        if isinstance(result, dict) and 'code_verifier' in result:
-            # Generate a unique key for this OAuth attempt
-            session_key = f"oauth_{platform}_{secrets.token_urlsafe(16)}"
-            
-            # Store PKCE values in cache
+        # Store OAuth state in Redis with user ID
+        state = auth_url.split('state=')[-1].split('&')[0] if 'state=' in auth_url else None
+        if state:
             cache.set(
-                session_key,
+                f'oauth_state_{state}',
                 {
-                    'code_verifier': result['code_verifier'],
-                    'state': result['state'],
+                    'user_id': request.user.id,
+                    'platform': platform,
                     'redirect_uri': redirect_uri
                 },
-                timeout=300  # 5 minutes expiry
+                timeout=3600  # 1 hour expiry
             )
-            
-            return Response({
-                'auth_url': result['auth_url'],
-                'session_key': session_key
-            })
         
-        return Response({'auth_url': result})
+        return Response({
+            'auth_url': auth_url
+        })
         
     except Exception as e:
-        return Response(
-            {'error': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @swagger_auto_schema(
     method='post',

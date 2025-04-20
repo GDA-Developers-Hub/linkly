@@ -4,6 +4,7 @@ import tweepy
 import hashlib
 import hmac
 from urllib.parse import urlencode
+import secrets
 
 def get_google_auth_url():
     """Get Google OAuth2 authorization URL"""
@@ -21,13 +22,14 @@ def get_google_auth_url():
     }
     return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
-def get_facebook_auth_url():
+def get_facebook_auth_url(redirect_uri=None):
     """Get Facebook OAuth2 authorization URL"""
     params = {
         'client_id': settings.SOCIAL_AUTH_FACEBOOK_KEY,
-        'redirect_uri': f"{settings.OAUTH2_REDIRECT_URI}/users/auth/facebook/callback/",
+        'redirect_uri': redirect_uri or f"{settings.OAUTH2_REDIRECT_URI}/users/auth/facebook/callback/",
         'scope': 'email,public_profile,pages_show_list,pages_read_engagement,pages_manage_posts',
-        'response_type': 'code'
+        'response_type': 'code',
+        'state': secrets.token_urlsafe(32)  # Generate secure state parameter
     }
     return f"https://www.facebook.com/v18.0/dialog/oauth?{urlencode(params)}"
 

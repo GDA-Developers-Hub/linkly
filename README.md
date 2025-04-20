@@ -1,56 +1,55 @@
 # Linkly - Social Media Management Platform
 
-Linkly is a comprehensive social media management platform that allows users to manage multiple social media accounts, schedule posts, analyze performance, and generate AI-powered content.
+Linkly is a comprehensive social media management platform that allows users to connect and manage multiple social media accounts in one place. With support for major platforms including Google, Facebook, Twitter, LinkedIn, Instagram, TikTok, and Telegram.
 
-## Features
+## 🌟 Features
 
-- **Multi-Platform Support**
-  - Facebook (Personal & Business Pages)
-  - Instagram (Personal & Business)
-  - Twitter/X
-  - LinkedIn (Personal & Company)
-  - YouTube (Personal & Brand)
-  - TikTok (Personal & Business)
-  - Telegram (Personal & Channels)
+### Social Media Integration
+- Connect multiple social media accounts
+- OAuth2 authentication for secure access
+- Support for business accounts and API features
+- Real-time sync of social media metrics
 
-- **Subscription Plans**
-  - Free Trial (10 days)
-  - Starter Plan
-  - Pro Plan
-  - Enterprise Plan
+### Account Management
+- Secure user authentication with JWT
+- Two-factor authentication (2FA)
+- Profile management
+- Password recovery
 
-- **Core Features**
-  - Social Media Account Management
-  - Post Scheduling
-  - Analytics Dashboard
-  - AI Caption Generation
-  - Team Collaboration
-  - Content Calendar
-  - Competitor Analysis
-  - API Access
+### Subscription System
+- Flexible subscription plans
+- Free trial period
+- Stripe integration for payments
+- Business features access control
 
-## Getting Started
+### Security
+- OAuth2 with PKCE support
+- State parameter verification
+- Secure token storage
+- Rate limiting
+- Input validation
+
+## 🚀 Getting Started
 
 ### Prerequisites
-
-- Python 3.10+
-- Node.js 16+
-- PostgreSQL 13+
-- Redis (for Celery)
+- Python 3.8+
+- Redis
+- PostgreSQL
+- Node.js 14+ (for frontend)
 
 ### Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/GDA-Developers-Hub/linkly.git
+git clone https://github.com/yourusername/linkly.git
 cd linkly
 ```
 
 2. Create and activate virtual environment:
 ```bash
-python -m venv env
-source env/bin/activate  # Linux/Mac
-.\env\Scripts\activate  # Windows
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate     # Windows
 ```
 
 3. Install dependencies:
@@ -69,159 +68,93 @@ cp .env.example .env
 python manage.py migrate
 ```
 
-6. Create initial subscription plans:
-```bash
-python manage.py loaddata subscription_plans
-```
-
-7. Run the development server:
+6. Start the development server:
 ```bash
 python manage.py runserver
 ```
 
-## Social Authentication Setup
-
-### OAuth Configuration
-
-Linkly uses a unified OAuth initialization endpoint for all social media platforms. The endpoint is:
-
-```
-GET /api/auth/init/?platform={platform}&business={boolean}&redirect_uri={uri}
-```
-
-Supported platforms:
-- google
-- facebook
-- linkedin
-- twitter
-- instagram
-- tiktok
-- telegram
-
-Parameters:
-- `platform`: (required) The social media platform to connect with
-- `business`: (optional) Set to true for business account access
-- `redirect_uri`: (optional) Custom OAuth redirect URI
-
-Example:
-```bash
-# Initialize Google OAuth
-curl -X GET "https://api.linkly.com/api/auth/init/?platform=google"
-
-# Initialize Facebook Business OAuth
-curl -X GET "https://api.linkly.com/api/auth/init/?platform=facebook&business=true"
-```
-
-### Platform-Specific Setup
-
-#### Google
-1. Go to Google Cloud Console
-2. Create a new project or select existing one
-3. Enable Google+ API and YouTube Data API
-4. Create OAuth 2.0 credentials
-5. Add authorized redirect URI: `https://your-domain.com/api/auth/google/callback/`
-
-#### Facebook
-1. Go to Facebook Developers
-2. Create a new app or select existing one
-3. Add Facebook Login product
-4. Configure OAuth settings
-5. Add redirect URI: `https://your-domain.com/api/auth/facebook/callback/`
-
-[Similar sections for other platforms...]
-
 ### Environment Variables
 
-```env
-# OAuth Client IDs
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-FACEBOOK_CLIENT_ID=your_facebook_client_id
-FACEBOOK_CLIENT_SECRET=your_facebook_client_secret
-LINKEDIN_CLIENT_ID=your_linkedin_client_id
-LINKEDIN_CLIENT_SECRET=your_linkedin_client_secret
-TWITTER_CLIENT_ID=your_twitter_client_id
-TWITTER_CLIENT_SECRET=your_twitter_client_secret
-INSTAGRAM_CLIENT_ID=your_instagram_client_id
-INSTAGRAM_CLIENT_SECRET=your_instagram_client_secret
-TIKTOK_CLIENT_ID=your_tiktok_client_id
-TIKTOK_CLIENT_SECRET=your_tiktok_client_secret
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+Required environment variables:
 
-# OAuth Redirect URIs (optional, defaults to domain-based URIs)
-OAUTH_REDIRECT_BASE_URL=https://your-domain.com/api/auth
+```plaintext
+# Django
+DJANGO_SECRET_KEY=your-secret-key
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# OAuth2 Credentials
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+FACEBOOK_CLIENT_ID=your-facebook-client-id
+FACEBOOK_CLIENT_SECRET=your-facebook-client-secret
+TWITTER_CLIENT_ID=your-twitter-client-id
+TWITTER_CLIENT_SECRET=your-twitter-client-secret
+LINKEDIN_CLIENT_ID=your-linkedin-client-id
+LINKEDIN_CLIENT_SECRET=your-linkedin-client-secret
+INSTAGRAM_CLIENT_ID=your-instagram-client-id
+INSTAGRAM_CLIENT_SECRET=your-instagram-client-secret
+TIKTOK_CLIENT_ID=your-tiktok-client-id
+TIKTOK_CLIENT_SECRET=your-tiktok-client-secret
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+
+# Stripe
+STRIPE_PUBLIC_KEY=your-stripe-public-key
+STRIPE_SECRET_KEY=your-stripe-secret-key
+STRIPE_WEBHOOK_SECRET=your-stripe-webhook-secret
 ```
 
-### Testing OAuth Integration
+## 📚 API Documentation
 
-1. Use the Postman collection in `docs/postman/` for testing
-2. Initialize OAuth flow:
-   ```bash
-   # Get authorization URL
-   curl -X GET "https://api.linkly.com/api/auth/init/?platform=google"
-   ```
-3. Complete OAuth flow in browser
-4. Handle callback at `/api/auth/{platform}/callback/`
+API documentation is available at `/api/docs/` when running the server. It includes:
+- Authentication endpoints
+- Social media integration
+- Profile management
+- Subscription handling
 
-## API Documentation
+## 🔒 Security Features
 
-Our API is documented using Swagger/OpenAPI. Access the interactive documentation at:
+1. **OAuth2 Security**
+   - PKCE for public clients
+   - State parameter verification
+   - Secure token storage
+   - Automatic token refresh
 
-- Swagger UI: `http://localhost:8000/api/docs/`
-- ReDoc: `http://localhost:8000/api/redoc/`
+2. **User Security**
+   - JWT authentication
+   - Two-factor authentication
+   - Password validation
+   - Rate limiting
 
-### Authentication
+3. **Data Security**
+   - Input validation
+   - HTTPS enforcement
+   - CORS configuration
+   - SQL injection protection
 
-The API uses JWT (JSON Web Tokens) for authentication. Include the token in the Authorization header:
+## 🤝 Contributing
 
-```http
-Authorization: Bearer <your_access_token>
-```
+Please read [DEVELOPERS.md](DEVELOPERS.md) for details on our code of conduct and the process for submitting pull requests.
 
-### Rate Limiting
-
-API endpoints are rate-limited based on the subscription plan:
-- Free Trial: 100 requests/hour
-- Starter: 1,000 requests/hour
-- Pro: 5,000 requests/hour
-- Enterprise: Custom limits
-
-### Error Handling
-
-The API returns standard HTTP status codes and JSON error responses:
-
-```json
-{
-  "error": "error_code",
-  "message": "Human readable message",
-  "details": {}
-}
-```
-
-Common error codes:
-- `authentication_failed`: Invalid or missing authentication
-- `permission_denied`: Insufficient permissions
-- `subscription_required`: Feature requires subscription
-- `rate_limit_exceeded`: Too many requests
-- `validation_error`: Invalid input data
-- `platform_error`: Social media platform API error
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-See [DEVELOPERS.md](DEVELOPERS.md) for detailed development guidelines.
-
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support
+## 🆘 Support
 
-- Documentation: [docs.linkly.com](https://docs.linkly.com)
-- Email: support@linkly.com
-- Discord: [Join our community](https://discord.gg/linkly) 
+- Technical Documentation: [/docs](./docs)
+- API Reference: `/api/docs/`
+- Developer Discord: [Join](https://discord.gg/yourdiscord)
+- Email Support: support@linkly.com
+
+## ✨ Acknowledgments
+
+- All the amazing social platforms that provide APIs
+- The open-source community
+- Our contributors and users 
