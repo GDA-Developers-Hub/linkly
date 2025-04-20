@@ -2,9 +2,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import HttpResponse
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+
+def health_check(request):
+    return HttpResponse("OK", status=200)
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -99,6 +103,7 @@ For API support, please contact:
 )
 
 urlpatterns = [
+    path('', health_check, name='health_check'),
     path('admin/', admin.site.urls),
     path('users/', include('users.urls')),
     path('socials/', include('socials.urls')),
