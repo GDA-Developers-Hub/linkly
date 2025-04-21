@@ -1,7 +1,9 @@
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
+from .views.registration import RegisterView
+
+
 from .views import (
-    RegisterView,
     CustomTokenObtainPairView,
     ChangePasswordView,
     UpdateProfileView,
