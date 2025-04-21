@@ -132,6 +132,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'socials.middleware.APIUsageMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'linkly.urls'
@@ -254,8 +255,8 @@ LINKEDIN_CLIENT_ID = os.getenv('LINKEDIN_CLIENT_ID')
 LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET')
 
 # Twitter Settings
-TWITTER_CLIENT_ID = os.environ.get('TWITTER_CLIENT_ID') or os.environ.get('TWITTER_API_KEY', 'ejv3lQRQc923gdN6DMsyDkykJ')
-TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_CLIENT_SECRET') or os.environ.get('TWITTER_API_SECRET', '2taxaldg80OqT5ATGYsePjsmavyRLm8SD8NAKDHNDjL5aQvZBY')
+TWITTER_CLIENT_ID = os.environ.get('TWITTER_CLIENT_ID') or os.environ.get('TWITTER_API_KEY', 'WFZUOThVQmpjS1E4ZldpRTNkQm86MTpjaQ')
+TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_CLIENT_SECRET') or os.environ.get('TWITTER_API_SECRET', 'xAAL-zVhMUm-_yCzVuUVfVMA63Tmf64bKu3Z_lDaPDuPPN0NlN')
 TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN')
 TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN')
 TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET')
