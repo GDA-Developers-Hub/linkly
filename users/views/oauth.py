@@ -124,6 +124,13 @@ def init_oauth(request):
             description="Session key for retrieving stored data",
             type=openapi.TYPE_STRING,
             required=True
+        ),
+        openapi.Parameter(
+            'code_verifier',
+            openapi.IN_QUERY,
+            description="Code verifier for PKCE verification",
+            type=openapi.TYPE_STRING,
+            required=False
         )
     ],
     responses={
@@ -151,8 +158,9 @@ def oauth_callback(request, platform):
     code = request.query_params.get('code')
     state = request.query_params.get('state')
     session_key = request.query_params.get('session_key')
+    code_verifier = request.query_params.get('code_verifier')
     
-    if not all([code, state, session_key]):
+    if not all([code, state]):
         return Response({
             'error': 'Missing required parameters'
         }, status=status.HTTP_400_BAD_REQUEST)
@@ -176,7 +184,18 @@ def oauth_callback(request, platform):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Connect the account
-        result = handler(request.user, code, session_key, state)
+        kwargs = {
+            'user': request.user,
+            'code': code,
+            'state': state
+        }
+        
+        if session_key:
+            kwargs['session_key'] = session_key
+        if code_verifier:
+            kwargs['code_verifier'] = code_verifier
+            
+        result = handler(**kwargs)
         return Response(result)
         
     except (StateVerificationError, PKCEVerificationError) as e:
@@ -214,22 +233,37 @@ def linkedin_callback(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def twitter_callback(request):
-    """Handle Twitter OAuth 1.0a callback"""
-    oauth_token = request.GET.get('oauth_token')
-    oauth_verifier = request.GET.get('oauth_verifier')
+    """Handle Twitter OAuth callback"""
+    code = request.query_params.get('code')
+    state = request.query_params.get('state')
+    code_verifier = request.query_params.get('code_verifier')
     
-    if not oauth_token or not oauth_verifier:
+    if not all([code, state]):
         return Response({
             'error': 'Missing required parameters'
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        result = connect_twitter_account(request.user, oauth_token, oauth_verifier)
+        # Use connect_twitter_account directly with code_verifier
+        result = connect_twitter_account(
+            user=request.user,
+            code=code,
+            state=state,
+            code_verifier=code_verifier
+        )
         return Response(result)
-    except Exception as e:
+    except (StateVerificationError, PKCEVerificationError) as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_401_UNAUTHORIZED)
+    except TokenExchangeError as e:
         return Response({
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

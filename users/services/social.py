@@ -80,9 +80,12 @@ def exchange_linkedin_code(code, redirect_uri=None):
     except Exception as e:
         raise SocialConnectionError(f'LinkedIn OAuth error: {str(e)}')
 
-def exchange_twitter_code(code, redirect_uri=None):
+def exchange_twitter_code(code, redirect_uri=None, code_verifier=None):
     """Exchange Twitter auth code for tokens"""
     try:
+        if not code_verifier:
+            raise SocialConnectionError('PKCE code_verifier is required for Twitter OAuth')
+            
         response = requests.post(
             'https://api.twitter.com/2/oauth2/token',
             data={
@@ -91,13 +94,16 @@ def exchange_twitter_code(code, redirect_uri=None):
                 'client_id': settings.TWITTER_CLIENT_ID,
                 'client_secret': settings.TWITTER_CLIENT_SECRET,
                 'redirect_uri': redirect_uri or settings.TWITTER_REDIRECT_URI,
-                'code_verifier': 'challenge'
+                'code_verifier': code_verifier
             }
         )
         if response.status_code != 200:
-            raise SocialConnectionError('Failed to exchange Twitter auth code')
+            error_msg = f'Failed to exchange Twitter auth code: {response.text}'
+            logger.error(error_msg)
+            raise SocialConnectionError(error_msg)
         return response.json()
     except Exception as e:
+        logger.error(f'Twitter OAuth error: {str(e)}')
         raise SocialConnectionError(f'Twitter OAuth error: {str(e)}')
 
 def exchange_instagram_code(code, redirect_uri=None):
@@ -204,7 +210,11 @@ def connect_social_account(user, platform, auth_data, business=False):
                 user.linkedin_business_connected = True
         
         elif platform == 'twitter':
-            tokens = exchange_twitter_code(auth_data.get('code'), auth_data.get('redirect_uri'))
+            tokens = exchange_twitter_code(
+                auth_data.get('code'), 
+                auth_data.get('redirect_uri'),
+                auth_data.get('code_verifier')
+            )
             user.twitter_access_token = tokens.get('access_token')
             if business:
                 user.twitter_business_connected = True
@@ -605,10 +615,16 @@ def connect_linkedin_account(user, code: str, session_key: str, state: str) -> D
         'profile': profile
     }
 
-def connect_twitter_account(user, code: str, session_key: str, state: str) -> Dict:
+def connect_twitter_account(user, code: str, state: str, session_key: str = None, code_verifier: str = None) -> Dict:
     """Connect Twitter account."""
     verify_oauth_state(state)
-    code_verifier = get_stored_code_verifier(state)
+    
+    # Use provided code_verifier or get it from storage
+    if not code_verifier:
+        code_verifier = get_stored_code_verifier(state)
+        
+    if not code_verifier:
+        raise PKCEVerificationError("Missing PKCE code_verifier for Twitter OAuth")
     
     token_data = exchange_code_for_token('twitter', code, settings.TWITTER_REDIRECT_URI, code_verifier)
     

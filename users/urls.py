@@ -33,7 +33,8 @@ from .views import (
     connect_instagram_business,
     connect_linkedin_company,
     connect_tiktok_business,
-    connect_telegram_channel
+    connect_telegram_channel,
+    get_connected_accounts
 )
 
 # OAuth URLs
@@ -52,6 +53,9 @@ urlpatterns = [
     path('auth/callback/instagram/', instagram_callback, name='instagram-callback'),
     path('auth/callback/tiktok/', tiktok_callback, name='tiktok-callback'),
     path('auth/callback/telegram/', telegram_callback, name='telegram-callback'),
+    
+    # Connected accounts endpoint
+    path('accounts/', get_connected_accounts, name='connected-accounts'),
     
     # Connect endpoints for personal accounts
     path('connect/google/', connect_google, name='connect-google'),

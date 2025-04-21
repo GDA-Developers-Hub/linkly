@@ -24,14 +24,55 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     """User profile serializer."""
+    connected_platforms = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
         fields = (
             'id', 'email', 'first_name', 'last_name', 'company_name',
             'website', 'industry', 'phone_number', 'country',
-            'profile_picture', 'timezone', 'date_joined'
+            'profile_picture', 'timezone', 'date_joined', 'connected_platforms'
         )
-        read_only_fields = ('id', 'email', 'date_joined')
+        read_only_fields = ('id', 'email', 'date_joined', 'connected_platforms')
+    
+    def get_connected_platforms(self, obj):
+        """Returns a list of connected social platforms."""
+        platforms = []
+        
+        if obj.google_id:
+            platforms.append('google')
+        if obj.facebook_id:
+            platforms.append('facebook')
+        if obj.twitter_id:
+            platforms.append('twitter')
+        if obj.linkedin_id:
+            platforms.append('linkedin')
+        if obj.instagram_id:
+            platforms.append('instagram')
+        if obj.tiktok_id:
+            platforms.append('tiktok')
+        if obj.telegram_id:
+            platforms.append('telegram')
+            
+        # Include business accounts information
+        business_accounts = {}
+        if obj.has_facebook_business:
+            business_accounts['facebook'] = True
+        if obj.has_instagram_business:
+            business_accounts['instagram'] = True
+        if obj.has_linkedin_company:
+            business_accounts['linkedin'] = True
+        if obj.has_twitter_business:
+            business_accounts['twitter'] = True
+        if obj.has_tiktok_business:
+            business_accounts['tiktok'] = True
+        if obj.has_telegram_channel:
+            business_accounts['telegram'] = True
+            
+        return {
+            'platforms': platforms,
+            'business_accounts': business_accounts
+        }
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Custom token obtain pair serializer."""
