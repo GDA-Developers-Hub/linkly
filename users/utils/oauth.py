@@ -4,6 +4,7 @@ import hashlib
 import base64
 from typing import Tuple, Dict, Optional
 from urllib.parse import urlencode
+import logging
 
 from django.conf import settings
 from django.core.cache import cache
@@ -140,4 +141,81 @@ def get_stored_code_verifier(state: str) -> Optional[str]:
     code_verifier = cache.get(cache_key)
     if code_verifier:
         cache.delete(cache_key)
-    return code_verifier 
+    return code_verifier
+
+def get_stored_pkce_verifier(state: str) -> Optional[str]:
+    """
+    Retrieve stored PKCE code verifier for the given state.
+    This is an alias for get_stored_code_verifier for consistency in naming.
+    """
+    return get_stored_code_verifier(state)
+
+def validate_pkce_code_verifier(code_verifier: str, code_challenge: str) -> bool:
+    """
+    Validate that the code_verifier matches the previously generated code_challenge.
+    
+    Args:
+        code_verifier: The original code verifier string
+        code_challenge: The code challenge that was sent to the authorization server
+        
+    Returns:
+        bool: True if the verification passes, False otherwise
+    """
+    if not code_verifier or not code_challenge:
+        return False
+        
+    # Generate the challenge from the verifier
+    generated_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).rstrip(b'=').decode()
+    
+    # Compare the generated challenge with the provided challenge
+    return generated_challenge == code_challenge
+
+def store_pkce_code_verifier(state: str, code_verifier: str, timeout: int = 3600) -> None:
+    """
+    Store PKCE code verifier in cache with the given state as key.
+    
+    Args:
+        state: The OAuth state parameter
+        code_verifier: The PKCE code verifier to store
+        timeout: Cache timeout in seconds (default 1 hour)
+    """
+    cache_key = f'pkce_{state}'
+    cache.set(cache_key, code_verifier, timeout=timeout)
+    
+def log_oauth_parameters(request, platform: str) -> Dict:
+    """
+    Log OAuth callback parameters for debugging purposes.
+    
+    Args:
+        request: The Django request object
+        platform: The platform name
+        
+    Returns:
+        Dict: Dictionary with the logged parameters
+    """
+    logger = logging.getLogger('social')
+    
+    # Get common OAuth parameters
+    code = request.query_params.get('code')
+    state = request.query_params.get('state')
+    error = request.query_params.get('error')
+    error_description = request.query_params.get('error_description')
+    
+    # Log parameters
+    params = {
+        'platform': platform,
+        'code_exists': bool(code),
+        'state': state[:10] + '...' if state and len(state) > 10 else state,
+        'error': error,
+        'error_description': error_description
+    }
+    
+    logger.info(f"OAuth callback for {platform}: {params}")
+    
+    # Check for errors
+    if error or error_description:
+        logger.error(f"OAuth error for {platform}: {error} - {error_description}")
+    
+    return params 

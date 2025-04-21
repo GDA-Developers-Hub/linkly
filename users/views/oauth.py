@@ -21,6 +21,7 @@ from ..services.exceptions import (
     OAuthError, TokenExchangeError, StateVerificationError,
     PKCEVerificationError, ProfileFetchError, BusinessAccountError
 )
+import logging
 
 @swagger_auto_schema(
     method='get',
@@ -231,39 +232,87 @@ def linkedin_callback(request):
     return oauth_callback(request, 'linkedin')
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
 def twitter_callback(request):
-    """Handle Twitter OAuth callback"""
+    """
+    OAuth 2.0 callback for Twitter.
+    Exchanges auth code for access token and refreshes the connected platforms list.
+    """
+    logger = logging.getLogger('social')
+    logger.info("Received Twitter OAuth callback")
+    
     code = request.query_params.get('code')
     state = request.query_params.get('state')
-    code_verifier = request.query_params.get('code_verifier')
     
-    if not all([code, state]):
-        return Response({
-            'error': 'Missing required parameters'
-        }, status=status.HTTP_400_BAD_REQUEST)
+    logger.info(f"Twitter callback parameters - Code exists: {bool(code)}, State: {state[:10] if state else None}")
+    
+    if not code or not state:
+        logger.error("Missing required parameters for Twitter callback")
+        return Response(
+            {"error": "Missing required parameters"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Extract the platform from state if available
+    platform = 'twitter'
+    if state and '_' in state:
+        platform = state.split('_')[0]
+        logger.info(f"Extracted platform from state: {platform}")
+    
+    # Get the code_verifier from session storage
+    # This is provided by frontend or stored in backend depending on implementation
+    code_verifier = get_stored_pkce_verifier(state)
+    if not code_verifier:
+        logger.warning(f"No code_verifier found for state: {state}")
+        return Response(
+            {"error": "No code verifier found for this authorization request"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    logger.info(f"Code verifier retrieved for state: {state}, length: {len(code_verifier)}")
     
     try:
-        # Use connect_twitter_account directly with code_verifier
-        result = connect_twitter_account(
-            user=request.user,
-            code=code,
-            state=state,
-            code_verifier=code_verifier
+        # Verify the state parameter to prevent CSRF
+        verify_oauth_state(state)
+        logger.info("State verification successful")
+        
+        # Exchange the code for tokens
+        user = request.user
+        connect_twitter_account(user, code, code_verifier)
+        logger.info(f"Successfully connected Twitter account for user {user.username}")
+        
+        # Return success response
+        return Response({"status": "success", "message": "Twitter account connected successfully"})
+    
+    except StateVerificationError as e:
+        logger.error(f"State verification error: {str(e)}")
+        return Response(
+            {"error": "State verification failed", "details": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
         )
-        return Response(result)
-    except (StateVerificationError, PKCEVerificationError) as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_401_UNAUTHORIZED)
+    except PKCEVerificationError as e:
+        logger.error(f"PKCE verification error: {str(e)}")
+        return Response(
+            {"error": "PKCE verification failed", "details": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     except TokenExchangeError as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_400_BAD_REQUEST)
+        logger.error(f"Token exchange error: {str(e)}")
+        return Response(
+            {"error": "Failed to exchange code for tokens", "details": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except ProfileFetchError as e:
+        logger.error(f"Profile fetch error: {str(e)}")
+        return Response(
+            {"error": "Failed to fetch Twitter profile", "details": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception(f"Unexpected error in Twitter callback: {str(e)}")
+        return Response(
+            {"error": "An unexpected error occurred", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

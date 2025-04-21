@@ -102,21 +102,25 @@ def get_twitter_oauth_url(redirect_uri=None, business: bool = False):
     logger = logging.getLogger('social')
     
     try:
-        # Use provided redirect URI or default
-        oauth_redirect_uri = redirect_uri or settings.TWITTER_CALLBACK_URL
+        # Use provided redirect URI or default - ensure it matches frontend
+        oauth_redirect_uri = redirect_uri or settings.OAUTH2_REDIRECT_URI
+        
+        logger.info(f"Using redirect URI for Twitter: {oauth_redirect_uri}")
         
         # Ensure we have client credentials
         if not settings.TWITTER_CLIENT_ID or not settings.TWITTER_CLIENT_SECRET:
             raise ValueError("Twitter client credentials are not configured")
         
         # Generate PKCE code verifier and challenge
-        code_verifier = secrets.token_urlsafe(96)
-        code_challenge = base64.urlsafe_b64encode(
-            hashlib.sha256(code_verifier.encode('utf-8')).digest()
-        ).decode('utf-8').rstrip('=')
+        code_verifier = secrets.token_urlsafe(96)[:128]  # Ensure it's not too long for Twitter
         
-        # Generate state parameter
-        state = secrets.token_urlsafe(32)
+        # Generate code challenge using SHA256
+        code_challenge_bytes = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+        code_challenge = base64.urlsafe_b64encode(code_challenge_bytes).decode('utf-8')
+        code_challenge = code_challenge.replace('=', '')  # Remove padding
+        
+        # Generate state parameter with platform prefix for identification
+        state = f"twitter_{secrets.token_urlsafe(24)}"
         
         # Required parameters
         params = {
@@ -132,7 +136,10 @@ def get_twitter_oauth_url(redirect_uri=None, business: bool = False):
         # Build authorization URL
         auth_url = f"https://twitter.com/i/oauth2/authorize?{urlencode(params)}"
         
-        logger.info("Generated Twitter OAuth URL successfully")
+        # Log for debugging
+        logger.info(f"Twitter OAuth URL generated: {auth_url}")
+        logger.info(f"Code verifier: {code_verifier[:10]}... (length: {len(code_verifier)})")
+        logger.info(f"Code challenge: {code_challenge[:10]}... (length: {len(code_challenge)})")
         
         return {
             'auth_url': auth_url,
@@ -157,6 +164,8 @@ def connect_twitter_account(user, code: str, state: str, code_verifier: str) -> 
     logger = logging.getLogger('social')
     
     try:
+        logger.info(f"Starting Twitter connection for user {user.id} with code_verifier length: {len(code_verifier) if code_verifier else 'None'}")
+        
         # Initialize OAuth 2.0 client
         client = tweepy.Client(
             consumer_key=settings.TWITTER_CLIENT_ID,
@@ -164,15 +173,21 @@ def connect_twitter_account(user, code: str, state: str, code_verifier: str) -> 
             return_type=dict
         )
         
+        # Define the redirect URI - must match what was used in the initial auth request
+        redirect_uri = settings.OAUTH2_REDIRECT_URI
+        logger.info(f"Using Twitter redirect URI: {redirect_uri}")
+        
         # Exchange code for access token
+        logger.info("Exchanging code for Twitter access token")
         token_response = client.fetch_token(
             "https://api.twitter.com/2/oauth2/token",
             code=code,
-            redirect_uri=settings.OAUTH2_REDIRECT_URI,
+            redirect_uri=redirect_uri,
             code_verifier=code_verifier
         )
         
         # Get access token and refresh token
+        logger.info("Successfully obtained Twitter tokens")
         access_token = token_response['access_token']
         refresh_token = token_response.get('refresh_token')
         
@@ -180,11 +195,13 @@ def connect_twitter_account(user, code: str, state: str, code_verifier: str) -> 
         client = tweepy.Client(bearer_token=access_token)
         
         # Get user profile information
+        logger.info("Fetching Twitter user profile")
         me = client.get_me(user_fields=['profile_image_url', 'description', 'public_metrics'])
         twitter_id = me['data']['id']
         twitter_username = me['data']['username']
         
         # Update or create social account
+        logger.info(f"Updating Twitter account for user: {twitter_username}")
         social_account, created = SocialAccount.objects.update_or_create(
             user=user,
             platform='twitter',

@@ -18,6 +18,7 @@ from .exceptions import (
     PKCEVerificationError
 )
 from ..utils.oauth import get_platform_config, verify_oauth_state, get_stored_code_verifier
+import base64
 
 logger = logging.getLogger('social')
 
@@ -82,26 +83,54 @@ def exchange_linkedin_code(code, redirect_uri=None):
 
 def exchange_twitter_code(code, redirect_uri=None, code_verifier=None):
     """Exchange Twitter auth code for tokens"""
+    logger = logging.getLogger('social')
+    
     try:
         if not code_verifier:
+            logger.error("Missing PKCE code_verifier for Twitter OAuth")
             raise SocialConnectionError('PKCE code_verifier is required for Twitter OAuth')
             
+        logger.info(f"Exchanging Twitter code for token. Code length: {len(code)} Code verifier length: {len(code_verifier)}")
+        logger.info(f"Code verifier starts with: {code_verifier[:10]}...")
+        logger.info(f"Using redirect URI: {redirect_uri or settings.TWITTER_REDIRECT_URI}")
+            
+        # Request body parameters
+        data = {
+            'code': code,
+            'grant_type': 'authorization_code',
+            'client_id': settings.TWITTER_CLIENT_ID,
+            'redirect_uri': redirect_uri or settings.TWITTER_REDIRECT_URI,
+            'code_verifier': code_verifier
+        }
+        
+        # For Twitter OAuth 2.0, client secret should be passed in Authorization header for better security
+        # Create Basic Authentication header
+        auth_header = f"{settings.TWITTER_CLIENT_ID}:{settings.TWITTER_CLIENT_SECRET}"
+        auth_bytes = auth_header.encode('ascii')
+        auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
+        
+        headers = {
+            'Authorization': f'Basic {auth_b64}',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        
+        logger.info(f"Making request to Twitter token endpoint with data: {data}")
+        
         response = requests.post(
             'https://api.twitter.com/2/oauth2/token',
-            data={
-                'code': code,
-                'grant_type': 'authorization_code',
-                'client_id': settings.TWITTER_CLIENT_ID,
-                'client_secret': settings.TWITTER_CLIENT_SECRET,
-                'redirect_uri': redirect_uri or settings.TWITTER_REDIRECT_URI,
-                'code_verifier': code_verifier
-            }
+            data=data,
+            headers=headers
         )
+        
         if response.status_code != 200:
             error_msg = f'Failed to exchange Twitter auth code: {response.text}'
             logger.error(error_msg)
             raise SocialConnectionError(error_msg)
-        return response.json()
+            
+        token_data = response.json()
+        logger.info(f"Successfully exchanged Twitter code for token. Token type: {token_data.get('token_type')}")
+        
+        return token_data
     except Exception as e:
         logger.error(f'Twitter OAuth error: {str(e)}')
         raise SocialConnectionError(f'Twitter OAuth error: {str(e)}')
