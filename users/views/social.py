@@ -400,4 +400,149 @@ def connect_telegram_channel(request):
         )
         return Response(result)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST) 
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='get',
+    operation_summary="Get Connected Accounts",
+    operation_description="""
+    Get list of all connected social media accounts.
+    
+    Returns:
+    - Connected platforms
+    - Account types (personal/business)
+    - Profile information
+    - Analytics access status
+    - Last sync timestamps
+    """,
+    responses={
+        200: 'Connected accounts retrieved successfully',
+        401: 'Authentication required'
+    },
+    tags=['Social Integration']
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_connected_accounts(request):
+    """Get all connected social media accounts"""
+    user = request.user
+    subscription = user.current_subscription
+    
+    accounts = []
+    
+    # Facebook
+    if user.facebook_id:
+        accounts.append({
+            'platform': 'facebook',
+            'account_type': 'business' if user.has_facebook_business else 'personal',
+            'profile': {
+                'id': user.facebook_id,
+                'name': user.facebook_page_name if user.has_facebook_business else None,
+                'followers': user.facebook_page_followers if user.has_facebook_business else None
+            },
+            'analytics_enabled': user.has_facebook_business and subscription and subscription.plan.has_analytics,
+            'last_synced': user.last_sync.get('facebook')
+        })
+    
+    # Instagram
+    if user.instagram_id:
+        accounts.append({
+            'platform': 'instagram',
+            'account_type': 'business' if user.has_instagram_business else 'personal',
+            'profile': {
+                'id': user.instagram_id,
+                'username': user.instagram_handle,
+                'business_name': user.instagram_business_name if user.has_instagram_business else None,
+                'followers': user.instagram_business_followers if user.has_instagram_business else None
+            },
+            'analytics_enabled': user.has_instagram_business and subscription and subscription.plan.has_analytics,
+            'last_synced': user.last_sync.get('instagram')
+        })
+    
+    # Twitter
+    if user.twitter_id:
+        accounts.append({
+            'platform': 'twitter',
+            'account_type': 'business' if user.has_twitter_business else 'personal',
+            'profile': {
+                'id': user.twitter_id,
+                'username': user.twitter_handle,
+                'followers': user.twitter_followers
+            },
+            'analytics_enabled': subscription and subscription.plan.has_analytics,
+            'last_synced': user.last_sync.get('twitter')
+        })
+    
+    # LinkedIn
+    if user.linkedin_id:
+        accounts.append({
+            'platform': 'linkedin',
+            'account_type': 'business' if user.has_linkedin_company else 'personal',
+            'profile': {
+                'id': user.linkedin_id,
+                'company_name': user.linkedin_company_name if user.has_linkedin_company else None,
+                'followers': user.linkedin_company_followers if user.has_linkedin_company else None
+            },
+            'analytics_enabled': user.has_linkedin_company and subscription and subscription.plan.has_analytics,
+            'last_synced': user.last_sync.get('linkedin')
+        })
+    
+    # TikTok
+    if user.tiktok_id:
+        accounts.append({
+            'platform': 'tiktok',
+            'account_type': 'business' if user.has_tiktok_business else 'personal',
+            'profile': {
+                'id': user.tiktok_id,
+                'username': user.tiktok_handle,
+                'followers': user.tiktok_followers
+            },
+            'analytics_enabled': user.has_tiktok_business and subscription and subscription.plan.has_analytics,
+            'last_synced': user.last_sync.get('tiktok')
+        })
+    
+    # Telegram
+    if user.telegram_id:
+        accounts.append({
+            'platform': 'telegram',
+            'account_type': 'business' if user.has_telegram_channel else 'personal',
+            'profile': {
+                'id': user.telegram_id,
+                'username': user.telegram_username,
+                'subscribers': user.telegram_subscribers if user.has_telegram_channel else None
+            },
+            'analytics_enabled': user.has_telegram_channel and subscription and subscription.plan.has_analytics,
+            'last_synced': user.last_sync.get('telegram')
+        })
+    
+    # Google (YouTube)
+    if user.google_id:
+        accounts.append({
+            'platform': 'google',
+            'account_type': 'business' if user.google_business_connected else 'personal',
+            'profile': {
+                'id': user.google_id
+            },
+            'analytics_enabled': user.google_business_connected and subscription and subscription.plan.has_analytics,
+            'last_synced': user.last_sync.get('google')
+        })
+        
+        # If YouTube channel is connected
+        if user.youtube_channel_id:
+            accounts.append({
+                'platform': 'youtube',
+                'account_type': 'business' if user.has_youtube_brand else 'personal',
+                'profile': {
+                    'id': user.youtube_channel_id,
+                    'title': user.youtube_channel_title,
+                    'subscribers': user.youtube_subscribers
+                },
+                'analytics_enabled': subscription and subscription.plan.has_analytics,
+                'last_synced': user.last_sync.get('youtube')
+            })
+    
+    return Response({
+        'accounts': accounts,
+        'total_count': len(accounts),
+        'limit': subscription.plan.social_accounts_limit if subscription else 0
+    }) 

@@ -34,7 +34,8 @@ from .views import (
     connect_linkedin_company,
     connect_tiktok_business,
     connect_telegram_channel,
-    get_connected_accounts
+    get_connected_accounts,
+    save_platform_tokens
 )
 
 # OAuth URLs
@@ -92,6 +93,7 @@ user_urlpatterns = [
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('profile/update/', UpdateProfileView.as_view(), name='update-profile'),
     path('password/change/', ChangePasswordView.as_view(), name='change-password'),
+    path('save-platform-tokens/', save_platform_tokens, name='save-platform-tokens'),
 ]
 
 # Subscription URL patterns

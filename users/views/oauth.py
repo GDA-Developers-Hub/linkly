@@ -345,4 +345,128 @@ def unlink_social_account(request, platform):
     return Response({
         'success': True,
         'message': f'{platform.title()} account unlinked successfully'
-    }) 
+    })
+
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=['platform', 'token_data'],
+        properties={
+            'platform': openapi.Schema(
+                type=openapi.TYPE_STRING,
+                description="Social platform identifier"
+            ),
+            'token_data': openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                description="Token data from OAuth callback"
+            )
+        }
+    ),
+    responses={
+        200: openapi.Response(
+            description="Tokens saved successfully",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    'message': openapi.Schema(type=openapi.TYPE_STRING)
+                }
+            )
+        ),
+        400: 'Invalid request data',
+        401: 'Authentication required'
+    },
+    tags=['Social Authentication']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def save_platform_tokens(request):
+    """Save platform tokens to user profile"""
+    platform = request.data.get('platform')
+    token_data = request.data.get('token_data')
+    
+    if not platform or not token_data:
+        return Response({
+            'success': False,
+            'error': 'Missing required parameters'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = request.user
+        platform = platform.lower()
+        
+        # Extract relevant data from token_data
+        profile_data = token_data.get('profile', {})
+        
+        # Platform-specific token saving logic
+        if platform == 'twitter':
+            user.twitter_id = profile_data.get('id')
+            if 'username' in profile_data:
+                user.twitter_handle = profile_data.get('username')
+            
+            # Save tokens if available in the payload
+            access_token = token_data.get('access_token')
+            refresh_token = token_data.get('refresh_token')
+            
+            if access_token:
+                user.twitter_access_token = access_token
+            if refresh_token:
+                user.twitter_refresh_token = refresh_token
+                
+        elif platform == 'facebook':
+            user.facebook_id = profile_data.get('id')
+            access_token = token_data.get('access_token')
+            if access_token:
+                user.facebook_access_token = access_token
+                
+        elif platform == 'instagram':
+            user.instagram_id = profile_data.get('id')
+            if 'username' in profile_data:
+                user.instagram_handle = profile_data.get('username')
+            access_token = token_data.get('access_token')
+            if access_token:
+                user.instagram_access_token = access_token
+                
+        elif platform == 'linkedin':
+            user.linkedin_id = profile_data.get('id')
+            access_token = token_data.get('access_token')
+            if access_token:
+                user.linkedin_access_token = access_token
+                
+        elif platform == 'google':
+            user.google_id = profile_data.get('id')
+            access_token = token_data.get('access_token')
+            refresh_token = token_data.get('refresh_token')
+            if access_token:
+                user.google_access_token = access_token
+            if refresh_token:
+                user.google_refresh_token = refresh_token
+                
+        elif platform == 'tiktok':
+            user.tiktok_id = profile_data.get('id')
+            if 'display_name' in profile_data:
+                user.tiktok_handle = profile_data.get('display_name')
+            access_token = token_data.get('access_token')
+            if access_token:
+                user.tiktok_access_token = access_token
+                
+        elif platform == 'telegram':
+            user.telegram_id = profile_data.get('id')
+            if 'username' in profile_data:
+                user.telegram_username = profile_data.get('username')
+        
+        # Update last sync timestamp
+        user.update_last_sync(platform)
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': f'{platform.title()} tokens saved successfully'
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
