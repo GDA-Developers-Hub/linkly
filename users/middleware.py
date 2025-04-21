@@ -5,20 +5,26 @@ from rest_framework import status
 class SubscriptionRestrictionMiddleware:
     """Middleware to enforce subscription restrictions"""
 
+    def __call__(self, request):
+        # Allow health checks to pass through
+        if request.path == '/':
+            return self.get_response(request)
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         # List of paths that don't require subscription checks
         unrestricted_paths = [
-            '/api/users/subscriptions/checkout/',
-            '/api/users/subscriptions/webhook/',
-            '/api/users/subscriptions/status/',
-            '/api/users/subscriptions/plans/',
-            '/api/users/login/',
-            '/api/users/register/',
-            '/api/users/password-reset/',
-            '/admin/',
+            '/',
+            'api/v1/users/subscriptions/checkout/',
+            'api/v1/users/subscriptions/webhook/',
+            'api/v1/users/subscriptions/status/',
+            'api/v1/users/subscriptions/plans/',
+            'api/v1/users/login/',
+            'api/v1/users/register/',
+            'api/v1/users/password-reset/',
+            'api/v1/',
         ]
 
         # Check if the path is unrestricted

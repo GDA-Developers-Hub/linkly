@@ -97,16 +97,16 @@ For API support, please contact:
     public=True,
     permission_classes=(permissions.AllowAny,),
     patterns=[
-        path('users/', include('users.urls')),
-        path('socials/', include('socials.urls')),
+        path('api/v1/users/', include('users.urls')),
+        path('api/v1/socials/', include('socials.urls')),
     ],
 )
 
 urlpatterns = [
     path('', health_check, name='health_check'),
     path('admin/', admin.site.urls),
-    path('users/', include('users.urls')),
-    path('socials/', include('socials.urls')),
+    path('api/v1/users/', include('users.urls')),
+    path('api/v1/socials/', include('socials.urls')),
     
     # Swagger documentation URLs
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
