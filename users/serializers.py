@@ -15,19 +15,19 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'password', 'username', 'is_active')
+        fields = ('id', 'email', 'password', 'first_name', 'last_name', 'is_active')
         read_only_fields = ('id', 'is_active')
 
     def create(self, validated_data):
         user = User.objects.create_user(**validated_data)
         return user
 
-class RegisterSerializer(serializers.ModelSerializer):
+class UserProfileSerializer(serializers.ModelSerializer):
     """User profile serializer."""
     class Meta:
         model = User
         fields = (
-            'id', 'email', 'first_name', "username", 'last_name', 'company_name',
+            'id', 'email', 'first_name', 'last_name', 'company_name',
             'website', 'industry', 'phone_number', 'country',
             'profile_picture', 'timezone', 'date_joined'
         )
