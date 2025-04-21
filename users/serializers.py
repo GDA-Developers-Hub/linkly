@@ -9,20 +9,20 @@ from .models import User, Subscription, SubscriptionPlan
 
 User = get_user_model()
 
+# class UserSerializer(serializers.ModelSerializer):
+#     """User model serializer."""
+#     password = serializers.CharField(write_only=True)
+
+#     class Meta:
+#         model = User
+#         fields = ('id', 'email', 'password', 'first_name', 'last_name', 'is_active')
+#         read_only_fields = ('id', 'is_active')
+
+#     def create(self, validated_data):
+#         user = User.objects.create_user(**validated_data)
+#         return user
+
 class UserSerializer(serializers.ModelSerializer):
-    """User model serializer."""
-    password = serializers.CharField(write_only=True)
-
-    class Meta:
-        model = User
-        fields = ('id', 'email', 'password', 'first_name', 'last_name', 'is_active')
-        read_only_fields = ('id', 'is_active')
-
-    def create(self, validated_data):
-        user = User.objects.create_user(**validated_data)
-        return user
-
-class UserProfileSerializer(serializers.ModelSerializer):
     """User profile serializer."""
     class Meta:
         model = User
