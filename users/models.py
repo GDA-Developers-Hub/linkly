@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timedelta
 from django.utils import timezone
 import logging
+from django.conf import settings
 
 class SubscriptionPlan(models.Model):
     PLAN_TYPES = [
@@ -740,4 +741,32 @@ class User(AbstractUser):
         return False
 
     class Meta:
-        db_table = 'auth_user' 
+        db_table = 'auth_user'
+
+class PlatformCredentials(models.Model):
+    """Model to store client-specific OAuth credentials for social platforms"""
+    
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='platform_credentials')
+    platform = models.CharField(max_length=20, choices=[
+        ('google', 'Google'),
+        ('facebook', 'Facebook'),
+        ('twitter', 'Twitter'),
+        ('linkedin', 'LinkedIn'),
+        ('instagram', 'Instagram'),
+        ('tiktok', 'TikTok'),
+        ('telegram', 'Telegram'),
+        ('youtube', 'YouTube'),
+    ])
+    client_id = models.CharField(max_length=255)
+    client_secret = models.CharField(max_length=255)
+    redirect_uri = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('user', 'platform')
+        verbose_name = 'Platform Credentials'
+        verbose_name_plural = 'Platform Credentials'
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.platform}" 

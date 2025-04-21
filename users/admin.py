@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.contrib.admin.models import LogEntry, CHANGE
 from django.contrib.contenttypes.models import ContentType
-from .models import SubscriptionPlan, Subscription
+from .models import SubscriptionPlan, Subscription, User, UserProfile, SocialAccount, PlatformCredentials
 from decimal import Decimal
 from django.db import models
 from django.contrib import messages
@@ -934,4 +934,19 @@ class SubscriptionAdmin(admin.ModelAdmin):
             cancelled_at=None,
             auto_renew=True
         )
-        self.message_user(request, f'Successfully activated {updated} subscriptions.') 
+        self.message_user(request, f'Successfully activated {updated} subscriptions.')
+
+@admin.register(PlatformCredentials)
+class PlatformCredentialsAdmin(admin.ModelAdmin):
+    list_display = ('user', 'platform', 'client_id', 'created_at', 'updated_at')
+    list_filter = ('platform', 'created_at')
+    search_fields = ('user__username', 'user__email', 'platform', 'client_id')
+    raw_id_fields = ('user',)
+    fieldsets = (
+        (None, {
+            'fields': ('user', 'platform')
+        }),
+        ('Credentials', {
+            'fields': ('client_id', 'client_secret', 'redirect_uri')
+        }),
+    ) 

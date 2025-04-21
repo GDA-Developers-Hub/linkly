@@ -37,6 +37,11 @@ from .views import (
     get_connected_accounts,
     save_platform_tokens
 )
+from .views.platform_credentials import PlatformCredentialsViewSet
+from .views.credential_management import (
+    platform_credentials, add_platform_credential,
+    edit_platform_credential, delete_platform_credential
+)
 
 # OAuth URLs
 urlpatterns = [
@@ -102,6 +107,12 @@ subscription_urlpatterns = [
     path('subscription/plans/', available_plans, name='available-plans'),
     path('subscription/checkout/', create_checkout_session, name='create-checkout-session'),
 ]
+
+# Platform credentials management
+path('dashboard/platform-credentials/', platform_credentials, name='platform_credentials'),
+path('dashboard/platform-credentials/add/', add_platform_credential, name='add_platform_credential'),
+path('dashboard/platform-credentials/edit/<int:credential_id>/', edit_platform_credential, name='edit_platform_credential'),
+path('dashboard/platform-credentials/delete/<int:credential_id>/', delete_platform_credential, name='delete_platform_credential'),
 
 # Combine all URL patterns
 urlpatterns = auth_urlpatterns + user_urlpatterns + urlpatterns + subscription_urlpatterns
@@ -213,4 +224,6 @@ Subscription Requirements:
 - Free: Basic social account connection
 - Pro: Business account features
 - Enterprise: Advanced analytics and automation
-""" 
+"""
+
+router.register(r'platform-credentials', PlatformCredentialsViewSet, basename='platform-credentials') 

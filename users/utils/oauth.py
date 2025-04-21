@@ -37,8 +37,27 @@ def verify_oauth_state(state: str) -> Dict:
     cache.delete(cache_key)
     return data
 
-def get_platform_config(platform: str) -> Dict:
+def get_platform_config(platform: str, user=None) -> Dict:
     """Get OAuth configuration for a specific platform."""
+    # Check if user-specific credentials exist
+    if user:
+        from ..models import PlatformCredentials
+        try:
+            credentials = PlatformCredentials.objects.get(user=user, platform=platform)
+            return {
+                'client_id': credentials.client_id,
+                'client_secret': credentials.client_secret,
+                'redirect_uri': credentials.redirect_uri,
+                'auth_url': get_default_auth_url(platform),
+                'token_url': get_default_token_url(platform),
+                'scopes': get_default_scopes(platform),
+                'uses_pkce': platform in ['google', 'youtube', 'twitter']
+            }
+        except PlatformCredentials.DoesNotExist:
+            # Fall back to default credentials
+            pass
+            
+    # Default configurations
     configs = {
         'google': {
             'client_id': settings.GOOGLE_CLIENT_ID,
@@ -110,12 +129,54 @@ def get_platform_config(platform: str) -> Dict:
         raise ValueError(f'Unsupported platform: {platform}')
     return configs[platform]
 
-def build_authorization_url(platform: str, redirect_uri: str, state: str) -> Tuple[str, Optional[str]]:
+def get_default_auth_url(platform: str) -> str:
+    """Get the default authorization URL for a platform."""
+    urls = {
+        'google': 'https://accounts.google.com/o/oauth2/v2/auth',
+        'youtube': 'https://accounts.google.com/o/oauth2/v2/auth',
+        'facebook': 'https://www.facebook.com/v12.0/dialog/oauth',
+        'twitter': 'https://twitter.com/i/oauth2/authorize',
+        'linkedin': 'https://www.linkedin.com/oauth/v2/authorization',
+        'instagram': 'https://api.instagram.com/oauth/authorize',
+        'tiktok': 'https://www.tiktok.com/auth/authorize/',
+        'telegram': 'https://oauth.telegram.org/auth'
+    }
+    return urls.get(platform)
+
+def get_default_token_url(platform: str) -> str:
+    """Get the default token URL for a platform."""
+    urls = {
+        'google': 'https://oauth2.googleapis.com/token',
+        'youtube': 'https://oauth2.googleapis.com/token',
+        'facebook': 'https://graph.facebook.com/v12.0/oauth/access_token',
+        'twitter': 'https://api.twitter.com/2/oauth2/token',
+        'linkedin': 'https://www.linkedin.com/oauth/v2/accessToken',
+        'instagram': 'https://api.instagram.com/oauth/access_token',
+        'tiktok': 'https://open-api.tiktok.com/oauth/access_token/',
+        'telegram': None  # Telegram uses a different auth flow
+    }
+    return urls.get(platform)
+
+def get_default_scopes(platform: str) -> list:
+    """Get the default scopes for a platform."""
+    scopes = {
+        'google': ['openid', 'email', 'profile'],
+        'youtube': ['https://www.googleapis.com/auth/youtube.readonly'],
+        'facebook': ['email', 'public_profile'],
+        'twitter': ['tweet.read', 'users.read'],
+        'linkedin': ['r_liteprofile', 'r_emailaddress'],
+        'instagram': ['basic'],
+        'tiktok': ['user.info.basic'],
+        'telegram': []
+    }
+    return scopes.get(platform, [])
+
+def build_authorization_url(platform: str, redirect_uri: str, state: str, client_id: str = None, user=None) -> Tuple[str, Optional[str]]:
     """Build OAuth authorization URL for a specific platform."""
-    config = get_platform_config(platform)
+    config = get_platform_config(platform, user)
     
     params = {
-        'client_id': config['client_id'],
+        'client_id': client_id or config['client_id'],
         'redirect_uri': redirect_uri,
         'response_type': 'code',
         'scope': ' '.join(config['scopes']),

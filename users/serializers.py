@@ -5,7 +5,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 import qrcode
 import base64
 from io import BytesIO
-from .models import User, Subscription, SubscriptionPlan
+from .models import User, Subscription, SubscriptionPlan, PlatformCredentials
 
 User = get_user_model()
 
@@ -214,4 +214,15 @@ class SocialConnectionSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         # Implement platform-specific connection creation
-        return validated_data 
+        return validated_data
+
+class PlatformCredentialsSerializer(serializers.ModelSerializer):
+    """Serializer for client OAuth credentials"""
+    
+    class Meta:
+        model = PlatformCredentials
+        fields = ['id', 'platform', 'client_id', 'client_secret', 'redirect_uri', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'client_secret': {'write_only': True}
+        } 

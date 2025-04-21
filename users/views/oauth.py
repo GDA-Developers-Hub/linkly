@@ -22,6 +22,7 @@ from ..services.exceptions import (
     PKCEVerificationError, ProfileFetchError, BusinessAccountError
 )
 import logging
+import secrets
 
 @swagger_auto_schema(
     method='get',
@@ -70,6 +71,7 @@ def init_oauth(request):
     """Initialize OAuth flow for social platform"""
     platform = request.query_params.get('platform')
     redirect_uri = request.query_params.get('redirect_uri')
+    use_client_credentials = request.query_params.get('use_client_credentials') == 'true'
     
     if not platform or not redirect_uri:
         return Response({
@@ -95,6 +97,69 @@ def init_oauth(request):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
+        # If client wants to use their own credentials and is authenticated
+        if use_client_credentials and request.user.is_authenticated:
+            from ..utils.credentials import get_user_platform_credentials
+            
+            # Check if client has stored credentials for this platform
+            credentials = get_user_platform_credentials(request.user.id, platform)
+            
+            if credentials:
+                # Generate state with custom prefix for tracking
+                from ..utils.oauth import store_oauth_state
+                custom_state = f"custom_{platform}_" + secrets.token_urlsafe(24)
+                cache_key = f'oauth_state_{custom_state}'
+                cache_data = {'platform': platform, 'user_id': request.user.id, 'custom_credentials': True}
+                cache.set(cache_key, cache_data, timeout=3600)  # 1 hour expiry
+                
+                # Build authorization URL with client credentials
+                from ..utils.oauth import build_authorization_url, get_platform_config
+                
+                # Get the base config
+                config = get_platform_config(platform)
+                
+                # Override with custom credentials
+                client_id = credentials['client_id']
+                
+                params = {
+                    'client_id': client_id,
+                    'redirect_uri': credentials['redirect_uri'],
+                    'response_type': 'code',
+                    'scope': ' '.join(config['scopes']),
+                    'state': custom_state
+                }
+                
+                # Add PKCE if platform uses it
+                code_verifier = None
+                if config['uses_pkce']:
+                    from ..utils.oauth import generate_pkce
+                    code_verifier, code_challenge = generate_pkce()
+                    params['code_challenge'] = code_challenge
+                    params['code_challenge_method'] = 'S256'
+                    
+                    # Store code verifier in cache
+                    pkce_cache_key = f'pkce_{custom_state}'
+                    cache.set(pkce_cache_key, code_verifier, timeout=3600)  # 1 hour expiry
+                
+                # Store client credentials in cache for the callback
+                creds_cache_key = f'credentials_{custom_state}'
+                cache.set(creds_cache_key, credentials, timeout=3600)  # 1 hour expiry
+                
+                # Build auth URL
+                from urllib.parse import urlencode
+                auth_url = f"{config['auth_url']}?{urlencode(params)}"
+                
+                result = {
+                    'auth_url': auth_url,
+                    'state': custom_state
+                }
+                
+                if code_verifier:
+                    result['code_verifier'] = code_verifier
+                    
+                return Response(result)
+        
+        # Use default OAuth function if no custom credentials found
         result = oauth_functions[platform](redirect_uri=redirect_uri)
         return Response(result)
     except Exception as e:
@@ -160,6 +225,7 @@ def oauth_callback(request, platform):
     state = request.query_params.get('state')
     session_key = request.query_params.get('session_key')
     code_verifier = request.query_params.get('code_verifier')
+    use_client_credentials = request.query_params.get('use_client_credentials') == 'true' or (state and state.startswith('custom_'))
     
     if not all([code, state]):
         return Response({
@@ -167,7 +233,92 @@ def oauth_callback(request, platform):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        # Get the appropriate connection handler
+        # Verify the OAuth state
+        try:
+            from ..utils.oauth import verify_oauth_state
+            state_data = verify_oauth_state(state)
+            has_custom_credentials = state_data.get('custom_credentials', False) or use_client_credentials
+        except ValueError:
+            raise StateVerificationError("Invalid or expired state parameter")
+        
+        # If using custom credentials, retrieve them from cache
+        if has_custom_credentials:
+            creds_cache_key = f'credentials_{state}'
+            credentials = cache.get(creds_cache_key)
+            
+            if not credentials:
+                from ..utils.credentials import get_user_platform_credentials
+                credentials = get_user_platform_credentials(request.user.id, platform)
+                
+            if not credentials:
+                raise TokenExchangeError("Custom credentials not found or expired")
+                
+            # Exchange the authorization code for tokens using custom credentials
+            from ..utils.oauth import get_platform_config
+            config = get_platform_config(platform)
+            
+            import requests
+            
+            # Get stored PKCE code verifier if applicable
+            if config['uses_pkce'] and not code_verifier:
+                from ..utils.oauth import get_stored_code_verifier
+                code_verifier = get_stored_code_verifier(state)
+            
+            # Build token exchange request
+            token_url = config['token_url']
+            data = {
+                'client_id': credentials['client_id'],
+                'client_secret': credentials['client_secret'],
+                'code': code,
+                'redirect_uri': credentials['redirect_uri'],
+                'grant_type': 'authorization_code'
+            }
+            
+            if code_verifier:
+                data['code_verifier'] = code_verifier
+            
+            # Exchange code for token
+            response = requests.post(token_url, data=data)
+            if not response.ok:
+                raise TokenExchangeError(f"Failed to exchange code: {response.text}")
+                
+            token_data = response.json()
+            
+            # Get user profile
+            profile_data = {}
+            access_token = token_data.get('access_token')
+            
+            if platform == 'google':
+                headers = {'Authorization': f"Bearer {access_token}"}
+                profile_response = requests.get('https://www.googleapis.com/oauth2/v2/userinfo', headers=headers)
+                if profile_response.ok:
+                    profile_data = profile_response.json()
+            elif platform == 'facebook':
+                params = {'fields': 'id,name,email', 'access_token': access_token}
+                profile_response = requests.get('https://graph.facebook.com/v12.0/me', params=params)
+                if profile_response.ok:
+                    profile_data = profile_response.json()
+            # Add similar profile fetching for other platforms
+            
+            # Update user with tokens and profile data
+            request.user.update_social_token(platform, access_token, token_data.get('expires_in', 3600))
+            
+            # Set platform IDs based on profile data
+            if platform == 'google' and profile_data.get('id'):
+                request.user.google_id = profile_data['id']
+            elif platform == 'facebook' and profile_data.get('id'):
+                request.user.facebook_id = profile_data['id']
+            # Add similar ID setters for other platforms
+            
+            request.user.save()
+            
+            return Response({
+                'success': True,
+                'platform': platform,
+                'profile': profile_data
+            })
+            
+        # Use standard connection handlers for default OAuth flow
         handlers = {
             'google': connect_google_account,
             'facebook': connect_facebook_account,
