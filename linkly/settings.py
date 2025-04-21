@@ -54,6 +54,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 if not DEBUG:
     CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173",
         "https://fe97-102-217-65-73.ngrok-free.app",
         "https://godigitalafrica-admin.web.app",
         "https://linkly-production.up.railway.app",
@@ -79,6 +80,7 @@ CORS_EXPOSE_HEADERS = ["content-type", "x-csrftoken"]
 
 # CSRF Settings
 CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
     'https://fe97-102-217-65-73.ngrok-free.app',
     'https://linkly-production.up.railway.app',
     'https://godigitalafrica-admin.web.app',
