@@ -54,6 +54,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 if not DEBUG:
     CORS_ALLOWED_ORIGINS = [
+        "https://link-ly.web.app",
         "http://localhost:5173",
         "https://fe97-102-217-65-73.ngrok-free.app",
         "https://godigitalafrica-admin.web.app",
@@ -80,6 +81,7 @@ CORS_EXPOSE_HEADERS = ["content-type", "x-csrftoken"]
 
 # CSRF Settings
 CSRF_TRUSTED_ORIGINS = [
+    "https://link-ly.web.app",
     "http://localhost:5173",
     'https://fe97-102-217-65-73.ngrok-free.app',
     'https://linkly-production.up.railway.app',
@@ -257,7 +259,7 @@ TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_CLIENT_SECRET') or os.environ.ge
 TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN')
 TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN')
 TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET')
-TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'https://godigitalafrica-admin.web.app/oauth-callback/twitter')
+TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'https://link-ly.web.app/oauth-callback/twitter')
 
 # For backwards compatibility
 TWITTER_API_KEY = TWITTER_CLIENT_ID
@@ -278,7 +280,7 @@ TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 # OAuth2 Settings
-OAUTH2_REDIRECT_URI = os.getenv('FRONTEND_URL', 'https://godigitalafrica-admin.web.app')
+OAUTH2_REDIRECT_URI = os.getenv('https://link-ly.web.app')
 
 # =========================================
 # STRIPE CONFIGURATION
@@ -288,8 +290,8 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 
 # Webhook and Redirect URLs
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
-STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'https://godigitalafrica-admin.web.app/billing/success')
-STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'https://godigitalafrica-admin.web.app/billing/cancel')
+STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'https://link-ly.web.app/billing/success')
+STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'https://link-ly.web.app/billing/cancel')
 
 # Jazzmin Settings
 JAZZMIN_SETTINGS = {
@@ -505,4 +507,4 @@ SESSION_CACHE_ALIAS = 'default'
 # Twitter API Configuration
 TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY')
 TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET')
-TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'http://localhost:3000/oauth-callback/twitter') 
+TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'https://link-ly.web.app/oauth-callback/twitter') 
