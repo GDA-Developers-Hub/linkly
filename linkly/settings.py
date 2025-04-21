@@ -17,15 +17,15 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-def get_ngrok_url():
-    """Get the ngrok URL from environment or try to detect it"""
-    ngrok_url = os.getenv('NGROK_URL')
-    if ngrok_url:
-        return ngrok_url.replace('https://', '').replace('http://', '')
-    return None
+# def get_ngrok_url():
+#     """Get the ngrok URL from environment or try to detect it"""
+#     ngrok_url = os.getenv('NGROK_URL')
+#     if ngrok_url:
+#         return ngrok_url.replace('https://', '').replace('http://', '')
+#     return None
 
 # Add ngrok URL to allowed hosts if available
-NGROK_URL = get_ngrok_url()
+# NGROK_URL = get_ngrok_url()
 ALLOWED_HOSTS = [
     'fe97-102-217-65-73.ngrok-free.app',
     'linkly-production.up.railway.app',
@@ -38,15 +38,15 @@ ALLOWED_HOSTS = [
 if os.getenv('ADDITIONAL_ALLOWED_HOSTS'):
     ALLOWED_HOSTS.extend(os.getenv('ADDITIONAL_ALLOWED_HOSTS').split(','))
 
-if NGROK_URL:
-    ALLOWED_HOSTS.append(NGROK_URL)
+# if NGROK_URL:
+#     ALLOWED_HOSTS.append(NGROK_URL)
 
 # Security Settings
-SECURE_SSL_REDIRECT = not DEBUG
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_HSTS_SECONDS = 31536000  # 1 year
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+# SECURE_SSL_REDIRECT = not DEBUG
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# SECURE_HSTS_SECONDS = 31536000  # 1 year
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# SECURE_HSTS_PRELOAD = True
 
 # CORS Settings
 CORS_ALLOW_ALL_ORIGINS = DEBUG
@@ -87,8 +87,8 @@ CSRF_TRUSTED_ORIGINS = [
 if os.getenv('ADDITIONAL_CSRF_ORIGINS'):
     CSRF_TRUSTED_ORIGINS.extend(os.getenv('ADDITIONAL_CSRF_ORIGINS').split(','))
 
-# Add Railway domain to CSRF trusted origins
-CSRF_TRUSTED_ORIGINS.extend([f'https://{host}' for host in ALLOWED_HOSTS if '.railway.app' in host])
+# # Add Railway domain to CSRF trusted origins
+# CSRF_TRUSTED_ORIGINS.extend([f'https://{host}' for host in ALLOWED_HOSTS if '.railway.app' in host])
 
 # Cookie Settings
 SESSION_COOKIE_SECURE = not DEBUG
