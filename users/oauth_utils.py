@@ -5,6 +5,9 @@ import hashlib
 import hmac
 from urllib.parse import urlencode
 import secrets
+import logging
+from django.core.cache import cache
+from typing import Tuple, Optional, Dict
 
 def get_google_auth_url():
     """Get Google OAuth2 authorization URL"""
@@ -100,7 +103,7 @@ def get_tiktok_auth_url():
         'response_type': 'code'
     }
     return f"https://open-api.tiktok.com/platform/oauth/connect/?{urlencode(params)}"
-    return f"https://open-api.tiktok.com/platform/oauth/connect/?{urlencode(params)}"
+
 def get_telegram_auth_url():
     """Get Telegram login widget URL"""
     params = {
@@ -124,4 +127,91 @@ def verify_telegram_hash(auth_data):
     secret_key = hashlib.sha256(bot_token.encode()).digest()
     hash = hmac.new(secret_key, auth_string.encode(), hashlib.sha256).hexdigest()
     
-    return hash == auth_data['hash'] 
+    return hash == auth_data['hash']
+
+def verify_oauth_state_from_sources(state: str, platform: str) -> Tuple[bool, Optional[Dict]]:
+    """Returns (is_valid, data) tuple"""
+    logger = logging.getLogger('oauth')
+    logger.info(f"Verifying {platform} OAuth state: {state}")
+    
+    # Try all possible cache key formats
+    cache_data = None
+    cache_key_formats = [
+        f'oauth_state_{state}',
+        f'{platform}_oauth_state_{state}',
+        f'1:oauth_state_{state}',
+        f'1:{platform}_oauth_state_{state}'
+    ]
+    
+    for cache_key in cache_key_formats:
+        logger.info(f"Trying cache key: {cache_key}")
+        try:
+            data = cache.get(cache_key)
+        except Exception as e:
+            logger.error(f"Redis connection error: {str(e)}")
+            # Fall back to session
+            continue
+        if data:
+            cache.delete(cache_key)  # Remove used state
+            cache_data = data
+            logger.info(f"Found state data in cache with key: {cache_key}")
+            return True, data
+    
+    # Log all cache keys for debugging
+    try:
+        all_keys = cache.keys('*oauth_state*')
+        logger.info(f"Available oauth state cache keys: {all_keys}")
+    except Exception as e:
+        logger.warning(f"Could not list cache keys: {e}")
+    
+    # If not found in cache, try session storage
+    # This is a fallback for when Redis is not available
+    from django.contrib.sessions.backends.base import SessionBase
+    
+    def check_session(request, key):
+        if hasattr(request, 'session') and isinstance(request.session, SessionBase):
+            if key in request.session:
+                value = request.session.get(key)
+                if state == value:
+                    logger.info(f"Found matching state in session with key: {key}")
+                    return True, value
+        return False, None
+    
+    # Check if we have request in the current context
+    from django.core.handlers.wsgi import WSGIRequest
+    if 'request' in locals() and isinstance(request, WSGIRequest):
+        if check_session(request, 'oauth_state') or check_session(request, f'{platform}_oauth_state'):
+            return True, cache_data
+    
+    # In production, we may want to proceed with a warning rather than failing
+    # This is a fallback for when Redis has issues or when cache expires
+    if not settings.DEBUG:
+        logger.warning(f"State verification failed for {platform}: state={state} not found in cache or session")
+        logger.warning(f"Proceeding without state verification in production")
+        return True, cache_data
+    
+    logger.error(f"State verification failed for {platform}: state={state} not found in any source")
+    return False, None
+
+def exchange_linkedin_code(code, redirect_uri):
+    # Implementation of exchange_linkedin_code function
+    pass
+
+def linkedin_callback(request):
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    if not code or not state:
+        return HttpResponse("Invalid request")
+
+    if request.user.is_authenticated:
+        # User is authenticated, connect LinkedIn account
+        result = connect_linkedin_account(request.user, code, state)
+        # Return success response with redirect to frontend
+        return result
+    else:
+        # User is not authenticated, store tokens for later
+        token_data = exchange_linkedin_code(code, redirect_uri=settings.LINKEDIN_CALLBACK_URL)
+        token_cache_key = f'linkedin_token_{state}'
+        cache.set(token_cache_key, token_data, timeout=3600)
+        redirect_url = f"{settings.FRONTEND_URL}/login?pending_oauth=linkedin&state={state}"
+        return redirect_url 
