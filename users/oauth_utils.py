@@ -100,7 +100,7 @@ def get_tiktok_auth_url():
         'response_type': 'code'
     }
     return f"https://open-api.tiktok.com/platform/oauth/connect/?{urlencode(params)}"
-
+    return f"https://open-api.tiktok.com/platform/oauth/connect/?{urlencode(params)}"
 def get_telegram_auth_url():
     """Get Telegram login widget URL"""
     params = {

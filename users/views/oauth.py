@@ -28,6 +28,8 @@ from urllib.parse import urlencode
 import time
 from django.urls import reverse
 from django.http import HttpResponseRedirect
+from django.shortcuts import redirect
+import secrets
 
 @swagger_auto_schema(
     method='get',
@@ -426,39 +428,21 @@ def facebook_callback(request):
     # Handle OAuth errors returned by Facebook
     if error:
         logger.error(f"Facebook returned OAuth error: {error} - {error_description}")
-        error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error={error}&message={error_description}"
+        error_redirect_url = get_error_redirect_url('facebook', error, error_description or "Unknown error")
         return redirect(error_redirect_url)
     
     # Check for required parameters
     if not code:
         logger.error("Missing required 'code' parameter")
-        error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=missing_code&message=Authorization+code+is+missing"
+        error_redirect_url = get_error_redirect_url('facebook', 'missing_code', "Authorization code is missing")
         return redirect(error_redirect_url)
     
     # Verify state parameter if provided
     if state:
-        # Try multiple state storage locations
-        cache_key = f"facebook_oauth_state_{state}"
-        cached_state = cache.get(cache_key)
-        global_cached_state = cache.get('facebook_oauth_state')
-        fallback_cached_state = cache.get('oauth_state')
-        session_state = request.session.get('facebook_oauth_state')
-        fallback_session_state = request.session.get('oauth_state')
-        
-        logger.info(f"State verification - Provided: {state}, Cache key: {cache_key}, "
-                   f"Cached: {cached_state}, Global cached: {global_cached_state}, Fallback cache: {fallback_cached_state}, "
-                   f"Session: {session_state}, Fallback session: {fallback_session_state}")
-        
-        # Check if state matches any of our stored states
-        state_verified = (state == cached_state or 
-                          state == global_cached_state or 
-                          state == fallback_cached_state or
-                          state == session_state or
-                          state == fallback_session_state)
-        
+        state_verified = verify_oauth_state_from_sources(state, 'facebook')
         if not state_verified:
             logger.error(f"State verification failed. Received: {state}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=invalid_state&message=State+verification+failed.+Please+try+again."
+            error_redirect_url = get_error_redirect_url('facebook', 'invalid_state', "State verification failed. Please try again.")
             return redirect(error_redirect_url)
         else:
             logger.info("State verification successful")
@@ -468,7 +452,14 @@ def facebook_callback(request):
     # Clean up used states
     try:
         if state:
-            cache.delete(f"facebook_oauth_state_{state}")
+            cache_key_formats = [
+                f'oauth_state_{state}',
+                f'facebook_oauth_state_{state}',
+                f'1:oauth_state_{state}',
+                f'1:facebook_oauth_state_{state}'
+            ]
+            for key_format in cache_key_formats:
+                cache.delete(key_format)
             cache.delete('facebook_oauth_state')
             cache.delete('oauth_state')
             request.session.pop('facebook_oauth_state', None)
@@ -505,22 +496,22 @@ def facebook_callback(request):
             
         except StateVerificationError as e:
             logger.error(f"State verification error: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=invalid_state&message={str(e)}"
+            error_redirect_url = get_error_redirect_url('facebook', 'invalid_state', str(e))
             return redirect(error_redirect_url)
             
         except TokenExchangeError as e:
             logger.error(f"Token exchange error: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=token_exchange_failed&message={str(e)}"
+            error_redirect_url = get_error_redirect_url('facebook', 'token_exchange_failed', str(e))
             return redirect(error_redirect_url)
             
         except ProfileFetchError as e:
             logger.error(f"Profile fetch error: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=profile_fetch_failed&message={str(e)}"
+            error_redirect_url = get_error_redirect_url('facebook', 'profile_fetch_failed', str(e))
             return redirect(error_redirect_url)
             
         except Exception as e:
             logger.exception(f"Unexpected error connecting Facebook account: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=connection_failed&message=An+unexpected+error+occurred"
+            error_redirect_url = get_error_redirect_url('facebook', 'connection_failed', "An unexpected error occurred")
             return redirect(error_redirect_url)
     else:
         # User is not logged in, try to authenticate with Facebook
@@ -530,7 +521,7 @@ def facebook_callback(request):
             
             if not token_data or 'access_token' not in token_data:
                 logger.error("Failed to exchange Facebook code for token")
-                error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=token_exchange_failed&message=Failed+to+exchange+code+for+token"
+                error_redirect_url = get_error_redirect_url('facebook', 'token_exchange_failed', "Failed to exchange code for token")
                 return redirect(error_redirect_url)
             
             # Store token in session for later use during login
@@ -548,7 +539,7 @@ def facebook_callback(request):
             
         except Exception as e:
             logger.exception(f"Error during unauthenticated Facebook callback: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=authentication_failed&message={str(e)}"
+            error_redirect_url = get_error_redirect_url('facebook', 'authentication_failed', str(e))
             return redirect(error_redirect_url)
 
 @api_view(['GET'])
@@ -724,167 +715,171 @@ def linkedin_callback(request):
 def twitter_callback(request):
     """
     OAuth 2.0 callback for Twitter.
-    Exchanges auth code for access token and refreshes the connected platforms list.
+    Exchanges auth code for access token and redirects to appropriate frontend URL.
     """
     logger = logging.getLogger('social')
-    logger.info("Received Twitter OAuth callback")
+    logger.info("===== Handling Twitter OAuth callback =====")
     
-    code = request.query_params.get('code')
-    state = request.query_params.get('state')
+    # Log request parameters (security redacted)
+    logger.info(f"Query parameters: code={'present' if request.GET.get('code') else 'missing'}, "
+               f"state={'present' if request.GET.get('state') else 'missing'}")
     
-    logger.info(f"Twitter callback parameters - Code exists: {bool(code)}, State: {state[:10] if state else None}")
+    # Extract parameters from request
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    error = request.GET.get('error')
+    error_description = request.GET.get('error_description')
     
-    if not code or not state:
-        logger.error("Missing required parameters for Twitter callback")
-        error_msg = "Missing required parameters"
-        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}"
-        return Response(
-            {
-                "error": error_msg,
-                "redirect_url": redirect_url
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    # Handle OAuth errors returned by Twitter
+    if error:
+        logger.error(f"Twitter returned OAuth error: {error} - {error_description}")
+        error_redirect_url = get_error_redirect_url('twitter', error, error_description or "Unknown error")
+        return redirect(error_redirect_url)
     
-    # Extract the platform from state if available
-    platform = 'twitter'
-    if state and '_' in state:
-        platform = state.split('_')[0]
-        logger.info(f"Extracted platform from state: {platform}")
+    # Check for required parameters
+    if not code:
+        logger.error("Missing required 'code' parameter")
+        error_redirect_url = get_error_redirect_url('twitter', 'missing_code', "Authorization code is missing")
+        return redirect(error_redirect_url)
     
-    try:
-        # Get the code_verifier from session storage
-        # This is provided by frontend or stored in backend depending on implementation
-        from ..utils.oauth import get_stored_pkce_verifier
-        code_verifier = get_stored_pkce_verifier(state)
-        if not code_verifier:
-            logger.warning(f"No code_verifier found for state: {state}")
-            error_msg = "No code verifier found for this authorization request"
-            redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details=The security verification code is missing. This may happen if you've waited too long or if cookies were cleared."
-            return Response(
-                {
-                    "error": error_msg,
-                    "redirect_url": redirect_url
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        logger.info(f"Code verifier retrieved for state: {state}, length: {len(code_verifier)}")
-        
-        # Verify the state parameter to prevent CSRF
-        from ..utils.oauth import verify_oauth_state
-        try:
-            verify_oauth_state(state)
-            logger.info("State verification successful")
-        except ValueError as e:
-            logger.error(f"State verification failed: {str(e)}")
-            error_msg = "Invalid or expired state parameter"
-            redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details=Your session has expired or is invalid. Please try connecting again."
-            return Response(
-                {
-                    "error": error_msg,
-                    "redirect_url": redirect_url
-                },
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-        
-        # Check if user is authenticated
-        user = request.user if request.user.is_authenticated else None
-        
-        if user:
-            # Exchange the code for tokens and connect the account
-            from ..services.social import connect_twitter_account
-            result = connect_twitter_account(user, code, state, code_verifier)
-            logger.info(f"Successfully connected Twitter account for user {user.username}")
-            
-            # Add redirect URL to success response
-            frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform=twitter"
-            result['redirect_url'] = frontend_success_url
-            
-            # Return success response
-            return Response(result)
+    # Verify state parameter if provided
+    if state:
+        state_verified = verify_oauth_state_from_sources(state, 'twitter')
+        if not state_verified:
+            logger.error(f"State verification failed. Received: {state}")
+            error_redirect_url = get_error_redirect_url('twitter', 'invalid_state', "State verification failed. Please try again.")
+            return redirect(error_redirect_url)
         else:
-            # User is not authenticated, store tokens and redirect to login
-            logger.info("Twitter OAuth successful but user is not authenticated. Redirecting to login.")
+            logger.info("State verification successful")
+    else:
+        logger.warning("No state parameter provided. Skipping verification.")
+    
+    # Clean up used states
+    try:
+        if state:
+            cache_key_formats = [
+                f'oauth_state_{state}',
+                f'twitter_oauth_state_{state}',
+                f'1:oauth_state_{state}',
+                f'1:twitter_oauth_state_{state}'
+            ]
+            for key_format in cache_key_formats:
+                cache.delete(key_format)
+            cache.delete('twitter_oauth_state')
+            cache.delete('oauth_state')
+            request.session.pop('twitter_oauth_state', None)
+            request.session.pop('oauth_state', None)
+    except Exception as e:
+        logger.warning(f"Error cleaning up state: {e}")
+    
+    # Get the code_verifier from cache or session
+    code_verifier = None
+    try:
+        # Try multiple storage locations for code verifier
+        if state:
+            for pkce_key in [f'pkce_{state}', f'twitter_pkce_{state}']:
+                code_verifier = cache.get(pkce_key)
+                if code_verifier:
+                    logger.info(f"Found code_verifier in cache with key: {pkce_key}")
+                    break
             
-            # Exchange code for token but don't associate with a user yet
+            if not code_verifier:
+                from ..utils.oauth import get_stored_pkce_verifier
+                try:
+                    code_verifier = get_stored_pkce_verifier(state)
+                    logger.info("Retrieved code_verifier from get_stored_pkce_verifier")
+                except Exception as e:
+                    logger.warning(f"Error in get_stored_pkce_verifier: {e}")
+        
+        if not code_verifier:
+            logger.warning("No code_verifier found in cache, checking session")
+            code_verifier = request.session.get('twitter_code_verifier')
+            if code_verifier:
+                logger.info("Found code_verifier in session")
+    except Exception as e:
+        logger.warning(f"Error retrieving code verifier: {e}")
+    
+    if not code_verifier:
+        logger.error("No code_verifier found for PKCE verification")
+        error_redirect_url = get_error_redirect_url('twitter', 'missing_code_verifier', "Security verification code is missing")
+        return redirect(error_redirect_url)
+    
+    # Handle differently for authenticated and unauthenticated users
+    if request.user.is_authenticated:
+        # User is logged in, connect the Twitter account
+        try:
+            result = connect_twitter_account(
+                user=request.user,
+                code=code,
+                state=state,
+                session_key=request.session.session_key,
+                code_verifier=code_verifier
+            )
+            
+            logger.info(f"Twitter account connected successfully for user {request.user.username}")
+            
+            # Redirect to success page with profile info
+            success_data = {
+                'platform': 'twitter',
+                'profile': {
+                    'name': result.get('profile', {}).get('name', ''),
+                    'username': result.get('profile', {}).get('username', ''),
+                    'picture': result.get('profile', {}).get('profile_image_url', ''),
+                }
+            }
+            
+            success_redirect_url = f"{settings.FRONTEND_URL}/social-auth/success?{urlencode(success_data)}"
+            return redirect(success_redirect_url)
+            
+        except StateVerificationError as e:
+            logger.error(f"State verification error: {e}")
+            error_redirect_url = get_error_redirect_url('twitter', 'invalid_state', str(e))
+            return redirect(error_redirect_url)
+            
+        except TokenExchangeError as e:
+            logger.error(f"Token exchange error: {e}")
+            error_redirect_url = get_error_redirect_url('twitter', 'token_exchange_failed', str(e))
+            return redirect(error_redirect_url)
+            
+        except ProfileFetchError as e:
+            logger.error(f"Profile fetch error: {e}")
+            error_redirect_url = get_error_redirect_url('twitter', 'profile_fetch_failed', str(e))
+            return redirect(error_redirect_url)
+            
+        except Exception as e:
+            logger.exception(f"Unexpected error connecting Twitter account: {e}")
+            error_redirect_url = get_error_redirect_url('twitter', 'connection_failed', "An unexpected error occurred")
+            return redirect(error_redirect_url)
+    else:
+        # User is not logged in, try to authenticate with Twitter
+        try:
             from ..services.social import exchange_twitter_code
             token_data = exchange_twitter_code(code, redirect_uri=settings.TWITTER_CALLBACK_URL, code_verifier=code_verifier)
             
-            # Store token data in cache for later
-            from django.core.cache import cache
-            token_cache_key = f'twitter_token_{state}'
-            cache.set(token_cache_key, token_data, timeout=3600)
+            if not token_data or 'access_token' not in token_data:
+                logger.error("Failed to exchange Twitter code for token")
+                error_redirect_url = get_error_redirect_url('twitter', 'token_exchange_failed', "Failed to exchange code for token")
+                return redirect(error_redirect_url)
             
-            # Redirect to login page with a special parameter
-            redirect_url = f"{settings.FRONTEND_URL}/login?pending_oauth=twitter&state={state}"
+            # Store token in session for later use during login
+            try:
+                request.session['twitter_access_token'] = token_data['access_token']
+                if 'refresh_token' in token_data:
+                    request.session['twitter_refresh_token'] = token_data['refresh_token']
+                if 'expires_in' in token_data:
+                    request.session['twitter_token_expiry'] = int(time.time()) + int(token_data['expires_in'])
+                logger.info("Stored Twitter access token in session")
+            except Exception as e:
+                logger.warning(f"Failed to store Twitter token in session: {e}")
             
-            return Response({
-                "message": "Please log in to complete linking your Twitter account",
-                "redirect_url": redirect_url,
-                "token_cache_key": token_cache_key
-            })
-    
-    except StateVerificationError as e:
-        logger.error(f"State verification error: {str(e)}")
-        error_msg = "State verification failed"
-        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
-        return Response(
-            {
-                "error": error_msg, 
-                "details": str(e),
-                "redirect_url": redirect_url
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    except PKCEVerificationError as e:
-        logger.error(f"PKCE verification error: {str(e)}")
-        error_msg = "PKCE verification failed"
-        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
-        return Response(
-            {
-                "error": error_msg, 
-                "details": str(e),
-                "redirect_url": redirect_url
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    except TokenExchangeError as e:
-        logger.error(f"Token exchange error: {str(e)}")
-        error_msg = "Failed to exchange code for tokens"
-        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
-        return Response(
-            {
-                "error": error_msg, 
-                "details": str(e),
-                "redirect_url": redirect_url
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    except ProfileFetchError as e:
-        logger.error(f"Profile fetch error: {str(e)}")
-        error_msg = "Failed to fetch Twitter profile"
-        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
-        return Response(
-            {
-                "error": error_msg, 
-                "details": str(e),
-                "redirect_url": redirect_url
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    except Exception as e:
-        logger.exception(f"Unexpected error in Twitter callback: {str(e)}")
-        error_msg = "An unexpected error occurred"
-        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
-        return Response(
-            {
-                "error": error_msg, 
-                "details": str(e),
-                "redirect_url": redirect_url
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+            # Redirect to login page with Twitter auth parameter
+            login_redirect_url = f"{settings.FRONTEND_URL}/login?social_auth=twitter"
+            return redirect(login_redirect_url)
+            
+        except Exception as e:
+            logger.exception(f"Error during unauthenticated Twitter callback: {e}")
+            error_redirect_url = get_error_redirect_url('twitter', 'authentication_failed', str(e))
+            return redirect(error_redirect_url)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -908,39 +903,21 @@ def instagram_callback(request):
     # Handle OAuth errors returned by Instagram
     if error:
         logger.error(f"Instagram returned OAuth error: {error} - {error_description}")
-        error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error={error}&message={error_description}"
+        error_redirect_url = get_error_redirect_url('instagram', error, error_description or "Unknown error")
         return redirect(error_redirect_url)
     
     # Check for required parameters
     if not code:
         logger.error("Missing required 'code' parameter")
-        error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=missing_code&message=Authorization+code+is+missing"
+        error_redirect_url = get_error_redirect_url('instagram', 'missing_code', "Authorization code is missing")
         return redirect(error_redirect_url)
     
     # Verify state parameter if provided
     if state:
-        # Try multiple state storage locations
-        cache_key = f"instagram_oauth_state_{state}"
-        cached_state = cache.get(cache_key)
-        global_cached_state = cache.get('instagram_oauth_state')
-        fallback_cached_state = cache.get('oauth_state')
-        session_state = request.session.get('instagram_oauth_state')
-        fallback_session_state = request.session.get('oauth_state')
-        
-        logger.info(f"State verification - Provided: {state}, Cache key: {cache_key}, "
-                   f"Cached: {cached_state}, Global cached: {global_cached_state}, Fallback cache: {fallback_cached_state}, "
-                   f"Session: {session_state}, Fallback session: {fallback_session_state}")
-        
-        # Check if state matches any of our stored states
-        state_verified = (state == cached_state or 
-                          state == global_cached_state or 
-                          state == fallback_cached_state or
-                          state == session_state or
-                          state == fallback_session_state)
-        
+        state_verified = verify_oauth_state_from_sources(state, 'instagram')
         if not state_verified:
             logger.error(f"State verification failed. Received: {state}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=invalid_state&message=State+verification+failed.+Please+try+again."
+            error_redirect_url = get_error_redirect_url('instagram', 'invalid_state', "State verification failed. Please try again.")
             return redirect(error_redirect_url)
         else:
             logger.info("State verification successful")
@@ -950,7 +927,14 @@ def instagram_callback(request):
     # Clean up used states
     try:
         if state:
-            cache.delete(f"instagram_oauth_state_{state}")
+            cache_key_formats = [
+                f'oauth_state_{state}',
+                f'instagram_oauth_state_{state}',
+                f'1:oauth_state_{state}',
+                f'1:instagram_oauth_state_{state}'
+            ]
+            for key_format in cache_key_formats:
+                cache.delete(key_format)
             cache.delete('instagram_oauth_state')
             cache.delete('oauth_state')
             request.session.pop('instagram_oauth_state', None)
@@ -987,22 +971,22 @@ def instagram_callback(request):
             
         except StateVerificationError as e:
             logger.error(f"State verification error: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=invalid_state&message={str(e)}"
+            error_redirect_url = get_error_redirect_url('instagram', 'invalid_state', str(e))
             return redirect(error_redirect_url)
             
         except TokenExchangeError as e:
             logger.error(f"Token exchange error: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=token_exchange_failed&message={str(e)}"
+            error_redirect_url = get_error_redirect_url('instagram', 'token_exchange_failed', str(e))
             return redirect(error_redirect_url)
             
         except ProfileFetchError as e:
             logger.error(f"Profile fetch error: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=profile_fetch_failed&message={str(e)}"
+            error_redirect_url = get_error_redirect_url('instagram', 'profile_fetch_failed', str(e))
             return redirect(error_redirect_url)
             
         except Exception as e:
             logger.exception(f"Unexpected error connecting Instagram account: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=connection_failed&message=An+unexpected+error+occurred"
+            error_redirect_url = get_error_redirect_url('instagram', 'connection_failed', "An unexpected error occurred")
             return redirect(error_redirect_url)
     else:
         # User is not logged in, try to authenticate with Instagram
@@ -1012,7 +996,7 @@ def instagram_callback(request):
             
             if not token_data or 'access_token' not in token_data:
                 logger.error("Failed to exchange Instagram code for token")
-                error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=token_exchange_failed&message=Failed+to+exchange+code+for+token"
+                error_redirect_url = get_error_redirect_url('instagram', 'token_exchange_failed', "Failed to exchange code for token")
                 return redirect(error_redirect_url)
             
             # Store token in session for later use during login
@@ -1030,20 +1014,303 @@ def instagram_callback(request):
             
         except Exception as e:
             logger.exception(f"Error during unauthenticated Instagram callback: {e}")
-            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=authentication_failed&message={str(e)}"
+            error_redirect_url = get_error_redirect_url('instagram', 'authentication_failed', str(e))
             return redirect(error_redirect_url)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def tiktok_callback(request):
-    """Handle TikTok OAuth callback"""
-    return oauth_callback(request, 'tiktok')
+    """
+    Handle callback from TikTok OAuth authorization.
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Handling TikTok OAuth callback =====")
+    
+    # Log request parameters (security redacted)
+    logger.info(f"Query parameters: code={'present' if request.GET.get('code') else 'missing'}, "
+               f"state={'present' if request.GET.get('state') else 'missing'}")
+    
+    # Extract parameters from request
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    error = request.GET.get('error')
+    error_description = request.GET.get('error_description')
+    
+    # Handle OAuth errors returned by TikTok
+    if error:
+        logger.error(f"TikTok returned OAuth error: {error} - {error_description}")
+        error_redirect_url = get_error_redirect_url('tiktok', error, error_description or "Unknown error")
+        return redirect(error_redirect_url)
+    
+    # Check for required parameters
+    if not code:
+        logger.error("Missing required 'code' parameter")
+        error_redirect_url = get_error_redirect_url('tiktok', 'missing_code', "Authorization code is missing")
+        return redirect(error_redirect_url)
+    
+    # Verify state parameter if provided
+    if state:
+        state_verified = verify_oauth_state_from_sources(state, 'tiktok')
+        if not state_verified:
+            logger.error(f"State verification failed. Received: {state}")
+            error_redirect_url = get_error_redirect_url('tiktok', 'invalid_state', "State verification failed. Please try again.")
+            return redirect(error_redirect_url)
+        else:
+            logger.info("State verification successful")
+    else:
+        logger.warning("No state parameter provided. Skipping verification.")
+    
+    # Clean up used states
+    try:
+        if state:
+            cache_key_formats = [
+                f'oauth_state_{state}',
+                f'tiktok_oauth_state_{state}',
+                f'1:oauth_state_{state}',
+                f'1:tiktok_oauth_state_{state}'
+            ]
+            for key_format in cache_key_formats:
+                cache.delete(key_format)
+            cache.delete('tiktok_oauth_state')
+            cache.delete('oauth_state')
+            request.session.pop('tiktok_oauth_state', None)
+            request.session.pop('oauth_state', None)
+    except Exception as e:
+        logger.warning(f"Error cleaning up state: {e}")
+    
+    # Get the code_verifier from cache or session
+    code_verifier = None
+    try:
+        # Try multiple storage locations for code verifier
+        if state:
+            for pkce_key in [f'pkce_{state}', f'tiktok_pkce_{state}']:
+                code_verifier = cache.get(pkce_key)
+                if code_verifier:
+                    logger.info(f"Found code_verifier in cache with key: {pkce_key}")
+                    break
+            
+            if not code_verifier:
+                from ..utils.oauth import get_stored_pkce_verifier
+                try:
+                    code_verifier = get_stored_pkce_verifier(state)
+                    logger.info("Retrieved code_verifier from get_stored_pkce_verifier")
+                except Exception as e:
+                    logger.warning(f"Error in get_stored_pkce_verifier: {e}")
+        
+        if not code_verifier:
+            logger.warning("No code_verifier found in cache, checking session")
+            code_verifier = request.session.get('tiktok_code_verifier')
+            if code_verifier:
+                logger.info("Found code_verifier in session")
+    except Exception as e:
+        logger.warning(f"Error retrieving code verifier: {e}")
+    
+    if not code_verifier:
+        logger.warning("No code_verifier found for TikTok. PKCE may not be required for this platform.")
+    
+    # Handle differently for authenticated and unauthenticated users
+    if request.user.is_authenticated:
+        # User is logged in, connect the TikTok account
+        try:
+            result = connect_tiktok_account(
+                user=request.user,
+                code=code,
+                session_key=request.session.session_key,
+                state=state
+            )
+            
+            logger.info(f"TikTok account connected successfully for user {request.user.username}")
+            
+            # Redirect to success page with profile info
+            success_data = {
+                'platform': 'tiktok',
+                'profile': {
+                    'name': result.get('profile', {}).get('display_name', ''),
+                    'username': result.get('profile', {}).get('display_name', ''),
+                    'picture': result.get('profile', {}).get('avatar_url', ''),
+                }
+            }
+            
+            success_redirect_url = f"{settings.FRONTEND_URL}/social-auth/success?{urlencode(success_data)}"
+            return redirect(success_redirect_url)
+            
+        except StateVerificationError as e:
+            logger.error(f"State verification error: {e}")
+            error_redirect_url = get_error_redirect_url('tiktok', 'invalid_state', str(e))
+            return redirect(error_redirect_url)
+            
+        except TokenExchangeError as e:
+            logger.error(f"Token exchange error: {e}")
+            error_redirect_url = get_error_redirect_url('tiktok', 'token_exchange_failed', str(e))
+            return redirect(error_redirect_url)
+            
+        except ProfileFetchError as e:
+            logger.error(f"Profile fetch error: {e}")
+            error_redirect_url = get_error_redirect_url('tiktok', 'profile_fetch_failed', str(e))
+            return redirect(error_redirect_url)
+            
+        except Exception as e:
+            logger.exception(f"Unexpected error connecting TikTok account: {e}")
+            error_redirect_url = get_error_redirect_url('tiktok', 'connection_failed', "An unexpected error occurred")
+            return redirect(error_redirect_url)
+    else:
+        # User is not logged in, try to authenticate with TikTok
+        try:
+            from ..services.social import exchange_tiktok_code
+            token_data = exchange_tiktok_code(code, redirect_uri=settings.TIKTOK_REDIRECT_URI)
+            
+            if not token_data or 'access_token' not in token_data:
+                logger.error("Failed to exchange TikTok code for token")
+                error_redirect_url = get_error_redirect_url('tiktok', 'token_exchange_failed', "Failed to exchange code for token")
+                return redirect(error_redirect_url)
+            
+            # Store token in session for later use during login
+            try:
+                request.session['tiktok_access_token'] = token_data['access_token']
+                request.session['tiktok_open_id'] = token_data['open_id']
+                if 'expires_in' in token_data:
+                    request.session['tiktok_token_expiry'] = int(time.time()) + int(token_data['expires_in'])
+                logger.info("Stored TikTok access token in session")
+            except Exception as e:
+                logger.warning(f"Failed to store TikTok token in session: {e}")
+            
+            # Redirect to login page with TikTok auth parameter
+            login_redirect_url = f"{settings.FRONTEND_URL}/login?social_auth=tiktok"
+            return redirect(login_redirect_url)
+            
+        except Exception as e:
+            logger.exception(f"Error during unauthenticated TikTok callback: {e}")
+            error_redirect_url = get_error_redirect_url('tiktok', 'authentication_failed', str(e))
+            return redirect(error_redirect_url)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def telegram_callback(request):
-    """Handle Telegram OAuth callback"""
-    return oauth_callback(request, 'telegram')
+    """
+    Handle callback from Telegram OAuth.
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Handling Telegram OAuth callback =====")
+    
+    # Log request parameters (security redacted)
+    logger.info(f"Query parameters: code={'present' if request.GET.get('code') else 'missing'}, "
+               f"state={'present' if request.GET.get('state') else 'missing'}")
+    
+    # Extract parameters from request
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    error = request.GET.get('error')
+    error_description = request.GET.get('error_description')
+    
+    # Handle OAuth errors returned by Telegram
+    if error:
+        logger.error(f"Telegram returned OAuth error: {error} - {error_description}")
+        error_redirect_url = get_error_redirect_url('telegram', error, error_description or "Unknown error")
+        return redirect(error_redirect_url)
+    
+    # Verify state parameter if provided
+    if state:
+        state_verified = verify_oauth_state_from_sources(state, 'telegram')
+        if not state_verified:
+            logger.error(f"State verification failed. Received: {state}")
+            error_redirect_url = get_error_redirect_url('telegram', 'invalid_state', "State verification failed. Please try again.")
+            return redirect(error_redirect_url)
+        else:
+            logger.info("State verification successful")
+    
+    # Handle differently for authenticated and unauthenticated users
+    if request.user.is_authenticated:
+        # User is logged in, connect the Telegram account
+        try:
+            result = connect_telegram_account(
+                user=request.user,
+                code=code,
+                session_key=request.session.session_key,
+                state=state
+            )
+            
+            logger.info(f"Telegram account connected successfully for user {request.user.username}")
+            
+            # Redirect to success page
+            success_data = {
+                'platform': 'telegram',
+                'profile': {
+                    'id': result.get('profile', {}).get('id', '')
+                }
+            }
+            
+            success_redirect_url = f"{settings.FRONTEND_URL}/social-auth/success?{urlencode(success_data)}"
+            return redirect(success_redirect_url)
+            
+        except Exception as e:
+            logger.exception(f"Unexpected error connecting Telegram account: {e}")
+            error_redirect_url = get_error_redirect_url('telegram', 'connection_failed', str(e))
+            return redirect(error_redirect_url)
+    else:
+        # User is not logged in, redirect to login page
+        logger.info("User not authenticated. Redirecting to login page.")
+        login_redirect_url = f"{settings.FRONTEND_URL}/login?social_auth=telegram"
+        return redirect(login_redirect_url)
+
+def login_instagram(request):
+    """
+    Initiate Instagram OAuth login flow.
+    Redirects to Instagram authorization page.
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Starting Instagram OAuth login flow =====")
+    
+    # Generate random state for CSRF protection
+    state = generate_random_state()
+    cache_key = f"instagram_oauth_state_{state}"
+
+    # Store state in multiple locations for redundancy
+    try:
+        # Store in cache with both formats
+        cache.set(cache_key, state, timeout=300)
+        cache.set('instagram_oauth_state', state, timeout=300)
+        cache.set('oauth_state', state, timeout=300)
+        logger.info(f"Stored state in cache at keys: {cache_key}, instagram_oauth_state, oauth_state")
+    except Exception as e:
+        logger.exception(f"Error storing state in cache: {e}")
+        # Continue anyway, we'll have fallbacks
+    
+    # Store in session as well for fallback
+    try:
+        request.session['instagram_oauth_state'] = state
+        request.session['oauth_state'] = state
+        logger.info(f"Stored state in session at keys: instagram_oauth_state, oauth_state")
+    except Exception as e:
+        logger.warning(f"Could not store state in session: {e}")
+    
+    # Get the redirect URI
+    redirect_uri = settings.INSTAGRAM_REDIRECT_URI
+    logger.info(f"Using redirect URI: {redirect_uri}")
+    
+    # Build the authorization URL
+    auth_params = {
+        'client_id': settings.INSTAGRAM_CLIENT_ID,
+        'redirect_uri': redirect_uri,
+        'state': state,
+        'response_type': 'code',
+        'scope': 'user_profile,user_media', # Basic permissions for Instagram
+    }
+    
+    auth_url = f"https://api.instagram.com/oauth/authorize?{urlencode(auth_params)}"
+    logger.info(f"Redirecting to Instagram authorization URL (truncated): {auth_url[:100]}...")
+    
+    # Store timestamp of login attempt
+    try:
+        cache.set(f"instagram_login_{state}_timestamp", int(time.time()), timeout=300)
+        logger.info(f"Stored login timestamp for state {state}")
+    except Exception as e:
+        logger.warning(f"Failed to store login timestamp: {e}")
+    
+    return redirect(auth_url)
+
+def generate_random_state():
+    """Generate a secure random state string for OAuth verification."""
+    return secrets.token_urlsafe(24)
 
 @swagger_auto_schema(
     method='post',
@@ -1283,62 +1550,6 @@ def login_facebook(request):
     # Store timestamp of login attempt
     try:
         cache.set(f"facebook_login_{state}_timestamp", int(time.time()), timeout=300)
-        logger.info(f"Stored login timestamp for state {state}")
-    except Exception as e:
-        logger.warning(f"Failed to store login timestamp: {e}")
-    
-    return redirect(auth_url)
-
-def login_instagram(request):
-    """
-    Initiate Instagram OAuth login flow.
-    Redirects to Instagram authorization page.
-    """
-    logger = logging.getLogger('social')
-    logger.info("===== Starting Instagram OAuth login flow =====")
-    
-    # Generate random state for CSRF protection
-    state = generate_random_state()
-    cache_key = f"instagram_oauth_state_{state}"
-
-    # Store state in multiple locations for redundancy
-    try:
-        # Store in cache with both formats
-        cache.set(cache_key, state, timeout=300)
-        cache.set('instagram_oauth_state', state, timeout=300)
-        cache.set('oauth_state', state, timeout=300)
-        logger.info(f"Stored state in cache at keys: {cache_key}, instagram_oauth_state, oauth_state")
-    except Exception as e:
-        logger.exception(f"Error storing state in cache: {e}")
-        # Continue anyway, we'll have fallbacks
-    
-    # Store in session as well for fallback
-    try:
-        request.session['instagram_oauth_state'] = state
-        request.session['oauth_state'] = state
-        logger.info(f"Stored state in session at keys: instagram_oauth_state, oauth_state")
-    except Exception as e:
-        logger.warning(f"Could not store state in session: {e}")
-    
-    # Get the redirect URI
-    redirect_uri = settings.INSTAGRAM_REDIRECT_URI
-    logger.info(f"Using redirect URI: {redirect_uri}")
-    
-    # Build the authorization URL
-    auth_params = {
-        'client_id': settings.INSTAGRAM_CLIENT_ID,
-        'redirect_uri': redirect_uri,
-        'state': state,
-        'response_type': 'code',
-        'scope': 'user_profile,user_media', # Basic permissions for Instagram
-    }
-    
-    auth_url = f"https://api.instagram.com/oauth/authorize?{urlencode(auth_params)}"
-    logger.info(f"Redirecting to Instagram authorization URL (truncated): {auth_url[:100]}...")
-    
-    # Store timestamp of login attempt
-    try:
-        cache.set(f"instagram_login_{state}_timestamp", int(time.time()), timeout=300)
         logger.info(f"Stored login timestamp for state {state}")
     except Exception as e:
         logger.warning(f"Failed to store login timestamp: {e}")
