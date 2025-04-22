@@ -51,7 +51,7 @@ def get_twitter_auth_url():
         auth = tweepy.OAuthHandler(
             settings.TWITTER_API_KEY,
             settings.TWITTER_API_SECRET,
-            callback=f"{settings.OAUTH2_REDIRECT_URI}/users/auth/twitter/callback/"
+            callback=f"{settings.OAUTH2_REDIRECT_URI}/api/v1/users/auth/twitter/callback/"
         )
 
         # Set access token for API v1.1 compatibility

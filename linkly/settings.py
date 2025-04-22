@@ -322,7 +322,12 @@ TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_CLIENT_SECRET') or os.environ.ge
 TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN')
 TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN')
 TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET')
-TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'https://linkly-production.up.railway.app/users/auth/twitter/callback/')
+
+# Unified callback URL for Twitter
+TWITTER_CALLBACK_URL = os.environ.get(
+    'TWITTER_CALLBACK_URL',
+    'https://linkly-production.up.railway.app/api/v1/users/auth/callback/twitter/'
+)
 
 # For backwards compatibility
 TWITTER_API_KEY = TWITTER_CLIENT_ID
@@ -567,8 +572,3 @@ CACHE_TTL = 60 * 15
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
 
-
-# Twitter API Configuration
-TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY')
-TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET')
-TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'https://link-ly.web.app/oauth-callback/twitter') 
