@@ -24,6 +24,10 @@ from ..services.exceptions import (
 )
 import logging
 from django.conf import settings
+from urllib.parse import urlencode
+import time
+from django.urls import reverse
+from django.http import HttpResponseRedirect
 
 @swagger_auto_schema(
     method='get',
@@ -401,10 +405,151 @@ def google_callback(request):
     return oauth_callback(request, 'google')
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def facebook_callback(request):
-    """Handle Facebook OAuth callback"""
-    return oauth_callback(request, 'facebook')
+    """
+    Handle callback from Facebook OAuth authorization.
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Handling Facebook OAuth callback =====")
+    
+    # Log request parameters (security redacted)
+    logger.info(f"Query parameters: code={'present' if request.GET.get('code') else 'missing'}, "
+               f"state={'present' if request.GET.get('state') else 'missing'}")
+    
+    # Extract parameters from request
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    error = request.GET.get('error')
+    error_description = request.GET.get('error_description')
+    
+    # Handle OAuth errors returned by Facebook
+    if error:
+        logger.error(f"Facebook returned OAuth error: {error} - {error_description}")
+        error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error={error}&message={error_description}"
+        return redirect(error_redirect_url)
+    
+    # Check for required parameters
+    if not code:
+        logger.error("Missing required 'code' parameter")
+        error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=missing_code&message=Authorization+code+is+missing"
+        return redirect(error_redirect_url)
+    
+    # Verify state parameter if provided
+    if state:
+        # Try multiple state storage locations
+        cache_key = f"facebook_oauth_state_{state}"
+        cached_state = cache.get(cache_key)
+        global_cached_state = cache.get('facebook_oauth_state')
+        fallback_cached_state = cache.get('oauth_state')
+        session_state = request.session.get('facebook_oauth_state')
+        fallback_session_state = request.session.get('oauth_state')
+        
+        logger.info(f"State verification - Provided: {state}, Cache key: {cache_key}, "
+                   f"Cached: {cached_state}, Global cached: {global_cached_state}, Fallback cache: {fallback_cached_state}, "
+                   f"Session: {session_state}, Fallback session: {fallback_session_state}")
+        
+        # Check if state matches any of our stored states
+        state_verified = (state == cached_state or 
+                          state == global_cached_state or 
+                          state == fallback_cached_state or
+                          state == session_state or
+                          state == fallback_session_state)
+        
+        if not state_verified:
+            logger.error(f"State verification failed. Received: {state}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=invalid_state&message=State+verification+failed.+Please+try+again."
+            return redirect(error_redirect_url)
+        else:
+            logger.info("State verification successful")
+    else:
+        logger.warning("No state parameter provided. Skipping verification.")
+    
+    # Clean up used states
+    try:
+        if state:
+            cache.delete(f"facebook_oauth_state_{state}")
+            cache.delete('facebook_oauth_state')
+            cache.delete('oauth_state')
+            request.session.pop('facebook_oauth_state', None)
+            request.session.pop('oauth_state', None)
+    except Exception as e:
+        logger.warning(f"Error cleaning up state: {e}")
+    
+    # Handle differently for authenticated and unauthenticated users
+    if request.user.is_authenticated:
+        # User is logged in, connect the Facebook account
+        try:
+            result = connect_facebook_account(
+                user=request.user,
+                code=code,
+                state=state,
+                session_key=request.session.session_key
+            )
+            
+            logger.info(f"Facebook account connected successfully for user {request.user.username}")
+            
+            # Redirect to success page with profile info
+            success_data = {
+                'platform': 'facebook',
+                'profile': {
+                    'name': result.get('name', ''),
+                    'email': result.get('email', ''),
+                    'picture': result.get('picture', ''),
+                },
+                'access_token': result.get('access_token', '')[:10] + '...' if result.get('access_token') else None
+            }
+            
+            success_redirect_url = f"{settings.FRONTEND_URL}/social-auth/success?{urlencode(success_data)}"
+            return redirect(success_redirect_url)
+            
+        except StateVerificationError as e:
+            logger.error(f"State verification error: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=invalid_state&message={str(e)}"
+            return redirect(error_redirect_url)
+            
+        except TokenExchangeError as e:
+            logger.error(f"Token exchange error: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=token_exchange_failed&message={str(e)}"
+            return redirect(error_redirect_url)
+            
+        except ProfileFetchError as e:
+            logger.error(f"Profile fetch error: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=profile_fetch_failed&message={str(e)}"
+            return redirect(error_redirect_url)
+            
+        except Exception as e:
+            logger.exception(f"Unexpected error connecting Facebook account: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=connection_failed&message=An+unexpected+error+occurred"
+            return redirect(error_redirect_url)
+    else:
+        # User is not logged in, try to authenticate with Facebook
+        try:
+            redirect_uri = settings.FACEBOOK_REDIRECT_URI
+            token_data = exchange_facebook_code(code, redirect_uri)
+            
+            if not token_data or 'access_token' not in token_data:
+                logger.error("Failed to exchange Facebook code for token")
+                error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=token_exchange_failed&message=Failed+to+exchange+code+for+token"
+                return redirect(error_redirect_url)
+            
+            # Store token in session for later use during login
+            try:
+                request.session['facebook_access_token'] = token_data['access_token']
+                if 'expires_in' in token_data:
+                    request.session['facebook_token_expiry'] = int(time.time()) + int(token_data['expires_in'])
+                logger.info("Stored Facebook access token in session")
+            except Exception as e:
+                logger.warning(f"Failed to store Facebook token in session: {e}")
+            
+            # Redirect to login page with Facebook auth parameter
+            login_redirect_url = f"{settings.FRONTEND_URL}/login?social_auth=facebook"
+            return redirect(login_redirect_url)
+            
+        except Exception as e:
+            logger.exception(f"Error during unauthenticated Facebook callback: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=facebook&error=authentication_failed&message={str(e)}"
+            return redirect(error_redirect_url)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow any user to access the callback
@@ -945,4 +1090,60 @@ def save_platform_tokens(request):
         return Response({
             'success': False,
             'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+def login_facebook(request):
+    """
+    Initiate Facebook OAuth login flow.
+    Redirects to Facebook authorization page.
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Starting Facebook OAuth login flow =====")
+    
+    # Generate random state for CSRF protection
+    state = generate_random_state()
+    cache_key = f"facebook_oauth_state_{state}"
+
+    # Store state in multiple locations for redundancy
+    try:
+        # Store in cache with both formats
+        cache.set(cache_key, state, timeout=300)
+        cache.set('facebook_oauth_state', state, timeout=300)
+        cache.set('oauth_state', state, timeout=300)
+        logger.info(f"Stored state in cache at keys: {cache_key}, facebook_oauth_state, oauth_state")
+    except Exception as e:
+        logger.exception(f"Error storing state in cache: {e}")
+        # Continue anyway, we'll have fallbacks
+    
+    # Store in session as well for fallback
+    try:
+        request.session['facebook_oauth_state'] = state
+        request.session['oauth_state'] = state
+        logger.info(f"Stored state in session at keys: facebook_oauth_state, oauth_state")
+    except Exception as e:
+        logger.warning(f"Could not store state in session: {e}")
+    
+    # Get the redirect URI
+    redirect_uri = settings.FACEBOOK_REDIRECT_URI
+    logger.info(f"Using redirect URI: {redirect_uri}")
+    
+    # Build the authorization URL
+    auth_params = {
+        'client_id': settings.FACEBOOK_CLIENT_ID,
+        'redirect_uri': redirect_uri,
+        'state': state,
+        'response_type': 'code',
+        'scope': 'email,public_profile,pages_show_list', # Add more scopes as needed
+    }
+    
+    auth_url = f"https://www.facebook.com/v18.0/dialog/oauth?{urlencode(auth_params)}"
+    logger.info(f"Redirecting to Facebook authorization URL (truncated): {auth_url[:100]}...")
+    
+    # Store timestamp of login attempt
+    try:
+        cache.set(f"facebook_login_{state}_timestamp", int(time.time()), timeout=300)
+        logger.info(f"Stored login timestamp for state {state}")
+    except Exception as e:
+        logger.warning(f"Failed to store login timestamp: {e}")
+    
+    return redirect(auth_url) 

@@ -20,6 +20,7 @@ from .exceptions import (
 from ..utils.oauth import get_platform_config, verify_oauth_state, get_stored_code_verifier
 import base64
 import json
+import datetime
 
 logger = logging.getLogger('social')
 
@@ -45,23 +46,214 @@ def exchange_google_code(code, redirect_uri=None):
     except Exception as e:
         raise SocialConnectionError(f'Google OAuth error: {str(e)}')
 
-def exchange_facebook_code(code, redirect_uri=None):
-    """Exchange Facebook auth code for tokens"""
+def exchange_facebook_code(code: str, redirect_uri: str = None) -> Dict[str, Any]:
+    """
+    Exchange Facebook authorization code for an access token.
+    
+    Args:
+        code: The authorization code received from Facebook
+        redirect_uri: The redirect URI used during authorization
+        
+    Returns:
+        Dictionary containing access token and other token data
+        
+    Raises:
+        SocialConnectionError: If there's an error exchanging the code for a token
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Exchanging Facebook code for token =====")
+    
+    # Use configured redirect URI if none provided
+    if not redirect_uri:
+        redirect_uri = settings.FACEBOOK_REDIRECT_URI
+    
+    logger.info(f"Using redirect URI: {redirect_uri}")
+    logger.info(f"Code length: {len(code) if code else 'None'}")
+    
+    # Validate inputs
+    if not code:
+        logger.error("Missing code parameter for Facebook OAuth")
+        raise SocialConnectionError("Missing authorization code")
+        
+    if not settings.FACEBOOK_CLIENT_ID or not settings.FACEBOOK_CLIENT_SECRET:
+        logger.error("Missing Facebook client credentials in settings")
+        raise SocialConnectionError("Facebook API credentials not configured")
+    
+    # Build request data
+    request_data = {
+        'client_id': settings.FACEBOOK_CLIENT_ID,
+        'client_secret': settings.FACEBOOK_CLIENT_SECRET,
+        'code': code,
+        'redirect_uri': redirect_uri,
+    }
+    
+    # Log request details (without exposing sensitive data)
+    logger.info(f"Token request data (client_id and redirect_uri): {settings.FACEBOOK_CLIENT_ID}, {redirect_uri}")
+    
     try:
+        # Exchange code for token
+        token_url = 'https://graph.facebook.com/v17.0/oauth/access_token'
+        logger.info(f"Making token request to: {token_url}")
+        
         response = requests.get(
-            'https://graph.facebook.com/v18.0/oauth/access_token',
-            params={
-                'client_id': settings.FACEBOOK_CLIENT_ID,
-                'client_secret': settings.FACEBOOK_CLIENT_SECRET,
-                'code': code,
-                'redirect_uri': redirect_uri or settings.FACEBOOK_REDIRECT_URI
-            }
+            token_url,
+            params=request_data,
+            timeout=10
         )
+        
+        # Check if response is successful
         if response.status_code != 200:
-            raise SocialConnectionError('Failed to exchange Facebook auth code')
-        return response.json()
+            logger.error(f"Token request failed: Status {response.status_code}, Response: {response.text}")
+            
+            # Try to parse the error response as JSON
+            try:
+                error_data = response.json()
+                logger.error(f"Facebook error details: {error_data}")
+                error_message = error_data.get('error', {}).get('message', 'Unknown error')
+                error_type = error_data.get('error', {}).get('type', 'unknown_error')
+                error_code = error_data.get('error', {}).get('code', 0)
+                logger.error(f"Facebook error type: {error_type}, code: {error_code}, message: {error_message}")
+            except (ValueError, json.JSONDecodeError, AttributeError):
+                logger.error("Could not parse Facebook error response as JSON")
+                error_message = response.text if response.text else f"HTTP {response.status_code}"
+            
+            raise SocialConnectionError(f"Facebook API error: {error_message}")
+        
+        # Parse response
+        token_data = response.json()
+        
+        # Verify token data
+        if 'access_token' not in token_data:
+            logger.error(f"Token response missing access_token: {token_data}")
+            raise SocialConnectionError("Facebook token response missing access_token")
+        
+        logger.info(
+            f"Successfully exchanged code for Facebook token. "
+            f"Token type: {token_data.get('token_type', 'unknown')}, "
+            f"Access token length: {len(token_data.get('access_token', ''))}"
+        )
+        
+        if 'expires_in' in token_data:
+            expiry_time = datetime.datetime.now() + datetime.timedelta(seconds=int(token_data['expires_in']))
+            logger.info(f"Token expires in {token_data['expires_in']} seconds (at {expiry_time.isoformat()})")
+        
+        # Get user profile with the token
+        try:
+            logger.info("Fetching Facebook user profile with the access token")
+            profile_data = get_facebook_profile(token_data['access_token'])
+            
+            # Add profile data to the result
+            result = {
+                'access_token': token_data['access_token'],
+                'expires_in': token_data.get('expires_in'),
+                'token_type': token_data.get('token_type'),
+                'id': profile_data.get('id'),
+                'name': profile_data.get('name'),
+                'email': profile_data.get('email'),
+                'picture': profile_data.get('picture'),
+                'profile': profile_data
+            }
+            
+            logger.info(f"Successfully retrieved Facebook profile for user: {profile_data.get('name', 'Unknown')}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error fetching Facebook profile, returning token only: {e}")
+            # Return token data even if profile fetch fails
+            return {
+                'access_token': token_data['access_token'],
+                'expires_in': token_data.get('expires_in'),
+                'token_type': token_data.get('token_type')
+            }
+            
+    except requests.RequestException as e:
+        logger.exception(f"Request error during Facebook token exchange: {e}")
+        raise SocialConnectionError(f"Network error during Facebook token exchange: {str(e)}")
+    except ValueError as e:
+        logger.exception(f"JSON parsing error during Facebook token exchange: {e}")
+        raise SocialConnectionError(f"Failed to parse Facebook token response: {str(e)}")
     except Exception as e:
-        raise SocialConnectionError(f'Facebook OAuth error: {str(e)}')
+        logger.exception(f"Unexpected error during Facebook token exchange: {e}")
+        raise SocialConnectionError(f"Unexpected error during Facebook token exchange: {str(e)}")
+
+def get_facebook_profile(access_token: str) -> Dict[str, Any]:
+    """
+    Fetch the user's Facebook profile data using the access token.
+    
+    Args:
+        access_token: Facebook access token
+        
+    Returns:
+        Dictionary containing user profile data
+        
+    Raises:
+        SocialConnectionError: If there's an error fetching the profile
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Fetching Facebook profile =====")
+    
+    try:
+        # Request user profile data with fields we want
+        fields = "id,name,email,picture.type(large),first_name,last_name,link"
+        profile_url = f"https://graph.facebook.com/v17.0/me?fields={fields}&access_token={access_token}"
+        
+        logger.info(f"Making profile request to Facebook Graph API")
+        
+        response = requests.get(profile_url, timeout=10)
+        
+        # Check if response is successful
+        if response.status_code != 200:
+            logger.error(f"Profile request failed: Status {response.status_code}, Response: {response.text}")
+            
+            # Try to parse the error response as JSON
+            try:
+                error_data = response.json()
+                logger.error(f"Facebook profile error details: {error_data}")
+                error_message = error_data.get('error', {}).get('message', 'Unknown error')
+                error_type = error_data.get('error', {}).get('type', 'unknown_error')
+                error_code = error_data.get('error', {}).get('code', 0)
+                logger.error(f"Facebook profile error type: {error_type}, code: {error_code}, message: {error_message}")
+            except (ValueError, json.JSONDecodeError, AttributeError):
+                logger.error("Could not parse Facebook profile error response as JSON")
+                error_message = response.text if response.text else f"HTTP {response.status_code}"
+            
+            raise SocialConnectionError(f"Facebook profile API error: {error_message}")
+        
+        # Parse response
+        profile_data = response.json()
+        
+        # Check for required profile fields
+        if 'id' not in profile_data:
+            logger.error(f"Profile response missing user ID: {profile_data}")
+            raise SocialConnectionError("Facebook profile response missing user ID")
+        
+        # Extract picture URL if available
+        if 'picture' in profile_data and 'data' in profile_data['picture'] and 'url' in profile_data['picture']['data']:
+            profile_data['picture'] = profile_data['picture']['data']['url']
+            logger.info(f"Extracted profile picture URL from response")
+        else:
+            logger.warning("No profile picture found in Facebook response")
+        
+        # Log profile data (excluding sensitive information)
+        safe_profile_data = {
+            'id': profile_data.get('id'),
+            'name': profile_data.get('name'),
+            'has_email': 'email' in profile_data,
+            'has_picture': 'picture' in profile_data and isinstance(profile_data['picture'], str)
+        }
+        logger.info(f"Facebook profile data received: {safe_profile_data}")
+        
+        return profile_data
+        
+    except requests.RequestException as e:
+        logger.exception(f"Request error during Facebook profile fetch: {e}")
+        raise SocialConnectionError(f"Network error fetching Facebook profile: {str(e)}")
+    except ValueError as e:
+        logger.exception(f"JSON parsing error during Facebook profile fetch: {e}")
+        raise SocialConnectionError(f"Failed to parse Facebook profile response: {str(e)}")
+    except Exception as e:
+        logger.exception(f"Unexpected error during Facebook profile fetch: {e}")
+        raise SocialConnectionError(f"Unexpected error during Facebook profile fetch: {str(e)}")
 
 def exchange_linkedin_code(code, redirect_uri=None):
     """Exchange LinkedIn auth code for tokens"""
@@ -1075,169 +1267,317 @@ def connect_google_account(user, code: str, session_key: str, state: str) -> Dic
         'profile': profile
     }
 
-def connect_facebook_account(user, code: str, session_key: str, state: str) -> Dict:
-    """Connect Facebook account."""
-    verify_oauth_state(state)
+def connect_facebook_account(user: 'User', code: str, state: str = None, session_key: str = None) -> Dict[str, Any]:
+    """
+    Connect a Facebook account to a user's profile.
     
-    token_data = exchange_code_for_token('facebook', code, settings.FACEBOOK_REDIRECT_URI)
-    
-    # Get user profile
-    params = {
-        'fields': 'id,name,email',
-        'access_token': token_data['access_token']
-    }
-    response = requests.get('https://graph.facebook.com/v12.0/me', params=params)
-    if not response.ok:
-        raise ProfileFetchError("Failed to fetch Facebook profile")
-    
-    profile = response.json()
-    
-    # Update user
-    user.facebook_id = profile['id']
-    user.facebook_access_token = token_data['access_token']
-    user.save()
-    
-    return {
-        'success': True,
-        'platform': 'facebook',
-        'profile': profile
-    }
-
-def connect_linkedin_account(user, code: str, state: str = None, session_key: str = None) -> Dict:
-    """Connect LinkedIn account."""
+    Args:
+        user: The User object to connect the Facebook account to
+        code: The authorization code received from Facebook
+        state: The state parameter used during authorization
+        session_key: The user's session key for storing session-specific data
+        
+    Returns:
+        Dictionary containing token and profile data
+        
+    Raises:
+        StateVerificationError: If state verification fails
+        TokenExchangeError: If token exchange fails
+        ProfileFetchError: If profile fetching fails
+        SocialConnectionError: For other Facebook connection errors
+    """
     logger = logging.getLogger('social')
-    logger.info(f"===== Connecting LinkedIn account for user {user.username if user else 'None'} =====")
+    logger.info(f"===== Connecting Facebook account for user {user.username} =====")
     
     try:
-        # Verify state if provided, but make it optional to handle cases where state is unavailable
+        # Exchange code for token
+        redirect_uri = settings.FACEBOOK_REDIRECT_URI
+        token_data = exchange_facebook_code(code, redirect_uri)
+        
+        if not token_data or 'access_token' not in token_data:
+            logger.error("Failed to exchange Facebook code for token")
+            raise TokenExchangeError("Failed to exchange Facebook code for token")
+        
+        # Extract profile data
+        facebook_id = token_data.get('id')
+        name = token_data.get('name')
+        email = token_data.get('email')
+        picture_url = token_data.get('picture')
+        
+        # If we don't have an ID, try to get the profile again
+        if not facebook_id:
+            logger.warning("Facebook ID not found in token data, fetching profile separately")
+            try:
+                profile_data = get_facebook_profile(token_data['access_token'])
+                facebook_id = profile_data.get('id')
+                name = profile_data.get('name')
+                email = profile_data.get('email')
+                picture_url = profile_data.get('picture')
+                
+                # Update token_data with profile data
+                token_data.update(profile_data)
+            except Exception as e:
+                logger.error(f"Error fetching Facebook profile: {e}")
+                raise ProfileFetchError(f"Failed to fetch Facebook profile: {e}")
+        
+        if not facebook_id:
+            logger.error("Facebook ID not found in profile data")
+            raise ProfileFetchError("Could not retrieve Facebook user ID")
+        
+        # Check if this Facebook account is already connected to another user
+        try:
+            existing_connection = SocialAccount.objects.filter(
+                provider='facebook',
+                provider_id=facebook_id
+            ).exclude(user=user).first()
+            
+            if existing_connection:
+                logger.error(f"Facebook account already connected to another user: {existing_connection.user.username}")
+                raise SocialConnectionError("This Facebook account is already connected to another user")
+        except Exception as e:
+            logger.warning(f"Error checking existing Facebook connections: {e}")
+        
+        # Get or create social account
+        try:
+            social_account, created = SocialAccount.objects.get_or_create(
+                user=user,
+                provider='facebook',
+                provider_id=facebook_id,
+                defaults={
+                    'extra_data': {
+                        'access_token': token_data['access_token'],
+                        'token_type': token_data.get('token_type'),
+                        'expires_in': token_data.get('expires_in'),
+                        'name': name,
+                        'email': email,
+                        'picture': picture_url
+                    }
+                }
+            )
+            
+            if not created:
+                # Update existing account
+                social_account.extra_data = {
+                    'access_token': token_data['access_token'],
+                    'token_type': token_data.get('token_type'),
+                    'expires_in': token_data.get('expires_in'),
+                    'name': name,
+                    'email': email,
+                    'picture': picture_url
+                }
+                social_account.save()
+                logger.info(f"Updated existing Facebook account for user {user.username}")
+            else:
+                logger.info(f"Created new Facebook account for user {user.username}")
+                
+            # Update user profile if email is provided and user doesn't have one
+            if email and not user.email:
+                user.email = email
+                user.save(update_fields=['email'])
+                logger.info(f"Updated user email to {email}")
+            
+            # Return account data
+            result = {
+                'provider': 'facebook',
+                'provider_id': facebook_id,
+                'name': name,
+                'email': email,
+                'picture': picture_url,
+                'access_token': token_data['access_token'],
+                'token_type': token_data.get('token_type'),
+                'expires_in': token_data.get('expires_in'),
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.exception(f"Error saving Facebook account: {e}")
+            raise SocialConnectionError(f"Failed to save Facebook account: {e}")
+            
+    except StateVerificationError as e:
+        # Re-raise state verification errors
+        raise
+    except TokenExchangeError as e:
+        # Re-raise token exchange errors
+        raise
+    except ProfileFetchError as e:
+        # Re-raise profile fetch errors
+        raise
+    except SocialConnectionError as e:
+        # Re-raise social connection errors
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error connecting Facebook account: {e}")
+        raise SocialConnectionError(f"Unexpected error connecting Facebook account: {e}")
+
+def connect_linkedin_account(user, code: str, state: str = None, session_key: str = None) -> Dict:
+    """
+    Connect a LinkedIn account to a user's profile.
+    
+    Args:
+        user: The User object to connect the LinkedIn account to
+        code: The authorization code received from LinkedIn
+        state: The state parameter used during authorization
+        session_key: The user's session key for storing session-specific data
+        
+    Returns:
+        Dictionary containing token and profile data
+        
+    Raises:
+        StateVerificationError: If state verification fails
+        TokenExchangeError: If token exchange fails
+        ProfileFetchError: If profile fetching fails
+        SocialConnectionError: For other LinkedIn connection errors
+    """
+    logger = logging.getLogger('social')
+    logger.info(f"===== Connecting LinkedIn account for user {user.username} =====")
+    
+    try:
+        # Verify state if provided
         if state:
+            from ..utils.oauth import verify_oauth_state
             try:
                 verify_oauth_state(state)
-                logger.info(f"Successfully verified OAuth state: {state}")
-            except Exception as state_error:
-                logger.warning(f"State verification failed but continuing: {str(state_error)}")
-                # In production, we may want to continue even if state verification fails
-                if settings.DEBUG:
-                    raise StateVerificationError(f"State verification failed: {str(state_error)}")
+                logger.info("LinkedIn state verification successful")
+            except ValueError as e:
+                logger.error(f"LinkedIn state verification failed: {str(e)}")
+                raise StateVerificationError(f"LinkedIn state verification failed: {str(e)}")
+        
+        # Exchange code for token
+        redirect_uri = settings.LINKEDIN_REDIRECT_URI
+        token_data = exchange_linkedin_code(code, redirect_uri)
+        
+        if not token_data or 'access_token' not in token_data:
+            logger.error("Failed to exchange LinkedIn code for token")
+            raise TokenExchangeError("Failed to exchange LinkedIn code for token")
+        
+        # Get the user profile
+        profile_data = {}
+        if 'profile' in token_data:
+            profile_data = token_data['profile']
         else:
-            logger.warning("No state provided for LinkedIn OAuth flow")
-        
-        # Get the appropriate redirect URI
-        redirect_uri = None
-        if hasattr(settings, 'LINKEDIN_CALLBACK_URL'):
-            redirect_uri = settings.LINKEDIN_CALLBACK_URL
-        else:
-            redirect_uri = settings.LINKEDIN_REDIRECT_URI
-            
-        logger.info(f"Using redirect URI for token exchange: {redirect_uri}")
-        
-        # Exchange the code for a token
-        try:
-            token_data = exchange_linkedin_code(code, redirect_uri=redirect_uri)
-            logger.info("Successfully exchanged LinkedIn code for token")
-        except Exception as token_error:
-            logger.error(f"Error exchanging LinkedIn code: {str(token_error)}")
-            raise TokenExchangeError(f"Failed to exchange LinkedIn code: {str(token_error)}")
-        
-        # Get profile data - either from token exchange or fetch separately
-        profile = token_data.get('profile')
-        
-        if not profile:
-            logger.info("Profile not included in token data, fetching separately")
             try:
-                # Get profile data from userinfo endpoint (OpenID Connect)
                 headers = {'Authorization': f"Bearer {token_data['access_token']}"}
+                profile_response = requests.get('https://api.linkedin.com/v2/userinfo', headers=headers)
                 
-                # Try the OpenID Connect endpoint first (preferred)
-                profile_response = requests.get('https://api.linkedin.com/v2/userinfo', headers=headers, timeout=10)
+                if not profile_response.ok:
+                    logger.error(f"Failed to fetch LinkedIn profile: Status {profile_response.status_code}, {profile_response.text}")
+                    raise ProfileFetchError(f"Failed to fetch LinkedIn profile: {profile_response.text}")
                 
-                if profile_response.status_code != 200:
-                    # Fallback to standard API
-                    logger.warning("OpenID Connect profile endpoint failed, trying standard API")
-                    profile_response = requests.get('https://api.linkedin.com/v2/me', headers=headers, timeout=10)
-                    
-                if profile_response.status_code != 200:
-                    logger.error(f"Failed to fetch LinkedIn profile: {profile_response.text}")
-                    raise ProfileFetchError(f"Failed to fetch LinkedIn profile: HTTP {profile_response.status_code}")
-                
-                profile = profile_response.json()
-                logger.info(f"Successfully fetched LinkedIn profile via API")
-            except Exception as profile_error:
-                logger.error(f"Error fetching LinkedIn profile: {str(profile_error)}")
-                # Don't fail completely, create a minimal profile
-                profile = {'error': str(profile_error)}
-                logger.warning("Created minimal profile due to profile fetch error")
+                profile_data = profile_response.json()
+                logger.info(f"Successfully fetched LinkedIn profile with ID: {profile_data.get('sub')}")
+            except requests.RequestException as e:
+                logger.error(f"Network error fetching LinkedIn profile: {str(e)}")
+                raise ProfileFetchError(f"Network error fetching LinkedIn profile: {str(e)}")
+            except ValueError as e:
+                logger.error(f"JSON parsing error fetching LinkedIn profile: {str(e)}")
+                raise ProfileFetchError(f"Failed to parse LinkedIn profile response: {str(e)}")
         
-        # Extract user ID from profile data
-        user_id = None
-        if 'id' in profile:
-            user_id = profile['id']
-        elif 'sub' in profile:  # OpenID Connect format
-            user_id = profile['sub']
-            
-        if not user_id:
-            logger.warning("No user ID found in LinkedIn profile. Creating temporary ID.")
-            # Generate a temporary ID as fallback
-            import uuid
-            user_id = f"temp_{uuid.uuid4()}"
+        # Extract profile information
+        linkedin_id = profile_data.get('sub')
+        name = profile_data.get('name', '')
+        email = profile_data.get('email', '')
+        picture_url = profile_data.get('picture', '')
         
-        # Update user
+        if not linkedin_id:
+            logger.error("LinkedIn ID (sub) not found in profile data")
+            raise ProfileFetchError("Could not retrieve LinkedIn user ID")
+        
+        # Check if this LinkedIn account is already connected to another user
         try:
-            logger.info(f"Updating user with LinkedIn ID: {user_id}")
-            user.linkedin_id = user_id
+            from ..models import SocialAccount
+            existing_connection = SocialAccount.objects.filter(
+                provider='linkedin',
+                provider_id=linkedin_id
+            ).exclude(user=user).first()
+            
+            if existing_connection:
+                logger.error(f"LinkedIn account already connected to another user: {existing_connection.user.username}")
+                raise SocialConnectionError("This LinkedIn account is already connected to another user")
+        except Exception as e:
+            logger.warning(f"Error checking existing LinkedIn connections: {e}")
+        
+        # Get or create social account
+        try:
+            social_account, created = SocialAccount.objects.get_or_create(
+                user=user,
+                provider='linkedin',
+                provider_id=linkedin_id,
+                defaults={
+                    'extra_data': {
+                        'access_token': token_data['access_token'],
+                        'token_type': token_data.get('token_type'),
+                        'expires_in': token_data.get('expires_in'),
+                        'name': name,
+                        'email': email,
+                        'picture': picture_url
+                    }
+                }
+            )
+            
+            if not created:
+                # Update existing account
+                social_account.extra_data = {
+                    'access_token': token_data['access_token'],
+                    'token_type': token_data.get('token_type'),
+                    'expires_in': token_data.get('expires_in'),
+                    'name': name,
+                    'email': email,
+                    'picture': picture_url
+                }
+                social_account.save()
+                logger.info(f"Updated existing LinkedIn account for user {user.username}")
+            else:
+                logger.info(f"Created new LinkedIn account for user {user.username}")
+            
+            # Update user model fields
+            user.linkedin_id = linkedin_id
             user.linkedin_access_token = token_data['access_token']
-            if 'refresh_token' in token_data:
-                user.linkedin_refresh_token = token_data['refresh_token']
-                logger.info("Saved LinkedIn refresh token")
-                
-            # Update token expiration if available
             if 'expires_in' in token_data:
-                from django.utils import timezone
-                import datetime
-                expires_at = timezone.now() + datetime.timedelta(seconds=int(token_data['expires_in']))
-                if hasattr(user, 'linkedin_token_expires_at'):
-                    user.linkedin_token_expires_at = expires_at
-                    logger.info(f"Set token expiration to: {expires_at}")
+                from datetime import datetime, timedelta
+                expires_at = datetime.now() + timedelta(seconds=int(token_data['expires_in']))
+                user.linkedin_token_expires_at = expires_at
+            
+            # Update user email if provided and user doesn't have one
+            if email and not user.email:
+                user.email = email
             
             user.save()
-            logger.info(f"Successfully updated user {user.username} with LinkedIn data")
-        except Exception as user_error:
-            logger.error(f"Error updating user with LinkedIn data: {str(user_error)}")
-            # Continue anyway so we can at least return the profile data
-        
-        # Build the response
-        name = profile.get('name', '')
-        if not name and profile.get('localizedFirstName') and profile.get('localizedLastName'):
-            name = f"{profile.get('localizedFirstName')} {profile.get('localizedLastName')}"
+            logger.info(f"Updated user with LinkedIn data: ID={linkedin_id}")
             
-        email = profile.get('email', '')
-        if not email and profile.get('emailAddress'):
-            email = profile.get('emailAddress')
-        
-        result = {
-            'success': True,
-            'platform': 'linkedin',
-            'profile': profile,
-            'name': name,
-            'email': email,
-            'access_token': token_data.get('access_token', '')[:10] + '...' if token_data.get('access_token') else ''
-        }
-        
-        logger.info("LinkedIn account connection complete")
-        return result
-        
-    except StateVerificationError as e:
-        logger.error(f"LinkedIn state verification error: {str(e)}")
-        raise StateVerificationError(f"LinkedIn authorization state invalid: {str(e)}")
-    except TokenExchangeError as e:
-        logger.error(f"LinkedIn token exchange error: {str(e)}")
-        raise TokenExchangeError(f"LinkedIn token exchange failed: {str(e)}")
-    except ProfileFetchError as e:
-        logger.error(f"LinkedIn profile fetch error: {str(e)}")
-        raise ProfileFetchError(f"LinkedIn profile fetch failed: {str(e)}")
+            # Return account data
+            result = {
+                'success': True,
+                'platform': 'linkedin',
+                'profile': {
+                    'id': linkedin_id,
+                    'name': name,
+                    'email': email,
+                    'picture': picture_url
+                }
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.exception(f"Error saving LinkedIn account: {e}")
+            raise SocialConnectionError(f"Failed to save LinkedIn account: {e}")
+    
+    except StateVerificationError:
+        # Re-raise state verification errors
+        raise
+    except TokenExchangeError:
+        # Re-raise token exchange errors
+        raise
+    except ProfileFetchError:
+        # Re-raise profile fetch errors
+        raise
+    except SocialConnectionError:
+        # Re-raise social connection errors
+        raise
     except Exception as e:
-        logger.exception(f"Unexpected error connecting LinkedIn account: {str(e)}")
-        raise OAuthError(f"LinkedIn connection error: {str(e)}")
+        logger.exception(f"Unexpected error connecting LinkedIn account: {e}")
+        raise SocialConnectionError(f"Unexpected error connecting LinkedIn account: {e}")
 
 def connect_twitter_account(user, code: str, state: str, session_key: str = None, code_verifier: str = None) -> Dict:
     """Connect Twitter account."""
