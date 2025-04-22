@@ -88,19 +88,24 @@ def get_linkedin_oauth_url(business: bool = False, redirect_uri: str = None) -> 
         'session_key': state
     }
 
-def get_twitter_auth_url(redirect_uri=None, business: bool = False):
+def get_twitter_oauth_url(redirect_uri=None, business: bool = False):
     """
-    Get Twitter OAuth authorization URL using OAuth 2.0 with PKCE
+    Generate Twitter OAuth2 URL with PKCE
     """
+    import logging
+    from django.conf import settings
+    from urllib.parse import urlencode
     import secrets
     import hashlib
     import base64
-    from urllib.parse import urlencode
-    from django.conf import settings
+    
+    logger = logging.getLogger('social')
     
     try:
-        # Use provided redirect URI or default
+        # Use provided redirect URI or default - ensure it matches frontend
         oauth_redirect_uri = redirect_uri or settings.OAUTH2_REDIRECT_URI
+        
+        logger.info(f"Using redirect URI for Twitter: {oauth_redirect_uri}")
         
         # Ensure we have client credentials
         if not settings.TWITTER_CLIENT_ID or not settings.TWITTER_CLIENT_SECRET:
@@ -131,6 +136,11 @@ def get_twitter_auth_url(redirect_uri=None, business: bool = False):
         # Build authorization URL
         auth_url = f"https://twitter.com/i/oauth2/authorize?{urlencode(params)}"
         
+        # Log for debugging
+        logger.info(f"Twitter OAuth URL generated: {auth_url}")
+        logger.info(f"Code verifier: {code_verifier[:10]}... (length: {len(code_verifier)})")
+        logger.info(f"Code challenge: {code_challenge[:10]}... (length: {len(code_challenge)})")
+        
         return {
             'auth_url': auth_url,
             'state': state,
@@ -138,8 +148,8 @@ def get_twitter_auth_url(redirect_uri=None, business: bool = False):
         }
         
     except Exception as e:
-        print(f"Error generating Twitter OAuth URL: {str(e)}")
-        return None
+        logger.error(f"Error generating Twitter OAuth URL: {str(e)}")
+        raise ValueError(f"Failed to generate Twitter OAuth URL: {str(e)}")
 
 def connect_twitter_account(user, code: str, state: str, code_verifier: str) -> Dict:
     """
