@@ -103,6 +103,13 @@ SESSION_COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'
 
 # Application definition
 INSTALLED_APPS = [
+    # 'allauth',
+    # 'allauth.account',
+    # 'allauth.socialaccount',
+    # 'allauth.socialaccount.providers.google',
+    # 'allauth.socialaccount.providers.github',
+    # 'allauth.socialaccount.providers.twitter',
+    # 'allauth.socialaccount.providers.facebook',
     'jazzmin',  # Must be before django.contrib.admin
     'django.contrib.admin',
     'django.contrib.auth',
@@ -120,6 +127,61 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'socials.apps.SocialsConfig',
 ]
+
+# SOCIALACCOUNT_PROVIDERS = {
+#     'google': {
+#         'APP': {
+#             'client_id': env('GOOGLE_CLIENT_ID'),
+#             'secret': env('GOOGLE_SECRET'),
+#         },
+#         'SCOPE': [
+#             'profile',
+#             'email'
+#         ],
+#         'AUTH_PARAMS': {
+#             'access_type': 'online',
+#             'prompt': 'consent'
+#         },
+#     },
+#     'github': {
+#         'APP': {
+#             'client_id': env('GITHUB_CLIENT_ID'),
+#             'secret': env('GITHUB_SECRET'),
+#         },
+#         'AUTH_PARAMS': {
+#             'prompt': 'consent',  
+#         },
+#     },
+#     'twitter': {
+#         'APP': {
+#             'client_id': env('TWITTER_CLIENT_ID'),
+#             'secret': env('TWITTER_SECRET'),
+#         },
+#     },
+#     'facebook': {
+#         'APP': {
+#             'client_id': env('FACEBOOK_CLIENT_ID'),
+#             'secret': env('FACEBOOK_SECRET'),
+#         },
+#         'AUTH_PARAMS': {
+#             'auth_type': 'reauthenticate',
+#         },
+#     },
+# }
+
+
+# SOCIALACCOUNT_LOGIN_ON_GET = True
+# SOCIALACCOUNT_AUTO_SIGNUP = True
+# ACCOUNT_UNIQUE_EMAIL = True
+# SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+# SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+# SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
+
+# ACCOUNT_ADAPTER = "a_users.adapters.CustomAccountAdapter"
+# SOCIALACCOUNT_ADAPTER = "a_users.adapters.SocialAccountAdapter"
+
+
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -260,7 +322,7 @@ TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_CLIENT_SECRET') or os.environ.ge
 TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN')
 TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN')
 TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET')
-TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'https://link-ly.web.app/oauth-callback/twitter')
+TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'https://linkly-production.up.railway.app/users/auth/twitter/callback/')
 
 # For backwards compatibility
 TWITTER_API_KEY = TWITTER_CLIENT_ID
@@ -281,7 +343,7 @@ TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 # OAuth2 Settings
-OAUTH2_REDIRECT_URI = os.getenv('https://link-ly.web.app')
+OAUTH2_REDIRECT_URI = os.getenv('https://linkly-production.up.railway.app')
 
 # =========================================
 # STRIPE CONFIGURATION
@@ -291,8 +353,8 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 
 # Webhook and Redirect URLs
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
-STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'https://link-ly.web.app/billing/success')
-STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'https://link-ly.web.app/billing/cancel')
+STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'https://linkly-production.up.railway.app/billing/success')
+STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'https://linkly-production.up.railway.app/cancel')
 
 # Jazzmin Settings
 JAZZMIN_SETTINGS = {
