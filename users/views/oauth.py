@@ -887,10 +887,151 @@ def twitter_callback(request):
         )
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def instagram_callback(request):
-    """Handle Instagram OAuth callback"""
-    return oauth_callback(request, 'instagram')
+    """
+    Handle callback from Instagram OAuth authorization.
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Handling Instagram OAuth callback =====")
+    
+    # Log request parameters (security redacted)
+    logger.info(f"Query parameters: code={'present' if request.GET.get('code') else 'missing'}, "
+               f"state={'present' if request.GET.get('state') else 'missing'}")
+    
+    # Extract parameters from request
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    error = request.GET.get('error')
+    error_description = request.GET.get('error_description')
+    
+    # Handle OAuth errors returned by Instagram
+    if error:
+        logger.error(f"Instagram returned OAuth error: {error} - {error_description}")
+        error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error={error}&message={error_description}"
+        return redirect(error_redirect_url)
+    
+    # Check for required parameters
+    if not code:
+        logger.error("Missing required 'code' parameter")
+        error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=missing_code&message=Authorization+code+is+missing"
+        return redirect(error_redirect_url)
+    
+    # Verify state parameter if provided
+    if state:
+        # Try multiple state storage locations
+        cache_key = f"instagram_oauth_state_{state}"
+        cached_state = cache.get(cache_key)
+        global_cached_state = cache.get('instagram_oauth_state')
+        fallback_cached_state = cache.get('oauth_state')
+        session_state = request.session.get('instagram_oauth_state')
+        fallback_session_state = request.session.get('oauth_state')
+        
+        logger.info(f"State verification - Provided: {state}, Cache key: {cache_key}, "
+                   f"Cached: {cached_state}, Global cached: {global_cached_state}, Fallback cache: {fallback_cached_state}, "
+                   f"Session: {session_state}, Fallback session: {fallback_session_state}")
+        
+        # Check if state matches any of our stored states
+        state_verified = (state == cached_state or 
+                          state == global_cached_state or 
+                          state == fallback_cached_state or
+                          state == session_state or
+                          state == fallback_session_state)
+        
+        if not state_verified:
+            logger.error(f"State verification failed. Received: {state}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=invalid_state&message=State+verification+failed.+Please+try+again."
+            return redirect(error_redirect_url)
+        else:
+            logger.info("State verification successful")
+    else:
+        logger.warning("No state parameter provided. Skipping verification.")
+    
+    # Clean up used states
+    try:
+        if state:
+            cache.delete(f"instagram_oauth_state_{state}")
+            cache.delete('instagram_oauth_state')
+            cache.delete('oauth_state')
+            request.session.pop('instagram_oauth_state', None)
+            request.session.pop('oauth_state', None)
+    except Exception as e:
+        logger.warning(f"Error cleaning up state: {e}")
+    
+    # Handle differently for authenticated and unauthenticated users
+    if request.user.is_authenticated:
+        # User is logged in, connect the Instagram account
+        try:
+            result = connect_instagram_account(
+                user=request.user,
+                code=code,
+                state=state,
+                session_key=request.session.session_key
+            )
+            
+            logger.info(f"Instagram account connected successfully for user {request.user.username}")
+            
+            # Redirect to success page with profile info
+            success_data = {
+                'platform': 'instagram',
+                'profile': {
+                    'name': result.get('name', ''),
+                    'username': result.get('username', ''),
+                    'picture': result.get('picture', ''),
+                },
+                'access_token': result.get('access_token', '')[:10] + '...' if result.get('access_token') else None
+            }
+            
+            success_redirect_url = f"{settings.FRONTEND_URL}/social-auth/success?{urlencode(success_data)}"
+            return redirect(success_redirect_url)
+            
+        except StateVerificationError as e:
+            logger.error(f"State verification error: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=invalid_state&message={str(e)}"
+            return redirect(error_redirect_url)
+            
+        except TokenExchangeError as e:
+            logger.error(f"Token exchange error: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=token_exchange_failed&message={str(e)}"
+            return redirect(error_redirect_url)
+            
+        except ProfileFetchError as e:
+            logger.error(f"Profile fetch error: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=profile_fetch_failed&message={str(e)}"
+            return redirect(error_redirect_url)
+            
+        except Exception as e:
+            logger.exception(f"Unexpected error connecting Instagram account: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=connection_failed&message=An+unexpected+error+occurred"
+            return redirect(error_redirect_url)
+    else:
+        # User is not logged in, try to authenticate with Instagram
+        try:
+            redirect_uri = settings.INSTAGRAM_REDIRECT_URI
+            token_data = exchange_instagram_code(code, redirect_uri)
+            
+            if not token_data or 'access_token' not in token_data:
+                logger.error("Failed to exchange Instagram code for token")
+                error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=token_exchange_failed&message=Failed+to+exchange+code+for+token"
+                return redirect(error_redirect_url)
+            
+            # Store token in session for later use during login
+            try:
+                request.session['instagram_access_token'] = token_data['access_token']
+                if 'expires_in' in token_data:
+                    request.session['instagram_token_expiry'] = int(time.time()) + int(token_data['expires_in'])
+                logger.info("Stored Instagram access token in session")
+            except Exception as e:
+                logger.warning(f"Failed to store Instagram token in session: {e}")
+            
+            # Redirect to login page with Instagram auth parameter
+            login_redirect_url = f"{settings.FRONTEND_URL}/login?social_auth=instagram"
+            return redirect(login_redirect_url)
+            
+        except Exception as e:
+            logger.exception(f"Error during unauthenticated Instagram callback: {e}")
+            error_redirect_url = f"{settings.FRONTEND_URL}/social-auth/error?platform=instagram&error=authentication_failed&message={str(e)}"
+            return redirect(error_redirect_url)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -1142,6 +1283,62 @@ def login_facebook(request):
     # Store timestamp of login attempt
     try:
         cache.set(f"facebook_login_{state}_timestamp", int(time.time()), timeout=300)
+        logger.info(f"Stored login timestamp for state {state}")
+    except Exception as e:
+        logger.warning(f"Failed to store login timestamp: {e}")
+    
+    return redirect(auth_url)
+
+def login_instagram(request):
+    """
+    Initiate Instagram OAuth login flow.
+    Redirects to Instagram authorization page.
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Starting Instagram OAuth login flow =====")
+    
+    # Generate random state for CSRF protection
+    state = generate_random_state()
+    cache_key = f"instagram_oauth_state_{state}"
+
+    # Store state in multiple locations for redundancy
+    try:
+        # Store in cache with both formats
+        cache.set(cache_key, state, timeout=300)
+        cache.set('instagram_oauth_state', state, timeout=300)
+        cache.set('oauth_state', state, timeout=300)
+        logger.info(f"Stored state in cache at keys: {cache_key}, instagram_oauth_state, oauth_state")
+    except Exception as e:
+        logger.exception(f"Error storing state in cache: {e}")
+        # Continue anyway, we'll have fallbacks
+    
+    # Store in session as well for fallback
+    try:
+        request.session['instagram_oauth_state'] = state
+        request.session['oauth_state'] = state
+        logger.info(f"Stored state in session at keys: instagram_oauth_state, oauth_state")
+    except Exception as e:
+        logger.warning(f"Could not store state in session: {e}")
+    
+    # Get the redirect URI
+    redirect_uri = settings.INSTAGRAM_REDIRECT_URI
+    logger.info(f"Using redirect URI: {redirect_uri}")
+    
+    # Build the authorization URL
+    auth_params = {
+        'client_id': settings.INSTAGRAM_CLIENT_ID,
+        'redirect_uri': redirect_uri,
+        'state': state,
+        'response_type': 'code',
+        'scope': 'user_profile,user_media', # Basic permissions for Instagram
+    }
+    
+    auth_url = f"https://api.instagram.com/oauth/authorize?{urlencode(auth_params)}"
+    logger.info(f"Redirecting to Instagram authorization URL (truncated): {auth_url[:100]}...")
+    
+    # Store timestamp of login attempt
+    try:
+        cache.set(f"instagram_login_{state}_timestamp", int(time.time()), timeout=300)
         logger.info(f"Stored login timestamp for state {state}")
     except Exception as e:
         logger.warning(f"Failed to store login timestamp: {e}")

@@ -21,7 +21,8 @@ from .oauth import (
     init_oauth, oauth_callback, google_callback,
     facebook_callback, linkedin_callback, twitter_callback,
     instagram_callback, tiktok_callback, telegram_callback,
-    unlink_social_account, save_platform_tokens
+    unlink_social_account, save_platform_tokens,
+    login_facebook, login_instagram
 )
 from .social import (
     connect_google,
@@ -70,5 +71,7 @@ __all__ = [
     'tiktok_callback',
     'telegram_callback',
     'unlink_social_account',
-    'save_platform_tokens'
+    'save_platform_tokens',
+    'login_facebook',
+    'login_instagram'
 ] 

@@ -37,7 +37,9 @@ from .views import (
     connect_tiktok_business,
     connect_telegram_channel,
     get_connected_accounts,
-    save_platform_tokens
+    save_platform_tokens,
+    login_facebook,
+    login_instagram
 )
 
 # OAuth URLs
@@ -56,6 +58,10 @@ urlpatterns = [
     path('auth/callback/instagram/', instagram_callback, name='instagram-callback'),
     path('auth/callback/tiktok/', tiktok_callback, name='tiktok-callback'),
     path('auth/callback/telegram/', telegram_callback, name='telegram-callback'),
+    
+    # Social login shortcuts
+    path('auth/login/facebook/', login_facebook, name='login-facebook'),
+    path('auth/login/instagram/', login_instagram, name='login-instagram'),
     
     # Connected accounts endpoint
     path('accounts/', get_connected_accounts, name='connected-accounts'),

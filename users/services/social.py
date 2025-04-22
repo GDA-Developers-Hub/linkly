@@ -21,6 +21,7 @@ from ..utils.oauth import get_platform_config, verify_oauth_state, get_stored_co
 import base64
 import json
 import datetime
+from datetime import timedelta
 
 logger = logging.getLogger('social')
 
@@ -677,6 +678,78 @@ def exchange_instagram_code(code: str, redirect_uri: str = None) -> Dict[str, An
         logger.exception(f"Unexpected error during Instagram code exchange: {str(e)}")
         raise SocialConnectionError(f"Instagram authentication error: {str(e)}")
 
+def get_instagram_profile(access_token: str) -> Dict[str, Any]:
+    """
+    Fetch the user's Instagram profile data using the access token.
+    
+    Args:
+        access_token: Instagram access token
+        
+    Returns:
+        Dictionary containing user profile data
+        
+    Raises:
+        SocialConnectionError: If there's an error fetching the profile
+    """
+    logger = logging.getLogger('social')
+    logger.info("===== Fetching Instagram profile =====")
+    
+    try:
+        # Request user profile data with fields we want
+        fields = "id,username,account_type,media_count"
+        profile_url = f"https://graph.instagram.com/me?fields={fields}&access_token={access_token}"
+        
+        logger.info(f"Making profile request to Instagram Graph API")
+        
+        response = requests.get(profile_url, timeout=10)
+        
+        # Check if response is successful
+        if response.status_code != 200:
+            logger.error(f"Profile request failed: Status {response.status_code}, Response: {response.text}")
+            
+            # Try to parse the error response as JSON
+            try:
+                error_data = response.json()
+                logger.error(f"Instagram profile error details: {error_data}")
+                error_message = error_data.get('error', {}).get('message', 'Unknown error')
+                error_type = error_data.get('error', {}).get('type', 'unknown_error')
+                error_code = error_data.get('error', {}).get('code', 0)
+                logger.error(f"Instagram profile error type: {error_type}, code: {error_code}, message: {error_message}")
+            except (ValueError, json.JSONDecodeError, AttributeError):
+                logger.error("Could not parse Instagram profile error response as JSON")
+                error_message = response.text if response.text else f"HTTP {response.status_code}"
+            
+            raise SocialConnectionError(f"Instagram profile API error: {error_message}")
+        
+        # Parse response
+        profile_data = response.json()
+        
+        # Check for required profile fields
+        if 'id' not in profile_data:
+            logger.error(f"Profile response missing user ID: {profile_data}")
+            raise SocialConnectionError("Instagram profile response missing user ID")
+        
+        # Log profile data (excluding sensitive information)
+        safe_profile_data = {
+            'id': profile_data.get('id'),
+            'username': profile_data.get('username'),
+            'account_type': profile_data.get('account_type'),
+            'media_count': profile_data.get('media_count')
+        }
+        logger.info(f"Instagram profile data received: {safe_profile_data}")
+        
+        return profile_data
+        
+    except requests.RequestException as e:
+        logger.exception(f"Request error during Instagram profile fetch: {e}")
+        raise SocialConnectionError(f"Network error fetching Instagram profile: {str(e)}")
+    except ValueError as e:
+        logger.exception(f"JSON parsing error during Instagram profile fetch: {e}")
+        raise SocialConnectionError(f"Failed to parse Instagram profile response: {str(e)}")
+    except Exception as e:
+        logger.exception(f"Unexpected error during Instagram profile fetch: {e}")
+        raise SocialConnectionError(f"Unexpected error during Instagram profile fetch: {str(e)}")
+
 def exchange_tiktok_code(code: str, redirect_uri: str = None) -> Dict[str, Any]:
     """
     Exchange the TikTok auth code for an access token.
@@ -768,7 +841,7 @@ def exchange_tiktok_code(code: str, redirect_uri: str = None) -> Dict[str, Any]:
         # Get user profile information
         logger.info(f"Fetching TikTok user profile for open_id: {open_id}")
         
-        profile_url = 'https://open-api.tiktok.com/user/info/'
+        profile_url = 'https://open-api.tiktokapis.com/v2/user/info/'
         profile_params = {
             'access_token': access_token,
             'open_id': open_id,
@@ -1534,8 +1607,7 @@ def connect_linkedin_account(user, code: str, state: str = None, session_key: st
             user.linkedin_id = linkedin_id
             user.linkedin_access_token = token_data['access_token']
             if 'expires_in' in token_data:
-                from datetime import datetime, timedelta
-                expires_at = datetime.now() + timedelta(seconds=int(token_data['expires_in']))
+                expires_at = timezone.now() + timedelta(seconds=int(token_data['expires_in']))
                 user.linkedin_token_expires_at = expires_at
             
             # Update user email if provided and user doesn't have one
@@ -1613,33 +1685,152 @@ def connect_twitter_account(user, code: str, state: str, session_key: str = None
         'profile': profile['data']
     }
 
-def connect_instagram_account(user, code: str, session_key: str, state: str) -> Dict:
-    """Connect Instagram account."""
-    verify_oauth_state(state)
+def connect_instagram_account(user: 'User', code: str, state: str = None, session_key: str = None) -> Dict[str, Any]:
+    """
+    Connect an Instagram account to a user's profile.
     
-    token_data = exchange_code_for_token('instagram', code, settings.INSTAGRAM_REDIRECT_URI)
+    Args:
+        user: The User object to connect the Instagram account to
+        code: The authorization code received from Instagram
+        state: The state parameter used during authorization
+        session_key: The user's session key for storing session-specific data
+        
+    Returns:
+        Dictionary containing token and profile data
+        
+    Raises:
+        StateVerificationError: If state verification fails
+        TokenExchangeError: If token exchange fails
+        ProfileFetchError: If profile fetching fails
+        SocialConnectionError: For other Instagram connection errors
+    """
+    logger = logging.getLogger('social')
+    logger.info(f"===== Connecting Instagram account for user {user.username} =====")
     
-    # Get user profile
-    params = {
-        'fields': 'id,username',
-        'access_token': token_data['access_token']
-    }
-    response = requests.get('https://graph.instagram.com/me', params=params)
-    if not response.ok:
-        raise ProfileFetchError("Failed to fetch Instagram profile")
-    
-    profile = response.json()
-    
-    # Update user
-    user.instagram_id = profile['id']
-    user.instagram_access_token = token_data['access_token']
-    user.save()
-    
-    return {
-        'success': True,
-        'platform': 'instagram',
-        'profile': profile
-    }
+    try:
+        # Exchange code for token
+        redirect_uri = settings.INSTAGRAM_REDIRECT_URI
+        token_data = exchange_instagram_code(code, redirect_uri)
+        
+        if not token_data or 'access_token' not in token_data:
+            logger.error("Failed to exchange Instagram code for token")
+            raise TokenExchangeError("Failed to exchange Instagram code for token")
+        
+        # Extract profile data
+        instagram_id = token_data.get('id')
+        username = token_data.get('username')
+        picture_url = token_data.get('picture')
+        
+        # If we don't have an ID, try to get the profile again
+        if not instagram_id:
+            logger.warning("Instagram ID not found in token data, fetching profile separately")
+            try:
+                profile_data = get_instagram_profile(token_data['access_token'])
+                instagram_id = profile_data.get('id')
+                username = profile_data.get('username')
+                picture_url = profile_data.get('profile_pic_url') or profile_data.get('picture')
+                
+                # Update token_data with profile data
+                token_data.update(profile_data)
+            except Exception as e:
+                logger.error(f"Error fetching Instagram profile: {e}")
+                raise ProfileFetchError(f"Failed to fetch Instagram profile: {e}")
+        
+        if not instagram_id:
+            logger.error("Instagram ID not found in profile data")
+            raise ProfileFetchError("Could not retrieve Instagram user ID")
+        
+        # Check if this Instagram account is already connected to another user
+        try:
+            existing_connection = SocialAccount.objects.filter(
+                provider='instagram',
+                provider_id=instagram_id
+            ).exclude(user=user).first()
+            
+            if existing_connection:
+                logger.error(f"Instagram account already connected to another user: {existing_connection.user.username}")
+                raise SocialConnectionError("This Instagram account is already connected to another user")
+        except Exception as e:
+            logger.warning(f"Error checking existing Instagram connections: {e}")
+        
+        # Get or create social account
+        try:
+            social_account, created = SocialAccount.objects.get_or_create(
+                user=user,
+                provider='instagram',
+                provider_id=instagram_id,
+                defaults={
+                    'extra_data': {
+                        'access_token': token_data['access_token'],
+                        'token_type': token_data.get('token_type'),
+                        'expires_in': token_data.get('expires_in'),
+                        'username': username,
+                        'picture': picture_url
+                    }
+                }
+            )
+            
+            if not created:
+                # Update existing account
+                social_account.extra_data = {
+                    'access_token': token_data['access_token'],
+                    'token_type': token_data.get('token_type'),
+                    'expires_in': token_data.get('expires_in'),
+                    'username': username,
+                    'picture': picture_url
+                }
+                social_account.save()
+                logger.info(f"Updated existing Instagram account for user {user.username}")
+            else:
+                logger.info(f"Created new Instagram account for user {user.username}")
+            
+            # Update user model fields
+            user.instagram_id = instagram_id
+            user.instagram_handle = username
+            user.instagram_access_token = token_data['access_token']
+            user.instagram_profile_url = f"https://instagram.com/{username}" if username else None
+            
+            # Set token expiry if available
+            if 'expires_in' in token_data:
+                expiry = timezone.now() + timedelta(seconds=int(token_data['expires_in']))
+                user.instagram_token_expiry = expiry
+                
+            user.save()
+            logger.info(f"Updated user model with Instagram account details")
+            
+            # Return account data
+            result = {
+                'provider': 'instagram',
+                'provider_id': instagram_id,
+                'username': username,
+                'name': token_data.get('full_name', ''),
+                'picture': picture_url,
+                'access_token': token_data['access_token'],
+                'token_type': token_data.get('token_type'),
+                'expires_in': token_data.get('expires_in'),
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.exception(f"Error saving Instagram account: {e}")
+            raise SocialConnectionError(f"Failed to save Instagram account: {e}")
+            
+    except StateVerificationError as e:
+        # Re-raise state verification errors
+        raise
+    except TokenExchangeError as e:
+        # Re-raise token exchange errors
+        raise
+    except ProfileFetchError as e:
+        # Re-raise profile fetch errors
+        raise
+    except SocialConnectionError as e:
+        # Re-raise social connection errors
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error connecting Instagram account: {e}")
+        raise SocialConnectionError(f"Unexpected error connecting Instagram account: {e}")
 
 def connect_tiktok_account(user, code: str, session_key: str, state: str) -> Dict:
     """Connect TikTok account."""

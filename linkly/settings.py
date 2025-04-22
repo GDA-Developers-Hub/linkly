@@ -327,6 +327,28 @@ LINKEDIN_CALLBACK_URL = os.environ.get(
     LINKEDIN_CALLBACK_URLS[0]  # Default to production URL
 )
 
+# Facebook OAuth Callback URLs
+FACEBOOK_CALLBACK_URLS = [
+    'https://linkly-production.up.railway.app/api/v1/users/auth/callback/facebook/',  # Production API
+]
+
+# Default callback URL for Facebook
+FACEBOOK_REDIRECT_URI = os.environ.get(
+    'FACEBOOK_REDIRECT_URI',
+    FACEBOOK_CALLBACK_URLS[0]  # Default to production URL
+)
+
+# Instagram OAuth Callback URLs
+INSTAGRAM_CALLBACK_URLS = [
+    'https://linkly-production.up.railway.app/api/v1/users/auth/callback/instagram/',  # Production API
+]
+
+# Default callback URL for Instagram
+INSTAGRAM_REDIRECT_URI = os.environ.get(
+    'INSTAGRAM_REDIRECT_URI',
+    INSTAGRAM_CALLBACK_URLS[0]  # Default to production URL
+)
+
 # Twitter Settings
 TWITTER_CLIENT_ID = os.environ.get('TWITTER_CLIENT_ID') or os.environ.get('TWITTER_API_KEY', 'WFZUOThVQmpjS1E4ZldpRTNkQm86MTpjaQ')
 TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_CLIENT_SECRET') or os.environ.get('TWITTER_API_SECRET', 'xAAL-zVhMUm-_yCzVuUVfVMA63Tmf64bKu3Z_lDaPDuPPN0NlN')
