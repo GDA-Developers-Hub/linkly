@@ -32,8 +32,17 @@ def verify_oauth_state(state: str) -> Dict:
     """Verify OAuth state parameter and return stored data."""
     cache_key = f'oauth_state_{state}'
     data = cache.get(cache_key)
+    
+    # If not found, try the LinkedIn specific format
     if not data:
+        cache_key = f'linkedin_oauth_state_{state}'
+        data = cache.get(cache_key)
+        
+    if not data:
+        logging.getLogger('oauth').error(f"Invalid or expired OAuth state: {state}")
         raise ValueError('Invalid or expired OAuth state')
+        
+    # Delete the cache entry to prevent reuse
     cache.delete(cache_key)
     return data
 

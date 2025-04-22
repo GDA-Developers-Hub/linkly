@@ -12,6 +12,7 @@ from ..utils.oauth import (
     get_platform_config
 )
 import time
+from django.core.cache import cache
 
 logger = logging.getLogger('oauth')
 
@@ -92,6 +93,10 @@ def get_linkedin_oauth_url(redirect_uri=None):
         
         # Generate state parameter for security
         state = secrets.token_urlsafe(32)
+        
+        # Make sure this state is properly stored
+        # Explicitly store in Django session or cache with adequate timeout
+        cache.set(f'linkedin_oauth_state_{state}', state, timeout=3600)  # 1 hour timeout
         
         # Required parameters
         params = {

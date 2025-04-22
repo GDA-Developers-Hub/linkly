@@ -409,6 +409,35 @@ def facebook_callback(request):
 @permission_classes([IsAuthenticated])
 def linkedin_callback(request):
     """Handle LinkedIn OAuth callback"""
+    logger = logging.getLogger('social')
+    
+    # Log the request parameters
+    code = request.query_params.get('code')
+    state = request.query_params.get('state')
+    
+    logger.info(f"LinkedIn callback received: State={state}, Code exists={bool(code)}")
+    
+    # Check if state exists in cache before passing to the callback
+    from ..utils.oauth import verify_oauth_state
+    cache_key = f'oauth_state_{state}'
+    cache_data = cache.get(cache_key)
+    
+    if not cache_data:
+        # Check the linkedin_oauth_state cache key too
+        cache_key = f'linkedin_oauth_state_{state}'
+        cache_data = cache.get(cache_key)
+        
+    logger.info(f"LinkedIn OAuth state verification: state={state}, found in cache={bool(cache_data)}")
+    
+    # Try linkedin specific oauth state format
+    if not cache_data:
+        logger.error(f"State verification failed for LinkedIn: state={state} not found in cache")
+        return Response({
+            "error": "Invalid or expired state parameter",
+            "redirect_url": f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error=Invalid or expired state parameter"
+        }, status=status.HTTP_401_UNAUTHORIZED)
+    
+    # State is valid, proceed with the standard callback
     return oauth_callback(request, 'linkedin')
 
 @api_view(['GET'])
