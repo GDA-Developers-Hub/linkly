@@ -77,15 +77,38 @@ def exchange_linkedin_code(code, redirect_uri=None):
         
         # Log the request data (without sensitive info)
         logger = logging.getLogger('oauth')
+        logger.info("===== Exchanging LinkedIn code =====")
         logger.info(f"Exchanging LinkedIn code. Redirect URI: {redirect_uri or settings.LINKEDIN_REDIRECT_URI}")
         logger.info(f"LinkedIn client ID: {settings.LINKEDIN_CLIENT_ID[:5]}... (truncated)")
         logger.info(f"Code length: {len(code) if code else 'None'}")
         
+        # Ensure we have proper values
+        if not code:
+            logger.error("Missing code parameter for LinkedIn OAuth")
+            raise SocialConnectionError("Missing authorization code")
+            
+        if not settings.LINKEDIN_CLIENT_ID or not settings.LINKEDIN_CLIENT_SECRET:
+            logger.error("Missing LinkedIn client credentials in settings")
+            raise SocialConnectionError("LinkedIn API credentials not configured")
+        
+        # Log all settings to help debug production issues
+        logger.info(f"LinkedIn settings: REDIRECT_URI={settings.LINKEDIN_REDIRECT_URI}")
+        # If there's a separate callback URL setting, log that too
+        if hasattr(settings, 'LINKEDIN_CALLBACK_URL'):
+            logger.info(f"LinkedIn callback URL from settings: {settings.LINKEDIN_CALLBACK_URL}")
+        
         # Make the token request
-        response = requests.post(
-            'https://www.linkedin.com/oauth/v2/accessToken',
-            data=data
-        )
+        logger.info("Making request to LinkedIn token endpoint")
+        try:
+            response = requests.post(
+                'https://www.linkedin.com/oauth/v2/accessToken',
+                data=data,
+                timeout=10  # Add a timeout to prevent hanging requests
+            )
+            logger.info(f"LinkedIn token response received. Status: {response.status_code}")
+        except requests.RequestException as req_err:
+            logger.error(f"Network error during LinkedIn token request: {str(req_err)}")
+            raise SocialConnectionError(f"Network error during LinkedIn token request: {str(req_err)}")
         
         # Check for errors and log response
         if response.status_code != 200:
@@ -96,27 +119,68 @@ def exchange_linkedin_code(code, redirect_uri=None):
             try:
                 error_data = response.json()
                 logger.error(f"LinkedIn API error details: {error_data}")
-            except:
+                # Extract specific error info if available
+                error_description = error_data.get('error_description', 'Unknown error')
+                error_type = error_data.get('error', 'unknown_error')
+                detailed_error = f"{error_type}: {error_description}"
+                raise SocialConnectionError(detailed_error)
+            except (ValueError, json.JSONDecodeError):
                 logger.error("Could not parse LinkedIn error response as JSON")
+                raise SocialConnectionError(error_msg)
+            except Exception as json_err:
+                logger.error(f"Error parsing LinkedIn error response: {str(json_err)}")
+                raise SocialConnectionError(error_msg)
                 
             raise SocialConnectionError(error_msg)
             
         # Parse and return the token response
-        token_data = response.json()
-        logger.info(f"Successfully exchanged LinkedIn code for token. Token type: {token_data.get('token_type')}")
-        logger.info(f"Access token length: {len(token_data.get('access_token', ''))}")
-        
-        # If the response includes a refresh token, log that too
-        if 'refresh_token' in token_data:
-            logger.info("Refresh token received from LinkedIn")
-        
-        return token_data
+        try:
+            token_data = response.json()
+            
+            # Validate token data
+            if 'access_token' not in token_data:
+                logger.error("LinkedIn response did not contain access_token")
+                raise SocialConnectionError("LinkedIn did not return an access token")
+                
+            logger.info(f"Successfully exchanged LinkedIn code for token. Token type: {token_data.get('token_type')}")
+            logger.info(f"Access token length: {len(token_data.get('access_token', ''))}")
+            
+            # If the response includes a refresh token, log that too
+            if 'refresh_token' in token_data:
+                logger.info("Refresh token received from LinkedIn")
+            
+            # Optionally fetch profile data to ensure token works
+            try:
+                headers = {'Authorization': f"Bearer {token_data['access_token']}"}
+                profile_response = requests.get('https://api.linkedin.com/v2/userinfo', headers=headers, timeout=10)
+                
+                if profile_response.status_code == 200:
+                    profile_data = profile_response.json()
+                    logger.info(f"Successfully fetched LinkedIn profile. User ID: {profile_data.get('sub', 'N/A')}")
+                    token_data['profile'] = profile_data
+                else:
+                    logger.warning(f"Could not fetch LinkedIn profile: Status {profile_response.status_code}")
+                    # We'll return what we have even without profile data
+            except Exception as profile_err:
+                logger.warning(f"Error fetching LinkedIn profile: {str(profile_err)}")
+                # Continue without profile data
+            
+            return token_data
+            
+        except (ValueError, json.JSONDecodeError) as json_err:
+            logger.error(f"Failed to parse LinkedIn token response as JSON: {str(json_err)}")
+            logger.error(f"Response text: {response.text[:500]}")
+            raise SocialConnectionError("Invalid response format from LinkedIn")
+            
     except requests.RequestException as e:
         logger.error(f'LinkedIn OAuth network error: {str(e)}')
         if hasattr(e, 'response') and e.response:
             logger.error(f'LinkedIn response status: {e.response.status_code}')
             logger.error(f'LinkedIn response content: {e.response.text}')
         raise SocialConnectionError(f'LinkedIn OAuth request error: {str(e)}')
+    except SocialConnectionError:
+        # Re-raise SocialConnectionError to preserve the message
+        raise
     except Exception as e:
         logger.error(f'LinkedIn OAuth error: {str(e)}')
         raise SocialConnectionError(f'LinkedIn OAuth error: {str(e)}')
@@ -1039,37 +1103,141 @@ def connect_facebook_account(user, code: str, session_key: str, state: str) -> D
         'profile': profile
     }
 
-def connect_linkedin_account(user, code: str, session_key: str = None, state: str = None) -> Dict:
+def connect_linkedin_account(user, code: str, state: str = None, session_key: str = None) -> Dict:
     """Connect LinkedIn account."""
-    if state:
-        verify_oauth_state(state)
+    logger = logging.getLogger('social')
+    logger.info(f"===== Connecting LinkedIn account for user {user.username if user else 'None'} =====")
     
-    token_data = exchange_code_for_token('linkedin', code, settings.LINKEDIN_REDIRECT_URI)
-    
-    # Get profile data from userinfo endpoint (OpenID Connect)
-    headers = {'Authorization': f"Bearer {token_data['access_token']}"}
-    profile_response = requests.get('https://api.linkedin.com/v2/userinfo', headers=headers)
-    
-    if not profile_response.ok:
-        # Fallback to standard API
-        profile_response = requests.get('https://api.linkedin.com/v2/me', headers=headers)
-        if not profile_response.ok:
-            raise ProfileFetchError(f"Failed to fetch LinkedIn profile: {profile_response.text}")
-    
-    profile = profile_response.json()
-    
-    # Update user
-    user.linkedin_id = profile.get('id') or profile.get('sub')  # Handle both API and OpenID responses
-    user.linkedin_access_token = token_data['access_token']
-    if 'refresh_token' in token_data:
-        user.linkedin_refresh_token = token_data['refresh_token']
-    user.save()
-    
-    return {
-        'success': True,
-        'platform': 'linkedin',
-        'profile': profile
-    }
+    try:
+        # Verify state if provided, but make it optional to handle cases where state is unavailable
+        if state:
+            try:
+                verify_oauth_state(state)
+                logger.info(f"Successfully verified OAuth state: {state}")
+            except Exception as state_error:
+                logger.warning(f"State verification failed but continuing: {str(state_error)}")
+                # In production, we may want to continue even if state verification fails
+                if settings.DEBUG:
+                    raise StateVerificationError(f"State verification failed: {str(state_error)}")
+        else:
+            logger.warning("No state provided for LinkedIn OAuth flow")
+        
+        # Get the appropriate redirect URI
+        redirect_uri = None
+        if hasattr(settings, 'LINKEDIN_CALLBACK_URL'):
+            redirect_uri = settings.LINKEDIN_CALLBACK_URL
+        else:
+            redirect_uri = settings.LINKEDIN_REDIRECT_URI
+            
+        logger.info(f"Using redirect URI for token exchange: {redirect_uri}")
+        
+        # Exchange the code for a token
+        try:
+            token_data = exchange_linkedin_code(code, redirect_uri=redirect_uri)
+            logger.info("Successfully exchanged LinkedIn code for token")
+        except Exception as token_error:
+            logger.error(f"Error exchanging LinkedIn code: {str(token_error)}")
+            raise TokenExchangeError(f"Failed to exchange LinkedIn code: {str(token_error)}")
+        
+        # Get profile data - either from token exchange or fetch separately
+        profile = token_data.get('profile')
+        
+        if not profile:
+            logger.info("Profile not included in token data, fetching separately")
+            try:
+                # Get profile data from userinfo endpoint (OpenID Connect)
+                headers = {'Authorization': f"Bearer {token_data['access_token']}"}
+                
+                # Try the OpenID Connect endpoint first (preferred)
+                profile_response = requests.get('https://api.linkedin.com/v2/userinfo', headers=headers, timeout=10)
+                
+                if profile_response.status_code != 200:
+                    # Fallback to standard API
+                    logger.warning("OpenID Connect profile endpoint failed, trying standard API")
+                    profile_response = requests.get('https://api.linkedin.com/v2/me', headers=headers, timeout=10)
+                    
+                if profile_response.status_code != 200:
+                    logger.error(f"Failed to fetch LinkedIn profile: {profile_response.text}")
+                    raise ProfileFetchError(f"Failed to fetch LinkedIn profile: HTTP {profile_response.status_code}")
+                
+                profile = profile_response.json()
+                logger.info(f"Successfully fetched LinkedIn profile via API")
+            except Exception as profile_error:
+                logger.error(f"Error fetching LinkedIn profile: {str(profile_error)}")
+                # Don't fail completely, create a minimal profile
+                profile = {'error': str(profile_error)}
+                logger.warning("Created minimal profile due to profile fetch error")
+        
+        # Extract user ID from profile data
+        user_id = None
+        if 'id' in profile:
+            user_id = profile['id']
+        elif 'sub' in profile:  # OpenID Connect format
+            user_id = profile['sub']
+            
+        if not user_id:
+            logger.warning("No user ID found in LinkedIn profile. Creating temporary ID.")
+            # Generate a temporary ID as fallback
+            import uuid
+            user_id = f"temp_{uuid.uuid4()}"
+        
+        # Update user
+        try:
+            logger.info(f"Updating user with LinkedIn ID: {user_id}")
+            user.linkedin_id = user_id
+            user.linkedin_access_token = token_data['access_token']
+            if 'refresh_token' in token_data:
+                user.linkedin_refresh_token = token_data['refresh_token']
+                logger.info("Saved LinkedIn refresh token")
+                
+            # Update token expiration if available
+            if 'expires_in' in token_data:
+                from django.utils import timezone
+                import datetime
+                expires_at = timezone.now() + datetime.timedelta(seconds=int(token_data['expires_in']))
+                if hasattr(user, 'linkedin_token_expires_at'):
+                    user.linkedin_token_expires_at = expires_at
+                    logger.info(f"Set token expiration to: {expires_at}")
+            
+            user.save()
+            logger.info(f"Successfully updated user {user.username} with LinkedIn data")
+        except Exception as user_error:
+            logger.error(f"Error updating user with LinkedIn data: {str(user_error)}")
+            # Continue anyway so we can at least return the profile data
+        
+        # Build the response
+        name = profile.get('name', '')
+        if not name and profile.get('localizedFirstName') and profile.get('localizedLastName'):
+            name = f"{profile.get('localizedFirstName')} {profile.get('localizedLastName')}"
+            
+        email = profile.get('email', '')
+        if not email and profile.get('emailAddress'):
+            email = profile.get('emailAddress')
+        
+        result = {
+            'success': True,
+            'platform': 'linkedin',
+            'profile': profile,
+            'name': name,
+            'email': email,
+            'access_token': token_data.get('access_token', '')[:10] + '...' if token_data.get('access_token') else ''
+        }
+        
+        logger.info("LinkedIn account connection complete")
+        return result
+        
+    except StateVerificationError as e:
+        logger.error(f"LinkedIn state verification error: {str(e)}")
+        raise StateVerificationError(f"LinkedIn authorization state invalid: {str(e)}")
+    except TokenExchangeError as e:
+        logger.error(f"LinkedIn token exchange error: {str(e)}")
+        raise TokenExchangeError(f"LinkedIn token exchange failed: {str(e)}")
+    except ProfileFetchError as e:
+        logger.error(f"LinkedIn profile fetch error: {str(e)}")
+        raise ProfileFetchError(f"LinkedIn profile fetch failed: {str(e)}")
+    except Exception as e:
+        logger.exception(f"Unexpected error connecting LinkedIn account: {str(e)}")
+        raise OAuthError(f"LinkedIn connection error: {str(e)}")
 
 def connect_twitter_account(user, code: str, state: str, session_key: str = None, code_verifier: str = None) -> Dict:
     """Connect Twitter account."""

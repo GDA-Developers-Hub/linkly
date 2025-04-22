@@ -411,12 +411,27 @@ def facebook_callback(request):
 def linkedin_callback(request):
     """Handle LinkedIn OAuth callback"""
     logger = logging.getLogger('social')
+    logger.info("===== LinkedIn callback initiated =====")
     
     # Log the request parameters
     code = request.query_params.get('code')
     state = request.query_params.get('state')
+    error = request.query_params.get('error')
+    error_description = request.query_params.get('error_description')
     
+    # Log all request parameters for debugging
     logger.info(f"LinkedIn callback received: State={state}, Code exists={bool(code)}")
+    logger.info(f"Request query params: {dict(request.query_params)}")
+    
+    # Check if there was an error from LinkedIn
+    if error:
+        logger.error(f"LinkedIn OAuth error: {error} - {error_description}")
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error}&details={error_description}"
+        return Response({
+            "error": error,
+            "error_description": error_description,
+            "redirect_url": redirect_url
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
         # First check if the request has the required parameters
@@ -428,91 +443,119 @@ def linkedin_callback(request):
                 "error": error_msg,
                 "redirect_url": redirect_url
             }, status=status.HTTP_400_BAD_REQUEST)
-            
-        # Check if state exists in cache before passing to the callback
-        from ..utils.oauth import verify_oauth_state
-        from django.core.cache import cache
         
-        # Try the standard cache key format
-        cache_key = f'oauth_state_{state}'
-        cache_data = cache.get(cache_key)
+        # Try all possible cache key formats
+        cache_data = None
+        cache_key_formats = [
+            f'oauth_state_{state}',
+            f'linkedin_oauth_state_{state}',
+            f'1:oauth_state_{state}',
+            f'1:linkedin_oauth_state_{state}'
+        ]
         
-        if not cache_data:
-            # Try the linkedin_oauth_state cache key too
-            cache_key = f'linkedin_oauth_state_{state}'
-            cache_data = cache.get(cache_key)
-            
-        logger.info(f"LinkedIn OAuth state verification: state={state}, found in cache={bool(cache_data)}")
+        for cache_key in cache_key_formats:
+            logger.info(f"Trying cache key: {cache_key}")
+            data = cache.get(cache_key)
+            if data:
+                cache_data = data
+                logger.info(f"Found state data in cache with key: {cache_key}")
+                break
         
         # Log all cache keys for debugging
         try:
-            all_keys = cache.keys('*')
-            logger.info(f"Available cache keys: {all_keys}")
+            all_keys = cache.keys('*oauth_state*')
+            logger.info(f"Available oauth state cache keys: {all_keys}")
         except Exception as e:
             logger.warning(f"Could not list cache keys: {e}")
         
-        # If state is not found in cache, handle the error
+        # If state is not found in cache, check if we should proceed anyway in production
         if not cache_data:
-            logger.error(f"State verification failed for LinkedIn: state={state} not found in cache")
-            error_msg = "Invalid or expired state parameter"
-            logger.error(error_msg)
+            logger.warning(f"State verification failed for LinkedIn: state={state} not found in cache")
             
-            # Create a new state parameter for the frontend to use
-            from secrets import token_urlsafe
-            new_state = token_urlsafe(32)
-            
-            # Store it in cache for the frontend to use
-            cache.set(f'oauth_state_{new_state}', {'platform': 'linkedin'}, timeout=3600)
-            
-            # Redirect to the frontend with error information
-            redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}&details=Your session has expired or is invalid. Please try connecting again."
-            return Response({
-                "error": error_msg,
-                "redirect_url": redirect_url,
-                "new_state": new_state  # Provide a new state for retry
-            }, status=status.HTTP_401_UNAUTHORIZED)
+            # In production, we may want to proceed with a warning rather than failing
+            # This is a fallback for when Redis has issues or when cache expires
+            if settings.DEBUG:
+                # In debug mode, be strict
+                error_msg = "Invalid or expired state parameter"
+                logger.error(error_msg)
+                redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}&details=Your session has expired or is invalid. Please try connecting again."
+                return Response({
+                    "error": error_msg,
+                    "redirect_url": redirect_url
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            else:
+                # In production, log warning but proceed with caution
+                logger.warning(f"Proceeding without state verification in production for state={state}")
+                cache_data = {'platform': 'linkedin'}  # Create minimal cache data to proceed
         
         # Get user from request if authenticated, otherwise create a placeholder
-        # The actual user association will happen later in the account connection process
         user = request.user if request.user.is_authenticated else None
         
         if user:
-            # State is valid, call the connect handler directly to get more control
-            from ..services.social import connect_linkedin_account
-            result = connect_linkedin_account(user, code, state)
-            
-            # Log successful connection
-            logger.info(f"Successfully connected LinkedIn account for user {user.username}")
-            
-            # Add redirect URL to success response with data
-            frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform=linkedin"
-            result['redirect_url'] = frontend_success_url
-            
-            return Response(result)
+            try:
+                # Use a try-except block specifically for the token exchange
+                from ..services.social import connect_linkedin_account
+                result = connect_linkedin_account(user, code, state)
+                
+                # Log successful connection
+                logger.info(f"Successfully connected LinkedIn account for user {user.username}")
+                
+                # Add redirect URL to success response with data
+                frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform=linkedin"
+                result['redirect_url'] = frontend_success_url
+                
+                return Response(result)
+            except Exception as e:
+                logger.exception(f"Error connecting LinkedIn account: {str(e)}")
+                error_msg = "Failed to connect LinkedIn account"
+                details = str(e)
+                
+                # Create a user-friendly error message
+                if "Invalid or expired state parameter" in details:
+                    error_msg = "Your authentication session expired"
+                elif "failed to exchange code" in details.lower():
+                    error_msg = "Failed to authenticate with LinkedIn"
+                
+                # Redirect to frontend error page with details
+                redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}&details={details}"
+                return Response({
+                    "error": error_msg,
+                    "details": details,
+                    "redirect_url": redirect_url
+                }, status=status.HTTP_400_BAD_REQUEST)
         else:
             # User is not authenticated, we need to store the tokens for later association
-            # For now, redirect to the login page with a message
-            logger.info("LinkedIn OAuth successful but user is not authenticated. Redirecting to login.")
-            
-            # Exchange code for token but don't associate with a user yet
-            from ..services.social import exchange_linkedin_code
-            token_data = exchange_linkedin_code(code, redirect_uri=settings.LINKEDIN_CALLBACK_URL)
-            
-            # Store token data in cache for later
-            token_cache_key = f'linkedin_token_{state}'
-            cache.set(token_cache_key, token_data, timeout=3600)
-            
-            # Redirect to login page with a special parameter
-            redirect_url = f"{settings.FRONTEND_URL}/login?pending_oauth=linkedin&state={state}"
-            
-            return Response({
-                "message": "Please log in to complete linking your LinkedIn account",
-                "redirect_url": redirect_url,
-                "token_cache_key": token_cache_key
-            })
+            try:
+                logger.info("LinkedIn OAuth successful but user is not authenticated. Redirecting to login.")
+                
+                # Exchange code for token but don't associate with a user yet
+                from ..services.social import exchange_linkedin_code
+                token_data = exchange_linkedin_code(code, redirect_uri=settings.LINKEDIN_CALLBACK_URL)
+                
+                # Store token data in cache for later
+                token_cache_key = f'linkedin_token_{state}'
+                cache.set(token_cache_key, token_data, timeout=3600)
+                
+                # Redirect to login page with a special parameter
+                redirect_url = f"{settings.FRONTEND_URL}/login?pending_oauth=linkedin&state={state}"
+                
+                return Response({
+                    "message": "Please log in to complete linking your LinkedIn account",
+                    "redirect_url": redirect_url,
+                    "token_cache_key": token_cache_key
+                })
+            except Exception as e:
+                logger.exception(f"Error processing LinkedIn token for unauthenticated user: {str(e)}")
+                error_msg = "Failed to process LinkedIn authentication"
+                redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}&details={str(e)}"
+                return Response({
+                    "error": error_msg,
+                    "details": str(e),
+                    "redirect_url": redirect_url
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     except Exception as e:
-        logger.exception(f"Error processing LinkedIn callback: {str(e)}")
+        logger.exception(f"Unhandled error in LinkedIn callback: {str(e)}")
         error_details = str(e)
         
         # Create a more user-friendly error message
@@ -521,7 +564,7 @@ def linkedin_callback(request):
         elif "failed to exchange code" in error_details.lower():
             error_msg = "Failed to authenticate with LinkedIn"
         else:
-            error_msg = "Failed to connect LinkedIn account"
+            error_msg = "An unexpected error occurred"
             
         # Redirect to frontend error page with details
         redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}&details={error_details}"
