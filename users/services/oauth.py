@@ -78,34 +78,60 @@ def get_facebook_oauth_url(redirect_uri=None, business: bool = False):
         logger.error(f"Error generating Facebook OAuth URL: {str(e)}")
         raise ValueError(f"Failed to generate Facebook OAuth URL: {str(e)}")
 
-def get_linkedin_oauth_url(business: bool = False, redirect_uri: str = None) -> Dict:
-    """Get LinkedIn OAuth URL."""
-    platform = 'linkedin'
-    state = store_oauth_state(platform)
-    auth_url, _ = build_authorization_url(platform, redirect_uri, state)
-    return {
-        'auth_url': auth_url,
-        'session_key': state
-    }
-
-def get_twitter_oauth_url(redirect_uri=None, business: bool = False):
+def get_linkedin_oauth_url(redirect_uri=None):
     """
-    Generate Twitter OAuth2 URL with PKCE
+    Generate LinkedIn OAuth2 URL with state parameter
     """
-    import logging
     from django.conf import settings
     from urllib.parse import urlencode
     import secrets
-    import hashlib
-    import base64
-    
-    logger = logging.getLogger('social')
     
     try:
-        # Use provided redirect URI or default - ensure it matches frontend
-        oauth_redirect_uri = redirect_uri or settings.OAUTH2_REDIRECT_URI
+        # Use provided redirect URI or default
+        oauth_redirect_uri = redirect_uri or settings.LINKEDIN_CALLBACK_URL
         
-        logger.info(f"Using redirect URI for Twitter: {oauth_redirect_uri}")
+        # Generate state parameter for security
+        state = secrets.token_urlsafe(32)
+        
+        # Required parameters
+        params = {
+            'client_id': settings.LINKEDIN_CLIENT_ID,
+            'redirect_uri': oauth_redirect_uri,
+            'state': state,
+            'scope': ' '.join([
+                'r_liteprofile',
+                'r_emailaddress',
+                'w_member_social',
+                'rw_organization_admin'
+            ]),
+            'response_type': 'code'
+        }
+        
+        # Build authorization URL
+        auth_url = f"https://www.linkedin.com/oauth/v2/authorization?{urlencode(params)}"
+        
+        return {
+            'auth_url': auth_url,
+            'state': state
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating LinkedIn OAuth URL: {str(e)}")
+        raise ValueError(f"Failed to generate LinkedIn OAuth URL: {str(e)}")
+
+def get_twitter_oauth_url(redirect_uri=None, business: bool = False):
+    """
+    Get Twitter OAuth authorization URL using OAuth 2.0 with PKCE
+    """
+    import secrets
+    import hashlib
+    import base64
+    from urllib.parse import urlencode
+    from django.conf import settings
+    
+    try:
+        # Use provided redirect URI or default
+        oauth_redirect_uri = redirect_uri or settings.OAUTH2_REDIRECT_URI
         
         # Ensure we have client credentials
         if not settings.TWITTER_CLIENT_ID or not settings.TWITTER_CLIENT_SECRET:
@@ -136,11 +162,6 @@ def get_twitter_oauth_url(redirect_uri=None, business: bool = False):
         # Build authorization URL
         auth_url = f"https://twitter.com/i/oauth2/authorize?{urlencode(params)}"
         
-        # Log for debugging
-        logger.info(f"Twitter OAuth URL generated: {auth_url}")
-        logger.info(f"Code verifier: {code_verifier[:10]}... (length: {len(code_verifier)})")
-        logger.info(f"Code challenge: {code_challenge[:10]}... (length: {len(code_challenge)})")
-        
         return {
             'auth_url': auth_url,
             'state': state,
@@ -148,8 +169,9 @@ def get_twitter_oauth_url(redirect_uri=None, business: bool = False):
         }
         
     except Exception as e:
-        logger.error(f"Error generating Twitter OAuth URL: {str(e)}")
-        raise ValueError(f"Failed to generate Twitter OAuth URL: {str(e)}")
+        print(f"Error generating Twitter OAuth URL: {str(e)}")
+        return None
+
 
 def connect_twitter_account(user, code: str, state: str, code_verifier: str) -> Dict:
     """

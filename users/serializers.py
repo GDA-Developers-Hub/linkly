@@ -9,6 +9,31 @@ from .models import User, Subscription, SubscriptionPlan, PlatformCredentials
 
 User = get_user_model()
 
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+    password2 = serializers.CharField(write_only=True, required=True)
+
+    class Meta:
+        model = User
+        fields = ('email', 'username', 'password', 'password2', 'is_business', 
+                 'company_name', 'phone_number')
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password2']:
+            raise serializers.ValidationError({"password": "Password fields didn't match."})
+            
+        # Ensure username is provided and not automatically set to email
+        if 'username' not in attrs or not attrs['username']:
+            raise serializers.ValidationError({"username": "Username is required"})
+            
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('password2')
+        # Create user with provided username
+        user = User.objects.create_user(**validated_data)
+        return user
+
 class UserSerializer(serializers.ModelSerializer):
     """User model serializer."""
     password = serializers.CharField(write_only=True)
@@ -132,30 +157,6 @@ class SocialAccountSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    password2 = serializers.CharField(write_only=True, required=True)
-
-    class Meta:
-        model = User
-        fields = ('email', 'username', 'password', 'password2', 'is_business', 
-                 'company_name', 'phone_number')
-
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
-            
-        # Ensure username is provided and not automatically set to email
-        if 'username' not in attrs or not attrs['username']:
-            raise serializers.ValidationError({"username": "Username is required"})
-            
-        return attrs
-
-    def create(self, validated_data):
-        validated_data.pop('password2')
-        # Create user with provided username
-        user = User.objects.create_user(**validated_data)
-        return user
 
 class Verify2FASerializer(serializers.Serializer):
     user_id = serializers.IntegerField()

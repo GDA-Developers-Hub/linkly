@@ -54,6 +54,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 if not DEBUG:
     CORS_ALLOWED_ORIGINS = [
+        "https://link-ly.web.app",
         "http://localhost:5173",
         "https://fe97-102-217-65-73.ngrok-free.app",
         "https://godigitalafrica-admin.web.app",
@@ -80,6 +81,7 @@ CORS_EXPOSE_HEADERS = ["content-type", "x-csrftoken"]
 
 # CSRF Settings
 CSRF_TRUSTED_ORIGINS = [
+    "https://link-ly.web.app",
     "http://localhost:5173",
     'https://fe97-102-217-65-73.ngrok-free.app',
     'https://linkly-production.up.railway.app',
@@ -101,6 +103,13 @@ SESSION_COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'
 
 # Application definition
 INSTALLED_APPS = [
+    # 'allauth',
+    # 'allauth.account',
+    # 'allauth.socialaccount',
+    # 'allauth.socialaccount.providers.google',
+    # 'allauth.socialaccount.providers.github',
+    # 'allauth.socialaccount.providers.twitter',
+    # 'allauth.socialaccount.providers.facebook',
     'jazzmin',  # Must be before django.contrib.admin
     'django.contrib.admin',
     'django.contrib.auth',
@@ -119,6 +128,61 @@ INSTALLED_APPS = [
     'socials.apps.SocialsConfig',
 ]
 
+# SOCIALACCOUNT_PROVIDERS = {
+#     'google': {
+#         'APP': {
+#             'client_id': env('GOOGLE_CLIENT_ID'),
+#             'secret': env('GOOGLE_SECRET'),
+#         },
+#         'SCOPE': [
+#             'profile',
+#             'email'
+#         ],
+#         'AUTH_PARAMS': {
+#             'access_type': 'online',
+#             'prompt': 'consent'
+#         },
+#     },
+#     'github': {
+#         'APP': {
+#             'client_id': env('GITHUB_CLIENT_ID'),
+#             'secret': env('GITHUB_SECRET'),
+#         },
+#         'AUTH_PARAMS': {
+#             'prompt': 'consent',  
+#         },
+#     },
+#     'twitter': {
+#         'APP': {
+#             'client_id': env('TWITTER_CLIENT_ID'),
+#             'secret': env('TWITTER_SECRET'),
+#         },
+#     },
+#     'facebook': {
+#         'APP': {
+#             'client_id': env('FACEBOOK_CLIENT_ID'),
+#             'secret': env('FACEBOOK_SECRET'),
+#         },
+#         'AUTH_PARAMS': {
+#             'auth_type': 'reauthenticate',
+#         },
+#     },
+# }
+
+
+# SOCIALACCOUNT_LOGIN_ON_GET = True
+# SOCIALACCOUNT_AUTO_SIGNUP = True
+# ACCOUNT_UNIQUE_EMAIL = True
+# SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+# SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+# SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
+
+# ACCOUNT_ADAPTER = "a_users.adapters.CustomAccountAdapter"
+# SOCIALACCOUNT_ADAPTER = "a_users.adapters.SocialAccountAdapter"
+
+
+
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -130,6 +194,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'socials.middleware.APIUsageMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'linkly.urls'
@@ -248,16 +313,33 @@ GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 FACEBOOK_CLIENT_ID = os.getenv('FACEBOOK_CLIENT_ID') or os.getenv('FACEBOOK_APP_ID')
 FACEBOOK_CLIENT_SECRET = os.getenv('FACEBOOK_CLIENT_SECRET') or os.getenv('FACEBOOK_APP_SECRET')
 
+# LinkedIn Settings
 LINKEDIN_CLIENT_ID = os.getenv('LINKEDIN_CLIENT_ID')
 LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET')
 
+# LinkedIn OAuth Callback URLs
+LINKEDIN_CALLBACK_URLS = [
+    'https://linkly-production.up.railway.app/api/v1/users/auth/callback/linkedin/',  # Production API
+]
+
+# Default callback URL (used for initial OAuth request)
+LINKEDIN_CALLBACK_URL = os.environ.get(
+    'LINKEDIN_CALLBACK_URL',
+    LINKEDIN_CALLBACK_URLS[0]  # Default to production URL
+)
+
 # Twitter Settings
-TWITTER_CLIENT_ID = os.environ.get('TWITTER_CLIENT_ID') or os.environ.get('TWITTER_API_KEY', 'ejv3lQRQc923gdN6DMsyDkykJ')
-TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_CLIENT_SECRET') or os.environ.get('TWITTER_API_SECRET', '2taxaldg80OqT5ATGYsePjsmavyRLm8SD8NAKDHNDjL5aQvZBY')
+TWITTER_CLIENT_ID = os.environ.get('TWITTER_CLIENT_ID') or os.environ.get('TWITTER_API_KEY', 'WFZUOThVQmpjS1E4ZldpRTNkQm86MTpjaQ')
+TWITTER_CLIENT_SECRET = os.environ.get('TWITTER_CLIENT_SECRET') or os.environ.get('TWITTER_API_SECRET', 'xAAL-zVhMUm-_yCzVuUVfVMA63Tmf64bKu3Z_lDaPDuPPN0NlN')
 TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN')
 TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN')
 TWITTER_ACCESS_TOKEN_SECRET = os.environ.get('TWITTER_ACCESS_TOKEN_SECRET')
-TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'https://godigitalafrica-admin.web.app/oauth-callback/twitter')
+
+# Unified callback URL for Twitter
+TWITTER_CALLBACK_URL = os.environ.get(
+    'TWITTER_CALLBACK_URL',
+    'https://linkly-production.up.railway.app/api/v1/users/auth/callback/twitter/'
+)
 
 # For backwards compatibility
 TWITTER_API_KEY = TWITTER_CLIENT_ID
@@ -278,7 +360,7 @@ TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 # OAuth2 Settings
-OAUTH2_REDIRECT_URI = os.getenv('FRONTEND_URL', 'https://godigitalafrica-admin.web.app')
+OAUTH2_REDIRECT_URI = os.getenv('https://linkly-production.up.railway.app')
 
 # =========================================
 # STRIPE CONFIGURATION
@@ -288,8 +370,8 @@ STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 
 # Webhook and Redirect URLs
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
-STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'https://godigitalafrica-admin.web.app/billing/success')
-STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'https://godigitalafrica-admin.web.app/billing/cancel')
+STRIPE_SUCCESS_URL = os.environ.get('STRIPE_SUCCESS_URL', 'https://linkly-production.up.railway.app/billing/success')
+STRIPE_CANCEL_URL = os.environ.get('STRIPE_CANCEL_URL', 'https://linkly-production.up.railway.app/cancel')
 
 # Jazzmin Settings
 JAZZMIN_SETTINGS = {
@@ -502,7 +584,3 @@ CACHE_TTL = 60 * 15
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
 
-# Twitter API Configuration
-TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY')
-TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET')
-TWITTER_CALLBACK_URL = os.environ.get('TWITTER_CALLBACK_URL', 'http://localhost:3000/oauth-callback/twitter') 

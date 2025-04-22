@@ -1,4 +1,5 @@
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -218,7 +219,7 @@ def init_oauth(request):
     tags=['Social Authentication']
 )
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def oauth_callback(request, platform):
     """Generic OAuth callback handler"""
     code = request.query_params.get('code')
