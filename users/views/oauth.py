@@ -23,7 +23,11 @@ from ..services.exceptions import (
     PKCEVerificationError, ProfileFetchError, BusinessAccountError
 )
 import logging
+<<<<<<< HEAD
 import secrets
+=======
+from django.conf import settings
+>>>>>>> ba474d24039fd240f798893060ee4b870bbe5558
 
 @swagger_auto_schema(
     method='get',
@@ -222,6 +226,21 @@ def init_oauth(request):
 @permission_classes([AllowAny])
 def oauth_callback(request, platform):
     """Generic OAuth callback handler"""
+    logger = logging.getLogger('social')
+    
+    # Check for OAuth error response
+    error = request.query_params.get('error')
+    error_description = request.query_params.get('error_description')
+    
+    if error:
+        logger.error(f"OAuth error for {platform}: {error} - {error_description}")
+        return Response({
+            'error': error,
+            'error_description': error_description,
+            'platform': platform
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Normal OAuth success flow
     code = request.query_params.get('code')
     state = request.query_params.get('state')
     session_key = request.query_params.get('session_key')
@@ -230,7 +249,8 @@ def oauth_callback(request, platform):
     
     if not all([code, state]):
         return Response({
-            'error': 'Missing required parameters'
+            'error': 'Missing required parameters',
+            'details': 'Both code and state parameters are required'
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
@@ -333,7 +353,8 @@ def oauth_callback(request, platform):
         handler = handlers.get(platform)
         if not handler:
             return Response({
-                'error': 'Invalid platform'
+                'error': 'Invalid platform',
+                'supported_platforms': list(handlers.keys())
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Connect the account
@@ -349,19 +370,30 @@ def oauth_callback(request, platform):
             kwargs['code_verifier'] = code_verifier
             
         result = handler(**kwargs)
+        
+        # Add redirect URL to success response
+        frontend_success_url = f"{settings.OAUTH2_REDIRECT_URI}/oauth-success?platform={platform}"
+        result['redirect_url'] = frontend_success_url
+        
         return Response(result)
         
     except (StateVerificationError, PKCEVerificationError) as e:
+        logger.error(f"Verification error for {platform}: {str(e)}")
         return Response({
-            'error': str(e)
+            'error': str(e),
+            'redirect_url': f"{settings.OAUTH2_REDIRECT_URI}/oauth-error?platform={platform}&error={str(e)}"
         }, status=status.HTTP_401_UNAUTHORIZED)
     except TokenExchangeError as e:
+        logger.error(f"Token exchange error for {platform}: {str(e)}")
         return Response({
-            'error': str(e)
+            'error': str(e),
+            'redirect_url': f"{settings.OAUTH2_REDIRECT_URI}/oauth-error?platform={platform}&error={str(e)}"
         }, status=status.HTTP_400_BAD_REQUEST)
     except OAuthError as e:
+        logger.error(f"OAuth error for {platform}: {str(e)}")
         return Response({
-            'error': str(e)
+            'error': str(e),
+            'redirect_url': f"{settings.OAUTH2_REDIRECT_URI}/oauth-error?platform={platform}&error={str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Platform-specific callback handlers with custom logic

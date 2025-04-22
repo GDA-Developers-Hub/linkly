@@ -65,20 +65,38 @@ def exchange_facebook_code(code, redirect_uri=None):
 def exchange_linkedin_code(code, redirect_uri=None):
     """Exchange LinkedIn auth code for tokens"""
     try:
+        # Build the request data
+        data = {
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': settings.LINKEDIN_CLIENT_ID,
+            'client_secret': settings.LINKEDIN_CLIENT_SECRET,
+            'redirect_uri': redirect_uri or settings.LINKEDIN_REDIRECT_URI
+        }
+        
+        # Log the request data (without sensitive info)
+        logger = logging.getLogger('oauth')
+        logger.info(f"Exchanging LinkedIn code. Redirect URI: {redirect_uri or settings.LINKEDIN_REDIRECT_URI}")
+        
+        # Make the token request
         response = requests.post(
             'https://www.linkedin.com/oauth/v2/accessToken',
-            data={
-                'grant_type': 'authorization_code',
-                'code': code,
-                'client_id': settings.LINKEDIN_CLIENT_ID,
-                'client_secret': settings.LINKEDIN_CLIENT_SECRET,
-                'redirect_uri': redirect_uri or settings.LINKEDIN_REDIRECT_URI
-            }
+            data=data
         )
+        
+        # Check for errors and log response
         if response.status_code != 200:
-            raise SocialConnectionError('Failed to exchange LinkedIn auth code')
-        return response.json()
+            error_msg = f'Failed to exchange LinkedIn auth code: Status {response.status_code}, Response: {response.text}'
+            logger.error(error_msg)
+            raise SocialConnectionError(error_msg)
+            
+        # Parse and return the token response
+        token_data = response.json()
+        logger.info(f"Successfully exchanged LinkedIn code for token. Token type: {token_data.get('token_type')}")
+        
+        return token_data
     except Exception as e:
+        logger.error(f'LinkedIn OAuth error: {str(e)}')
         raise SocialConnectionError(f'LinkedIn OAuth error: {str(e)}')
 
 def exchange_twitter_code(code, redirect_uri=None, code_verifier=None):
@@ -619,23 +637,30 @@ def connect_facebook_account(user, code: str, session_key: str, state: str) -> D
         'profile': profile
     }
 
-def connect_linkedin_account(user, code: str, session_key: str, state: str) -> Dict:
+def connect_linkedin_account(user, code: str, session_key: str = None, state: str = None) -> Dict:
     """Connect LinkedIn account."""
-    verify_oauth_state(state)
+    if state:
+        verify_oauth_state(state)
     
     token_data = exchange_code_for_token('linkedin', code, settings.LINKEDIN_REDIRECT_URI)
     
-    # Get user profile
+    # Get profile data from userinfo endpoint (OpenID Connect)
     headers = {'Authorization': f"Bearer {token_data['access_token']}"}
-    response = requests.get('https://api.linkedin.com/v2/me', headers=headers)
-    if not response.ok:
-        raise ProfileFetchError("Failed to fetch LinkedIn profile")
+    profile_response = requests.get('https://api.linkedin.com/v2/userinfo', headers=headers)
     
-    profile = response.json()
+    if not profile_response.ok:
+        # Fallback to standard API
+        profile_response = requests.get('https://api.linkedin.com/v2/me', headers=headers)
+        if not profile_response.ok:
+            raise ProfileFetchError(f"Failed to fetch LinkedIn profile: {profile_response.text}")
+    
+    profile = profile_response.json()
     
     # Update user
-    user.linkedin_id = profile['id']
+    user.linkedin_id = profile.get('id') or profile.get('sub')  # Handle both API and OpenID responses
     user.linkedin_access_token = token_data['access_token']
+    if 'refresh_token' in token_data:
+        user.linkedin_refresh_token = token_data['refresh_token']
     user.save()
     
     return {

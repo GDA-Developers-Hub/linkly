@@ -99,10 +99,10 @@ def get_linkedin_oauth_url(redirect_uri=None):
             'redirect_uri': oauth_redirect_uri,
             'state': state,
             'scope': ' '.join([
-                'r_liteprofile',
-                'r_emailaddress',
+                'openid',
+                'profile',
                 'w_member_social',
-                'rw_organization_admin'
+                'email'
             ]),
             'response_type': 'code'
         }
