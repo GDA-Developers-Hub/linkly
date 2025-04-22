@@ -407,7 +407,7 @@ def facebook_callback(request):
     return oauth_callback(request, 'facebook')
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])  # Allow any user to access the callback
 def linkedin_callback(request):
     """Handle LinkedIn OAuth callback"""
     logger = logging.getLogger('social')
@@ -418,45 +418,101 @@ def linkedin_callback(request):
     
     logger.info(f"LinkedIn callback received: State={state}, Code exists={bool(code)}")
     
-    # Check if state exists in cache before passing to the callback
-    from ..utils.oauth import verify_oauth_state
-    cache_key = f'oauth_state_{state}'
-    cache_data = cache.get(cache_key)
-    
-    if not cache_data:
-        # Check the linkedin_oauth_state cache key too
-        cache_key = f'linkedin_oauth_state_{state}'
+    try:
+        # First check if the request has the required parameters
+        if not code or not state:
+            logger.error("Missing required parameters for LinkedIn callback")
+            error_msg = "Missing code or state parameter"
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}"
+            return Response({
+                "error": error_msg,
+                "redirect_url": redirect_url
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Check if state exists in cache before passing to the callback
+        from ..utils.oauth import verify_oauth_state
+        from django.core.cache import cache
+        
+        # Try the standard cache key format
+        cache_key = f'oauth_state_{state}'
         cache_data = cache.get(cache_key)
         
-    logger.info(f"LinkedIn OAuth state verification: state={state}, found in cache={bool(cache_data)}")
+        if not cache_data:
+            # Try the linkedin_oauth_state cache key too
+            cache_key = f'linkedin_oauth_state_{state}'
+            cache_data = cache.get(cache_key)
+            
+        logger.info(f"LinkedIn OAuth state verification: state={state}, found in cache={bool(cache_data)}")
+        
+        # Log all cache keys for debugging
+        try:
+            all_keys = cache.keys('*')
+            logger.info(f"Available cache keys: {all_keys}")
+        except Exception as e:
+            logger.warning(f"Could not list cache keys: {e}")
+        
+        # If state is not found in cache, handle the error
+        if not cache_data:
+            logger.error(f"State verification failed for LinkedIn: state={state} not found in cache")
+            error_msg = "Invalid or expired state parameter"
+            logger.error(error_msg)
+            
+            # Create a new state parameter for the frontend to use
+            from secrets import token_urlsafe
+            new_state = token_urlsafe(32)
+            
+            # Store it in cache for the frontend to use
+            cache.set(f'oauth_state_{new_state}', {'platform': 'linkedin'}, timeout=3600)
+            
+            # Redirect to the frontend with error information
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}&details=Your session has expired or is invalid. Please try connecting again."
+            return Response({
+                "error": error_msg,
+                "redirect_url": redirect_url,
+                "new_state": new_state  # Provide a new state for retry
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Get user from request if authenticated, otherwise create a placeholder
+        # The actual user association will happen later in the account connection process
+        user = request.user if request.user.is_authenticated else None
+        
+        if user:
+            # State is valid, call the connect handler directly to get more control
+            from ..services.social import connect_linkedin_account
+            result = connect_linkedin_account(user, code, state)
+            
+            # Log successful connection
+            logger.info(f"Successfully connected LinkedIn account for user {user.username}")
+            
+            # Add redirect URL to success response with data
+            frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform=linkedin"
+            result['redirect_url'] = frontend_success_url
+            
+            return Response(result)
+        else:
+            # User is not authenticated, we need to store the tokens for later association
+            # For now, redirect to the login page with a message
+            logger.info("LinkedIn OAuth successful but user is not authenticated. Redirecting to login.")
+            
+            # Exchange code for token but don't associate with a user yet
+            from ..services.social import exchange_linkedin_code
+            token_data = exchange_linkedin_code(code, redirect_uri=settings.LINKEDIN_CALLBACK_URL)
+            
+            # Store token data in cache for later
+            token_cache_key = f'linkedin_token_{state}'
+            cache.set(token_cache_key, token_data, timeout=3600)
+            
+            # Redirect to login page with a special parameter
+            redirect_url = f"{settings.FRONTEND_URL}/login?pending_oauth=linkedin&state={state}"
+            
+            return Response({
+                "message": "Please log in to complete linking your LinkedIn account",
+                "redirect_url": redirect_url,
+                "token_cache_key": token_cache_key
+            })
     
-    # Try linkedin specific oauth state format
-    if not cache_data:
-        logger.error(f"State verification failed for LinkedIn: state={state} not found in cache")
-        error_msg = "Invalid or expired state parameter"
-        logger.error(error_msg)
-        
-        # Redirect to the frontend with error information
-        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}&details=Your session has expired or is invalid. Please try connecting again."
-        return Response({
-            "error": error_msg,
-            "redirect_url": redirect_url
-        }, status=status.HTTP_401_UNAUTHORIZED)
-    
-    try:
-        # State is valid, call the connect handler directly to get more control
-        result = connect_linkedin_account(request.user, code, state)
-        
-        # Log successful connection
-        logger.info(f"Successfully connected LinkedIn account for user {request.user.username}")
-        
-        # Add redirect URL to success response with data
-        frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform=linkedin"
-        result['redirect_url'] = frontend_success_url
-        
-        return Response(result)
     except Exception as e:
-        logger.exception(f"Error connecting LinkedIn account: {str(e)}")
+        logger.exception(f"Error processing LinkedIn callback: {str(e)}")
         error_details = str(e)
         
         # Create a more user-friendly error message
@@ -473,9 +529,10 @@ def linkedin_callback(request):
             "error": error_msg,
             "details": error_details,
             "redirect_url": redirect_url
-        }, status=status.HTTP_400_BAD_REQUEST)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def twitter_callback(request):
     """
     OAuth 2.0 callback for Twitter.
@@ -507,42 +564,78 @@ def twitter_callback(request):
         platform = state.split('_')[0]
         logger.info(f"Extracted platform from state: {platform}")
     
-    # Get the code_verifier from session storage
-    # This is provided by frontend or stored in backend depending on implementation
-    from ..utils.oauth import get_stored_pkce_verifier
-    code_verifier = get_stored_pkce_verifier(state)
-    if not code_verifier:
-        logger.warning(f"No code_verifier found for state: {state}")
-        error_msg = "No code verifier found for this authorization request"
-        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details=The security verification code is missing. This may happen if you've waited too long or if cookies were cleared."
-        return Response(
-            {
-                "error": error_msg,
-                "redirect_url": redirect_url
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    logger.info(f"Code verifier retrieved for state: {state}, length: {len(code_verifier)}")
-    
     try:
+        # Get the code_verifier from session storage
+        # This is provided by frontend or stored in backend depending on implementation
+        from ..utils.oauth import get_stored_pkce_verifier
+        code_verifier = get_stored_pkce_verifier(state)
+        if not code_verifier:
+            logger.warning(f"No code_verifier found for state: {state}")
+            error_msg = "No code verifier found for this authorization request"
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details=The security verification code is missing. This may happen if you've waited too long or if cookies were cleared."
+            return Response(
+                {
+                    "error": error_msg,
+                    "redirect_url": redirect_url
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        logger.info(f"Code verifier retrieved for state: {state}, length: {len(code_verifier)}")
+        
         # Verify the state parameter to prevent CSRF
         from ..utils.oauth import verify_oauth_state
-        verify_oauth_state(state)
-        logger.info("State verification successful")
+        try:
+            verify_oauth_state(state)
+            logger.info("State verification successful")
+        except ValueError as e:
+            logger.error(f"State verification failed: {str(e)}")
+            error_msg = "Invalid or expired state parameter"
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details=Your session has expired or is invalid. Please try connecting again."
+            return Response(
+                {
+                    "error": error_msg,
+                    "redirect_url": redirect_url
+                },
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         
-        # Exchange the code for tokens
-        user = request.user
-        from ..services.social import connect_twitter_account
-        result = connect_twitter_account(user, code, state, code_verifier)
-        logger.info(f"Successfully connected Twitter account for user {user.username}")
+        # Check if user is authenticated
+        user = request.user if request.user.is_authenticated else None
         
-        # Add redirect URL to success response
-        frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform=twitter"
-        result['redirect_url'] = frontend_success_url
-        
-        # Return success response
-        return Response(result)
+        if user:
+            # Exchange the code for tokens and connect the account
+            from ..services.social import connect_twitter_account
+            result = connect_twitter_account(user, code, state, code_verifier)
+            logger.info(f"Successfully connected Twitter account for user {user.username}")
+            
+            # Add redirect URL to success response
+            frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform=twitter"
+            result['redirect_url'] = frontend_success_url
+            
+            # Return success response
+            return Response(result)
+        else:
+            # User is not authenticated, store tokens and redirect to login
+            logger.info("Twitter OAuth successful but user is not authenticated. Redirecting to login.")
+            
+            # Exchange code for token but don't associate with a user yet
+            from ..services.social import exchange_twitter_code
+            token_data = exchange_twitter_code(code, redirect_uri=settings.TWITTER_CALLBACK_URL, code_verifier=code_verifier)
+            
+            # Store token data in cache for later
+            from django.core.cache import cache
+            token_cache_key = f'twitter_token_{state}'
+            cache.set(token_cache_key, token_data, timeout=3600)
+            
+            # Redirect to login page with a special parameter
+            redirect_url = f"{settings.FRONTEND_URL}/login?pending_oauth=twitter&state={state}"
+            
+            return Response({
+                "message": "Please log in to complete linking your Twitter account",
+                "redirect_url": redirect_url,
+                "token_cache_key": token_cache_key
+            })
     
     except StateVerificationError as e:
         logger.error(f"State verification error: {str(e)}")
