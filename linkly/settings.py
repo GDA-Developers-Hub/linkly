@@ -313,8 +313,20 @@ GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 FACEBOOK_CLIENT_ID = os.getenv('FACEBOOK_CLIENT_ID') or os.getenv('FACEBOOK_APP_ID')
 FACEBOOK_CLIENT_SECRET = os.getenv('FACEBOOK_CLIENT_SECRET') or os.getenv('FACEBOOK_APP_SECRET')
 
+# LinkedIn Settings
 LINKEDIN_CLIENT_ID = os.getenv('LINKEDIN_CLIENT_ID')
 LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET')
+
+# LinkedIn OAuth Callback URLs
+LINKEDIN_CALLBACK_URLS = [
+    'https://linkly-production.up.railway.app/api/v1/users/auth/callback/linkedin/',  # Production API
+]
+
+# Default callback URL (used for initial OAuth request)
+LINKEDIN_CALLBACK_URL = os.environ.get(
+    'LINKEDIN_CALLBACK_URL',
+    LINKEDIN_CALLBACK_URLS[0]  # Default to production URL
+)
 
 # Twitter Settings
 TWITTER_CLIENT_ID = os.environ.get('TWITTER_CLIENT_ID') or os.environ.get('TWITTER_API_KEY', 'WFZUOThVQmpjS1E4ZldpRTNkQm86MTpjaQ')
