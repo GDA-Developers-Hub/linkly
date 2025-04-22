@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.contrib.admin.models import LogEntry, CHANGE
 from django.contrib.contenttypes.models import ContentType
-from .models import SubscriptionPlan, Subscription, User, UserProfile, SocialAccount, PlatformCredentials
+from .models import SubscriptionPlan, Subscription, User, PlatformCredentials
 from decimal import Decimal
 from django.db import models
 from django.contrib import messages

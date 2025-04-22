@@ -23,11 +23,7 @@ from ..services.exceptions import (
     PKCEVerificationError, ProfileFetchError, BusinessAccountError
 )
 import logging
-<<<<<<< HEAD
-import secrets
-=======
 from django.conf import settings
->>>>>>> ba474d24039fd240f798893060ee4b870bbe5558
 
 @swagger_auto_schema(
     method='get',
