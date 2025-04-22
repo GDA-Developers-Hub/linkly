@@ -329,6 +329,7 @@ def oauth_callback(request, platform):
             
             request.user.save()
             
+            frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform={platform}"
             return Response({
                 'success': True,
                 'platform': platform,
@@ -368,7 +369,7 @@ def oauth_callback(request, platform):
         result = handler(**kwargs)
         
         # Add redirect URL to success response
-        frontend_success_url = f"{settings.OAUTH2_REDIRECT_URI}/oauth-success?platform={platform}"
+        frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform={platform}"
         result['redirect_url'] = frontend_success_url
         
         return Response(result)
@@ -377,19 +378,19 @@ def oauth_callback(request, platform):
         logger.error(f"Verification error for {platform}: {str(e)}")
         return Response({
             'error': str(e),
-            'redirect_url': f"{settings.OAUTH2_REDIRECT_URI}/oauth-error?platform={platform}&error={str(e)}"
+            'redirect_url': f"{settings.FRONTEND_URL}/oauth-error?platform={platform}&error={str(e)}"
         }, status=status.HTTP_401_UNAUTHORIZED)
     except TokenExchangeError as e:
         logger.error(f"Token exchange error for {platform}: {str(e)}")
         return Response({
             'error': str(e),
-            'redirect_url': f"{settings.OAUTH2_REDIRECT_URI}/oauth-error?platform={platform}&error={str(e)}"
+            'redirect_url': f"{settings.FRONTEND_URL}/oauth-error?platform={platform}&error={str(e)}"
         }, status=status.HTTP_400_BAD_REQUEST)
     except OAuthError as e:
         logger.error(f"OAuth error for {platform}: {str(e)}")
         return Response({
             'error': str(e),
-            'redirect_url': f"{settings.OAUTH2_REDIRECT_URI}/oauth-error?platform={platform}&error={str(e)}"
+            'redirect_url': f"{settings.FRONTEND_URL}/oauth-error?platform={platform}&error={str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Platform-specific callback handlers with custom logic
@@ -432,13 +433,47 @@ def linkedin_callback(request):
     # Try linkedin specific oauth state format
     if not cache_data:
         logger.error(f"State verification failed for LinkedIn: state={state} not found in cache")
+        error_msg = "Invalid or expired state parameter"
+        logger.error(error_msg)
+        
+        # Redirect to the frontend with error information
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}&details=Your session has expired or is invalid. Please try connecting again."
         return Response({
-            "error": "Invalid or expired state parameter",
-            "redirect_url": f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error=Invalid or expired state parameter"
+            "error": error_msg,
+            "redirect_url": redirect_url
         }, status=status.HTTP_401_UNAUTHORIZED)
     
-    # State is valid, proceed with the standard callback
-    return oauth_callback(request, 'linkedin')
+    try:
+        # State is valid, call the connect handler directly to get more control
+        result = connect_linkedin_account(request.user, code, state)
+        
+        # Log successful connection
+        logger.info(f"Successfully connected LinkedIn account for user {request.user.username}")
+        
+        # Add redirect URL to success response with data
+        frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform=linkedin"
+        result['redirect_url'] = frontend_success_url
+        
+        return Response(result)
+    except Exception as e:
+        logger.exception(f"Error connecting LinkedIn account: {str(e)}")
+        error_details = str(e)
+        
+        # Create a more user-friendly error message
+        if "Invalid or expired state parameter" in error_details:
+            error_msg = "Your authentication session expired"
+        elif "failed to exchange code" in error_details.lower():
+            error_msg = "Failed to authenticate with LinkedIn"
+        else:
+            error_msg = "Failed to connect LinkedIn account"
+            
+        # Redirect to frontend error page with details
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=linkedin&error={error_msg}&details={error_details}"
+        return Response({
+            "error": error_msg,
+            "details": error_details,
+            "redirect_url": redirect_url
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def twitter_callback(request):
@@ -456,8 +491,13 @@ def twitter_callback(request):
     
     if not code or not state:
         logger.error("Missing required parameters for Twitter callback")
+        error_msg = "Missing required parameters"
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}"
         return Response(
-            {"error": "Missing required parameters"},
+            {
+                "error": error_msg,
+                "redirect_url": redirect_url
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
     
@@ -469,11 +509,17 @@ def twitter_callback(request):
     
     # Get the code_verifier from session storage
     # This is provided by frontend or stored in backend depending on implementation
+    from ..utils.oauth import get_stored_pkce_verifier
     code_verifier = get_stored_pkce_verifier(state)
     if not code_verifier:
         logger.warning(f"No code_verifier found for state: {state}")
+        error_msg = "No code verifier found for this authorization request"
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details=The security verification code is missing. This may happen if you've waited too long or if cookies were cleared."
         return Response(
-            {"error": "No code verifier found for this authorization request"},
+            {
+                "error": error_msg,
+                "redirect_url": redirect_url
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
     
@@ -481,45 +527,81 @@ def twitter_callback(request):
     
     try:
         # Verify the state parameter to prevent CSRF
+        from ..utils.oauth import verify_oauth_state
         verify_oauth_state(state)
         logger.info("State verification successful")
         
         # Exchange the code for tokens
         user = request.user
-        connect_twitter_account(user, code, code_verifier)
+        from ..services.social import connect_twitter_account
+        result = connect_twitter_account(user, code, state, code_verifier)
         logger.info(f"Successfully connected Twitter account for user {user.username}")
         
+        # Add redirect URL to success response
+        frontend_success_url = f"{settings.FRONTEND_URL}/oauth-success?platform=twitter"
+        result['redirect_url'] = frontend_success_url
+        
         # Return success response
-        return Response({"status": "success", "message": "Twitter account connected successfully"})
+        return Response(result)
     
     except StateVerificationError as e:
         logger.error(f"State verification error: {str(e)}")
+        error_msg = "State verification failed"
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
         return Response(
-            {"error": "State verification failed", "details": str(e)},
+            {
+                "error": error_msg, 
+                "details": str(e),
+                "redirect_url": redirect_url
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
     except PKCEVerificationError as e:
         logger.error(f"PKCE verification error: {str(e)}")
+        error_msg = "PKCE verification failed"
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
         return Response(
-            {"error": "PKCE verification failed", "details": str(e)},
+            {
+                "error": error_msg, 
+                "details": str(e),
+                "redirect_url": redirect_url
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
     except TokenExchangeError as e:
         logger.error(f"Token exchange error: {str(e)}")
+        error_msg = "Failed to exchange code for tokens"
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
         return Response(
-            {"error": "Failed to exchange code for tokens", "details": str(e)},
+            {
+                "error": error_msg, 
+                "details": str(e),
+                "redirect_url": redirect_url
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
     except ProfileFetchError as e:
         logger.error(f"Profile fetch error: {str(e)}")
+        error_msg = "Failed to fetch Twitter profile"
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
         return Response(
-            {"error": "Failed to fetch Twitter profile", "details": str(e)},
+            {
+                "error": error_msg, 
+                "details": str(e),
+                "redirect_url": redirect_url
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
     except Exception as e:
         logger.exception(f"Unexpected error in Twitter callback: {str(e)}")
+        error_msg = "An unexpected error occurred"
+        redirect_url = f"{settings.FRONTEND_URL}/oauth-error?platform=twitter&error={error_msg}&details={str(e)}"
         return Response(
-            {"error": "An unexpected error occurred", "details": str(e)},
+            {
+                "error": error_msg, 
+                "details": str(e),
+                "redirect_url": redirect_url
+            },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

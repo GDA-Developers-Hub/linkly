@@ -360,7 +360,10 @@ TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 # OAuth2 Settings
-OAUTH2_REDIRECT_URI = os.getenv('https://linkly-production.up.railway.app')
+OAUTH2_REDIRECT_URI = os.getenv('OAUTH2_REDIRECT_URI', 'https://linkly-production.up.railway.app/api/v1/users/auth/callback')
+
+# Frontend URL for redirects after OAuth
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://link-ly.web.app')
 
 # =========================================
 # STRIPE CONFIGURATION
