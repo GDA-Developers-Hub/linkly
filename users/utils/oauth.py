@@ -77,8 +77,8 @@ def get_platform_config(platform: str) -> Dict:
             'client_secret': settings.LINKEDIN_CLIENT_SECRET,
             'auth_url': 'https://www.linkedin.com/oauth/v2/authorization',
             'token_url': 'https://www.linkedin.com/oauth/v2/accessToken',
-            'scopes': ['r_liteprofile', 'r_emailaddress'],
-            'uses_pkce': False
+            'scopes': ['profile', 'email', 'openid'],
+            'uses_pkce': True
         },
         'instagram': {
             'client_id': settings.INSTAGRAM_CLIENT_ID,
