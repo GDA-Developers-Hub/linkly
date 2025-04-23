@@ -13,7 +13,7 @@ def get_google_auth_url():
     """Get Google OAuth2 authorization URL"""
     params = {
         'client_id': settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY,
-        'redirect_uri': f"{settings.OAUTH2_REDIRECT_URI}api/v1/users/auth/google/callback/",
+        'redirect_uri': f"{settings.OAUTH2_REDIRECT_URI}/api/v1/users/auth/google/callback/",
         'scope': ' '.join([
             'https://www.googleapis.com/auth/userinfo.email',
             'https://www.googleapis.com/auth/userinfo.profile',
@@ -29,7 +29,7 @@ def get_facebook_auth_url(redirect_uri=None):
     """Get Facebook OAuth2 authorization URL"""
     params = {
         'client_id': settings.SOCIAL_AUTH_FACEBOOK_KEY,
-        'redirect_uri': redirect_uri or f"{settings.OAUTH2_REDIRECT_URI}api/v1/users/auth/facebook/callback/",
+        'redirect_uri': redirect_uri or f"{settings.OAUTH2_REDIRECT_URI}/api/v1/users/auth/facebook/callback/",
         'scope': 'email,public_profile,pages_show_list,pages_read_engagement,pages_manage_posts',
         'response_type': 'code',
         'state': secrets.token_urlsafe(32)  # Generate secure state parameter
@@ -88,7 +88,7 @@ def get_instagram_auth_url():
     """Get Instagram OAuth2 authorization URL"""
     params = {
         'client_id': settings.INSTAGRAM_CLIENT_ID,
-        'redirect_uri': f"{settings.OAUTH2_REDIRECT_URI}api/v1/users/auth/instagram/callback/",
+        'redirect_uri': f"{settings.OAUTH2_REDIRECT_URI}/api/v1/users/auth/instagram/callback/",
         'scope': 'basic public_content',
         'response_type': 'code'
     }
@@ -98,7 +98,7 @@ def get_tiktok_auth_url():
     """Get TikTok OAuth authorization URL"""
     params = {
         'client_key': settings.TIKTOK_CLIENT_KEY,
-        'redirect_uri': f"{settings.OAUTH2_REDIRECT_URI}/users/auth/tiktok/callback/",
+        'redirect_uri': f"{settings.OAUTH2_REDIRECT_URI}/api/v1/users/auth/tiktok/callback/",
         'scope': 'user.info.basic,video.list',
         'response_type': 'code'
     }
@@ -110,7 +110,7 @@ def get_telegram_auth_url():
         'origin': settings.OAUTH2_REDIRECT_URI,
         'bot_id': settings.TELEGRAM_BOT_TOKEN.split(':')[0],
         'request_access': 'write',
-        'return_to': f"{settings.OAUTH2_REDIRECT_URI}/users/auth/telegram/callback/"
+        'return_to': f"{settings.OAUTH2_REDIRECT_URI}/api/v1/users/auth/telegram/callback/"
     }
     return f"https://oauth.telegram.org/auth?{urlencode(params)}"
 
