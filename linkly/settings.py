@@ -369,10 +369,20 @@ TWITTER_API_SECRET = TWITTER_CLIENT_SECRET
 # Instagram Settings
 INSTAGRAM_CLIENT_ID = os.getenv('INSTAGRAM_CLIENT_ID') or os.getenv('INSTAGRAM_APP_ID')
 INSTAGRAM_CLIENT_SECRET = os.getenv('INSTAGRAM_CLIENT_SECRET') or os.getenv('INSTAGRAM_APP_SECRET')
+INSTAGRAM_REDIRECT_URI = os.environ.get(
+    'https://linkly-production.up.railway.app/api/v1/users/auth/callback/instagram/'
+    'INSTAGRAM_REDIRECT_URI',
+)   
+
+
 
 # TikTok Settings
 TIKTOK_CLIENT_ID = os.getenv('TIKTOK_CLIENT_KEY')
 TIKTOK_CLIENT_SECRET = os.getenv('TIKTOK_CLIENT_SECRET')
+TIKTOK_REDIRECT_URI = os.environ.get(
+    'https://linkly-production.up.railway.app/api/v1/users/auth/callback/tiktok/'
+    'TIKTOK_REDIRECT_URI',
+)
 
 # Legacy TikTok credentials (if still needed)
 TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY')
