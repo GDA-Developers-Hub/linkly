@@ -22,6 +22,7 @@ import base64
 import json
 import datetime
 from datetime import timedelta
+import os
 
 logger = logging.getLogger('social')
 
@@ -921,47 +922,81 @@ def exchange_tiktok_code(code: str, redirect_uri: str = None) -> Dict[str, Any]:
         logger.exception(f"Unexpected error during TikTok code exchange: {str(e)}")
         raise SocialConnectionError(f"TikTok authentication error: {str(e)}")
 
-def verify_telegram_data(auth_data):
+def verify_telegram_data(auth_data: Dict) -> bool:
     """
-    Verify Telegram login widget data
-    https://core.telegram.org/widgets/login#checking-authorization
-    """
-    try:
-        # Get the hash and remove it from the data
-        received_hash = auth_data.pop('hash', '')
-        auth_string = []
-        
-        # Sort the remaining fields alphabetically
-        for key in sorted(auth_data.keys()):
-            if auth_data[key] is not None:
-                auth_string.append(f'{key}={auth_data[key]}')
-        
-        # Join the sorted fields
-        auth_string = '\n'.join(auth_string)
-        
-        # Create a secret key using SHA256
-        secret_key = hashlib.sha256(settings.TELEGRAM_BOT_TOKEN.encode()).digest()
-        
-        # Calculate the hash using HMAC-SHA256
-        computed_hash = hmac.new(
-            secret_key,
-            auth_string.encode(),
-            hashlib.sha256
-        ).hexdigest()
-        
-        # Verify the hash
-        if computed_hash != received_hash:
-            raise SocialConnectionError('Invalid Telegram authentication data')
-        
-        # Check if the auth data is not expired (default 1 day)
-        auth_date = int(auth_data.get('auth_date', 0))
-        if time.time() - auth_date > 86400:
-            raise SocialConnectionError('Telegram authentication data has expired')
+    Verify the data received from the Telegram Login Widget.
+    
+    Checks that:
+    1. The auth_date is recent (prevent replay attacks)
+    2. The data hash is valid (verify authenticity)
+    
+    Args:
+        auth_data: Dictionary containing Telegram login widget data
+            - id: User's Telegram ID
+            - first_name: User's first name
+            - last_name: User's last name (optional)
+            - username: User's username (optional)
+            - photo_url: URL of user's profile photo (optional)
+            - auth_date: Authentication date as Unix time
+            - hash: HMAC-SHA-256 signature of the data
             
-        return True
+    Returns:
+        bool: True if verification passes
         
-    except Exception as e:
-        raise SocialConnectionError(f'Telegram verification error: {str(e)}')
+    Raises:
+        SocialConnectionError: If verification fails
+    """
+    logger = logging.getLogger('social')
+    
+    # Check for required fields
+    required_fields = ['id', 'auth_date', 'hash']
+    for field in required_fields:
+        if field not in auth_data:
+            logger.error(f"Missing required field '{field}' in Telegram auth data")
+            raise SocialConnectionError(f"Missing required field '{field}' in Telegram auth data")
+    
+    # Get Telegram Bot token from settings or environment
+    from django.conf import settings
+    bot_token = getattr(settings, 'TELEGRAM_BOT_TOKEN', os.environ.get('TELEGRAM_BOT_TOKEN'))
+    
+    if not bot_token:
+        logger.error("Telegram Bot token is not configured")
+        raise SocialConnectionError("Telegram Bot token is not configured")
+    
+    # Check auth_date is recent (within last 24 hours)
+    auth_date = int(auth_data['auth_date'])
+    now = int(time.time())
+    if now - auth_date > 86400:  # 24 hours in seconds
+        logger.error(f"Telegram auth_date is too old: {auth_date} (current time: {now})")
+        raise SocialConnectionError("Telegram authentication has expired")
+    
+    # Verify data hash
+    received_hash = auth_data['hash']
+    
+    # Remove hash from data_check_string
+    data_check_arr = []
+    for key, value in sorted(auth_data.items()):
+        if key != 'hash':
+            data_check_arr.append(f"{key}={value}")
+    data_check_string = '\n'.join(data_check_arr)
+    
+    # Create secret key from bot token
+    secret_key = hashlib.sha256(bot_token.encode()).digest()
+    
+    # Compute signature
+    computed_hash = hmac.new(
+        key=secret_key,
+        msg=data_check_string.encode(),
+        digestmod=hashlib.sha256
+    ).hexdigest()
+    
+    # Compare received hash with computed hash
+    if received_hash != computed_hash:
+        logger.error("Telegram data signature verification failed")
+        raise SocialConnectionError("Invalid Telegram authentication data")
+    
+    logger.info(f"Telegram auth data successfully verified for user {auth_data['id']}")
+    return True
 
 def connect_social_account(user, platform, auth_data, business=False):
     """Connect a social media account to a user"""
@@ -1858,17 +1893,125 @@ def connect_tiktok_account(user, code: str, session_key: str, state: str) -> Dic
         'profile': profile['data']['user']
     }
 
-def connect_telegram_account(user, code: str, session_key: str, state: str) -> Dict:
-    """Connect Telegram account."""
-    verify_oauth_state(state)
+def connect_telegram_account(auth_data: Dict[str, Any] = None, code: str = None, session_key: str = None, state: str = None) -> Dict[str, Any]:
+    """
+    Connect a user's Telegram account to their profile using data from Telegram Login Widget.
     
-    # Telegram uses a different authentication flow through their Bot API
-    # The code parameter here is actually the user's Telegram ID
-    user.telegram_id = code
-    user.save()
+    This function now supports both:
+    1. Direct data from Telegram Login Widget (preferred method)
+    2. Legacy flow with code, session_key and state (for backward compatibility)
     
-    return {
-        'success': True,
-        'platform': 'telegram',
-        'profile': {'id': code}
-    } 
+    Args:
+        auth_data: Dictionary containing Telegram login widget data
+        code: Legacy parameter - Authorization code from Telegram
+        session_key: Legacy parameter - Session key for state verification
+        state: Legacy parameter - OAuth state for verification
+    
+    Returns:
+        Dict containing token data and user profile information
+    
+    Raises:
+        SocialConnectionError: If connection fails due to authentication issues
+    """
+    logger = logging.getLogger('social')
+    
+    # Log the beginning of the connection attempt
+    logger.info(f"Starting Telegram account connection process")
+    
+    if auth_data:
+        logger.info(f"Using Telegram Login Widget data")
+        
+        # Verify the Telegram data
+        try:
+            verify_telegram_data(auth_data)
+        except SocialConnectionError as e:
+            logger.error(f"Telegram data verification failed: {str(e)}")
+            raise
+            
+        # Extract user data
+        user_id = auth_data.get('id')
+        first_name = auth_data.get('first_name', '')
+        last_name = auth_data.get('last_name', '')
+        username = auth_data.get('username', '')
+        photo_url = auth_data.get('photo_url', '')
+        
+        # Create profile data
+        profile_data = {
+            'id': user_id,
+            'first_name': first_name,
+            'last_name': last_name,
+            'username': username,
+            'photo_url': photo_url,
+            'auth_date': auth_data.get('auth_date')
+        }
+        
+        # For Telegram, we don't have a traditional OAuth token
+        # Instead, we'll use the auth_date as a reference
+        token_data = {
+            'auth_date': auth_data.get('auth_date'),
+            'user_id': user_id
+        }
+        
+        # Get the user from the request context
+        from django.contrib.auth import get_user_model
+        from django.core.cache import cache
+        
+        User = get_user_model()
+        user = None
+        
+        # Try to get the current user from the thread local storage
+        from threading import local
+        _thread_locals = local()
+        if hasattr(_thread_locals, 'user') and _thread_locals.user and _thread_locals.user.is_authenticated:
+            user = _thread_locals.user
+        
+        if user:
+            # Update the user's profile
+            logger.info(f"Updating Telegram details for user {user.id}")
+            user.telegram_id = user_id
+            user.telegram_username = username
+            
+            # Store the full profile data
+            if not hasattr(user, 'social_profiles') or user.social_profiles is None:
+                user.social_profiles = {}
+            
+            user.social_profiles['telegram'] = profile_data
+            user.save(update_fields=['telegram_id', 'telegram_username', 'social_profiles'])
+            
+            logger.info(f"Successfully connected Telegram account for user {user.id}")
+            return {
+                'token_data': token_data,
+                'profile': profile_data
+            }
+        else:
+            # If no user is found, cache the data for later use
+            cache_key = f"telegram_data_{user_id}"
+            cache.set(cache_key, {
+                'token_data': token_data,
+                'profile': profile_data
+            }, timeout=3600)  # Cache for 1 hour
+            
+            logger.info(f"Cached Telegram data for user_id {user_id} - no authenticated user found")
+            return {
+                'token_data': token_data,
+                'profile': profile_data
+            }
+    
+    # Legacy flow
+    elif code and state:
+        logger.info(f"Using legacy Telegram flow with code and state")
+        # Verify the session state
+        if not verify_oauth_state(state):
+            logger.error(f"OAuth state verification failed")
+            raise SocialConnectionError("State verification failed")
+            
+        # Process the code to get the user data
+        # This is a placeholder since Telegram doesn't use traditional OAuth
+        # In a real implementation, you would process the code to get user data
+        
+        logger.warning("Legacy Telegram flow is deprecated - use Telegram Login Widget instead")
+        raise SocialConnectionError("Legacy Telegram flow is not supported. Please use Telegram Login Widget.")
+    
+    else:
+        logger.error("No valid Telegram authentication data provided")
+        raise SocialConnectionError("No valid Telegram authentication data provided")

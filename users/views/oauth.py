@@ -30,6 +30,8 @@ from django.urls import reverse
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 import secrets
+from django.http import JsonResponse
+import urllib.parse
 
 @swagger_auto_schema(
     method='get',
@@ -1183,74 +1185,57 @@ def tiktok_callback(request):
             error_redirect_url = get_error_redirect_url('tiktok', 'authentication_failed', str(e))
             return redirect(error_redirect_url)
 
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([AllowAny])
 def telegram_callback(request):
     """
-    Handle callback from Telegram OAuth.
+    Handle data from the Telegram Login Widget.
+    
+    This endpoint processes authentication data sent by the Telegram Login Widget,
+    verifies it, and either connects it to the user's account if they're logged in
+    or caches it for later use.
+    
+    Returns:
+        JsonResponse with the connection status and redirect URL
     """
-    logger = logging.getLogger('social')
-    logger.info("===== Handling Telegram OAuth callback =====")
+    logger = logging.getLogger('oauth')
+    logger.info(f"Received Telegram callback with data: {request.data}")
     
-    # Log request parameters (security redacted)
-    logger.info(f"Query parameters: code={'present' if request.GET.get('code') else 'missing'}, "
-               f"state={'present' if request.GET.get('state') else 'missing'}")
+    # Extract Telegram auth data from the request
+    auth_data = request.data
     
-    # Extract parameters from request
-    code = request.GET.get('code')
-    state = request.GET.get('state')
-    error = request.GET.get('error')
-    error_description = request.GET.get('error_description')
+    if not auth_data or not isinstance(auth_data, dict) or 'id' not in auth_data:
+        logger.error("Invalid Telegram auth data format")
+        return JsonResponse({
+            'error': 'Invalid auth data format',
+            'redirect_url': f"{settings.FRONTEND_URL}/social/error?platform=telegram&error=invalid_data"
+        }, status=400)
     
-    # Handle OAuth errors returned by Telegram
-    if error:
-        logger.error(f"Telegram returned OAuth error: {error} - {error_description}")
-        error_redirect_url = get_error_redirect_url('telegram', error, error_description or "Unknown error")
-        return redirect(error_redirect_url)
-    
-    # Verify state parameter if provided
-    if state:
-        state_verified = verify_oauth_state_from_sources(state, 'telegram')
-        if not state_verified:
-            logger.error(f"State verification failed. Received: {state}")
-            error_redirect_url = get_error_redirect_url('telegram', 'invalid_state', "State verification failed. Please try again.")
-            return redirect(error_redirect_url)
-        else:
-            logger.info("State verification successful")
-    
-    # Handle differently for authenticated and unauthenticated users
-    if request.user.is_authenticated:
-        # User is logged in, connect the Telegram account
-        try:
-            result = connect_telegram_account(
-                user=request.user,
-                code=code,
-                session_key=request.session.session_key,
-                state=state
-            )
-            
-            logger.info(f"Telegram account connected successfully for user {request.user.username}")
-            
-            # Redirect to success page
-            success_data = {
-                'platform': 'telegram',
-                'profile': {
-                    'id': result.get('profile', {}).get('id', '')
-                }
-            }
-            
-            success_redirect_url = f"{settings.FRONTEND_URL}/social-auth/success?{urlencode(success_data)}"
-            return redirect(success_redirect_url)
-            
-        except Exception as e:
-            logger.exception(f"Unexpected error connecting Telegram account: {e}")
-            error_redirect_url = get_error_redirect_url('telegram', 'connection_failed', str(e))
-            return redirect(error_redirect_url)
-    else:
-        # User is not logged in, redirect to login page
-        logger.info("User not authenticated. Redirecting to login page.")
-        login_redirect_url = f"{settings.FRONTEND_URL}/login?social_auth=telegram"
-        return redirect(login_redirect_url)
+    try:
+        # Connect the Telegram account - this function now handles the case where the user isn't authenticated
+        from ..services.social import connect_telegram_account
+        result = connect_telegram_account(auth_data=auth_data)
+        
+        logger.info(f"Telegram connection successful for ID: {auth_data.get('id')}")
+        
+        # Return success with profile data
+        return JsonResponse({
+            'success': True,
+            'profile': result.get('profile', {}),
+            'redirect_url': f"{settings.FRONTEND_URL}/social/success?platform=telegram"
+        })
+    except SocialConnectionError as e:
+        logger.error(f"Error connecting Telegram account: {str(e)}")
+        return JsonResponse({
+            'error': str(e),
+            'redirect_url': f"{settings.FRONTEND_URL}/social/error?platform=telegram&error={urllib.parse.quote(str(e))}"
+        }, status=400)
+    except Exception as e:
+        logger.exception(f"Unexpected error in Telegram callback: {str(e)}")
+        return JsonResponse({
+            'error': 'An unexpected error occurred',
+            'redirect_url': f"{settings.FRONTEND_URL}/social/error?platform=telegram&error=server_error"
+        }, status=500)
 
 def login_instagram(request):
     """
