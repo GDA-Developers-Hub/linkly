@@ -1,6 +1,9 @@
 import { toast } from "@/components/ui/use-toast"
 import { getAPI } from "@/lib/api"
 
+// Base URL for SocialBu
+const SOCIALBU_BASE_URL = "https://socialbu.com/api/v1"
+
 // Types
 export interface Account {
   id: number
@@ -77,24 +80,80 @@ export async function withErrorHandling<T>(fn: () => Promise<T>, errorMessage = 
 // SocialBu API Client
 class SocialBuAPI {
   private api = getAPI()
+  private baseUrl = SOCIALBU_BASE_URL
 
   // Check if authenticated
   isAuthenticated(): boolean {
     return this.api.isAuthenticated()
   }
 
-  // Authentication
-  async authenticate(email: string, password: string): Promise<{ token: string }> {
-    return this.api.request<{ token: string }>("/socialbu/authenticate/", "POST", { email, password })
+  // Check if user has valid token
+  async checkToken(): Promise<boolean> {
+    try {
+      // Try to make a simple API call that requires authentication
+      await this.getAccounts()
+      return true
+    } catch (error) {
+      return false
+    }
   }
+
+  // Register a new account
+  async register(name: string, email: string, password: string): Promise<void> {
+    // Call the SocialBu registration endpoint directly
+    const response = await fetch(`${this.baseUrl}/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name, email, password }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      const errorMessage = errorData.detail || errorData.message || `Registration failed with status ${response.status}`
+      throw new Error(errorMessage)
+    }
+  }
+
+// Authentication
+async authenticate(email: string, password: string): Promise<{ token: string }> {
+  // Use our backend proxy to avoid CORS issues
+  try {
+    console.log("Attempting authentication with SocialBu");
+    console.log("Base URL:", this.baseUrl);
+    
+    // IMPORTANT: Do not use leading slash to avoid incorrect URL construction
+    const result = await this.api.request<{ token: string; user_id?: string; name?: string; email?: string }>(
+      "socialbu/authenticate", 
+      "POST", 
+      { 
+        email, 
+        password, 
+        base_url: this.baseUrl 
+      }
+    );
+    
+    if (!result.token) {
+      throw new Error("Authentication failed: No token received");
+    }
+    
+    return { token: result.token };
+  } catch (error: any) {
+    const errorMessage = error.message || "Authentication failed";
+    console.error("Authentication error:", errorMessage);
+    throw error;
+  }
+}
 
   // Social Platform Connection
   async getConnectionUrl(provider: string, accountId?: string): Promise<{ url: string }> {
-    const data: any = { provider }
+    const data: any = { provider, base_url: this.baseUrl }
     if (accountId) {
       data.account_id = accountId
     }
-    return this.api.request<{ url: string }>("/socialbu/get_connection_url/", "POST", data)
+    // Do not use leading slash
+    return this.api.request<{ url: string }>("socialbu/get_connection_url", "POST", data)
   }
 
   // Open a popup for social platform connection
@@ -151,8 +210,9 @@ class SocialBuAPI {
 
   // Posts
   async getPosts(limit?: number, status?: string): Promise<Post[]> {
-    let endpoint = "/socialbu/posts/"
-    const params = []
+    // Do not use leading slash
+    let endpoint = "socialbu/posts"
+    const params = [`base_url=${this.baseUrl}`]
 
     if (limit) {
       params.push(`limit=${limit}`)
@@ -162,9 +222,7 @@ class SocialBuAPI {
       params.push(`status=${status}`)
     }
 
-    if (params.length > 0) {
-      endpoint += `?${params.join("&")}`
-    }
+    endpoint += `?${params.join("&")}`
 
     return this.api.request<Post[]>(endpoint)
   }
@@ -173,6 +231,7 @@ class SocialBuAPI {
     const data: any = {
       content,
       platforms,
+      base_url: this.baseUrl
     }
 
     if (mediaIds && mediaIds.length > 0) {
@@ -183,27 +242,35 @@ class SocialBuAPI {
       data.scheduled_at = scheduledAt.toISOString()
     }
 
-    return this.api.request<Post>("/socialbu/create_post/", "POST", data)
+    // Do not use leading slash
+    return this.api.request<Post>("socialbu/create_post", "POST", data)
   }
 
   async updatePost(postId: number, data: Partial<Post>): Promise<Post> {
-    return this.api.request<Post>(`/socialbu/update_post/${postId}/`, "PUT", data)
+    // Do not use leading slash
+    return this.api.request<Post>(`socialbu/update_post/${postId}`, "PUT", {
+      ...data,
+      base_url: this.baseUrl
+    })
   }
 
   async deletePost(postId: number): Promise<void> {
-    return this.api.request<void>(`/socialbu/delete_post/${postId}/`, "DELETE")
+    // Remove leading slash
+    return this.api.request<void>(`socialbu/delete_post/${postId}?base_url=${this.baseUrl}`, "DELETE")
   }
 
   // Media
   async getMedia(): Promise<Media[]> {
-    return this.api.request<Media[]>("/socialbu/media/")
+    // Remove leading slash
+    return this.api.request<Media[]>(`socialbu/media?base_url=${this.baseUrl}`)
   }
 
   async uploadMedia(file: File): Promise<Media> {
     const formData = new FormData()
     formData.append("media", file)
+    formData.append("base_url", this.baseUrl)
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/socialbu/upload_media/`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/socialbu/upload_media`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.api.getAccessToken()}`,
@@ -221,51 +288,70 @@ class SocialBuAPI {
   }
 
   async deleteMedia(mediaId: number): Promise<void> {
-    return this.api.request<void>(`/socialbu/delete_media/${mediaId}/`, "DELETE")
+    // Remove leading slash
+    return this.api.request<void>(`socialbu/delete_media/${mediaId}?base_url=${this.baseUrl}`, "DELETE")
   }
 
   // Accounts
   async getAccounts(): Promise<Account[]> {
-    return this.api.request<Account[]>("/socialbu/accounts/")
+    // Remove leading slash
+    return this.api.request<Account[]>(`socialbu/accounts?base_url=${this.baseUrl}`)
   }
 
   async disconnectAccount(accountId: number): Promise<void> {
-    return this.api.request<void>(`/socialbu/disconnect_account/${accountId}/`, "DELETE")
+    // Remove leading slash
+    return this.api.request<void>(`socialbu/disconnect_account/${accountId}?base_url=${this.baseUrl}`, "DELETE")
   }
 
   // Insights
   async getInsights(): Promise<Insight[]> {
-    return this.api.request<Insight[]>("/socialbu/insights/")
+    // Remove leading slash
+    return this.api.request<Insight[]>(`socialbu/insights?base_url=${this.baseUrl}`)
   }
 
   async getPostInsights(postId: number): Promise<Insight[]> {
-    return this.api.request<Insight[]>(`/socialbu/post_insights/${postId}/`)
+    // Remove leading slash
+    return this.api.request<Insight[]>(`socialbu/post_insights/${postId}?base_url=${this.baseUrl}`)
   }
 
   // Notifications
   async getNotifications(): Promise<Notification[]> {
-    return this.api.request<Notification[]>("/socialbu/notifications/")
+    // Remove leading slash
+    return this.api.request<Notification[]>(`socialbu/notifications?base_url=${this.baseUrl}`)
   }
 
   async markNotificationAsRead(notificationId: number): Promise<void> {
-    return this.api.request<void>(`/socialbu/mark_notification_read/${notificationId}/`, "PUT")
+    // Remove leading slash
+    return this.api.request<void>(`socialbu/mark_notification_read/${notificationId}`, "PUT", {
+      base_url: this.baseUrl
+    })
   }
 
   // Teams
   async createTeam(name: string): Promise<Team> {
-    return this.api.request<Team>("/socialbu/create_team/", "POST", { name })
+    // Remove leading slash
+    return this.api.request<Team>("socialbu/create_team", "POST", { 
+      name,
+      base_url: this.baseUrl
+    })
   }
 
   async addTeamMember(teamId: number, userId: number): Promise<void> {
-    return this.api.request<void>(`/socialbu/add_team_member/${teamId}/`, "POST", { user_id: userId })
+    // Remove leading slash
+    return this.api.request<void>(`socialbu/add_team_member/${teamId}`, "POST", { 
+      user_id: userId,
+      base_url: this.baseUrl 
+    })
   }
 
   async getTeamMembers(teamId: number): Promise<TeamMember[]> {
-    return this.api.request<TeamMember[]>(`/socialbu/team_members/${teamId}/`)
+    // Remove leading slash
+    return this.api.request<TeamMember[]>(`socialbu/team_members/${teamId}?base_url=${this.baseUrl}`)
   }
 
   async removeTeamMember(teamId: number, userId: number): Promise<void> {
-    return this.api.request<void>(`/socialbu/remove_team_member/${teamId}/?user_id=${userId}`, "DELETE")
+    // Remove leading slash
+    return this.api.request<void>(`socialbu/remove_team_member/${teamId}?user_id=${userId}&base_url=${this.baseUrl}`, "DELETE")
   }
 }
 

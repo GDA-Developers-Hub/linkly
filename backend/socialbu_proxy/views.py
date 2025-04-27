@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.conf import settings
 
@@ -55,18 +55,76 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
             
             return SocialBuService()
     
-    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
-    def authenticate(self, request):
-        """Authenticate with SocialBu API"""
-        serializer = SocialBuAuthSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+    @action(detail=False, methods=['get'])
+    def check_token(self, request):
+        """Check if the user has a valid SocialBu token"""
+        try:
+            token_obj = SocialBuToken.objects.get(user=request.user)
+            
+            # Verify token with a simple API call
+            service = SocialBuService(token=token_obj.access_token)
+            try:
+                # Try a simple API call
+                service.get_accounts()
+                return Response({'has_token': True})
+            except SocialBuAPIError:
+                # Token is invalid
+                return Response({'has_token': False})
+        except SocialBuToken.DoesNotExist:
+            return Response({'has_token': False})
+    
+    @action(detail=False, methods=['post'])
+    def register(self, request):
+        """Register a new user with SocialBu"""
+        # This is a proxy to the SocialBu registration endpoint
+        name = request.data.get('name')
+        email = request.data.get('email')
+        password = request.data.get('password')
+        
+        if not all([name, email, password]):
+            return Response({'detail': 'Name, email and password are required'}, 
+                           status=status.HTTP_400_BAD_REQUEST)
         
         try:
             service = SocialBuService()
+            result = service.register(name, email, password)
+            return Response(result)
+        except SocialBuAPIError as e:
+            return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def authenticate(self, request):
+        """Authenticate with SocialBu API"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"Authentication request received")
+        logger.info(f"Request data: {request.data}")
+        
+        serializer = SocialBuAuthSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        logger.info(f"Serializer valid data: {serializer.validated_data}")
+        
+        try:
+            service = SocialBuService()
+            
+            # Get base_url from the request data if provided
+            base_url = request.data.get('base_url')
+            logger.info(f"Base URL from request: {base_url}")
+            
             result = service.authenticate(
                 serializer.validated_data['email'],
-                serializer.validated_data['password']
+                serializer.validated_data['password'],
+                base_url=base_url
             )
+            
+            # Verify that we got a token back
+            if not result.get('token'):
+                return Response(
+                    {'detail': 'Authentication failed - no token received from SocialBu'}, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
             
             # If user is authenticated, store the token
             if request.user.is_authenticated:
@@ -80,8 +138,67 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
             
             return Response(result)
         except SocialBuAPIError as e:
-            return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
+            # Log the full error for debugging
+            logger.error(f"SocialBu authentication error: {str(e)}")
+            
+            # Return a more detailed error message
+            error_message = f"Authentication failed: {e.message}"
+            return Response({'detail': error_message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            # Catch any other exceptions
+            logger.error(f"Unexpected error during SocialBu authentication: {str(e)}")
+            
+            return Response({'detail': f"Authentication error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+    @action(detail=False, methods=['post'])
+    def store_token(self, request):
+        """Store a token obtained from direct API call"""
+        token = request.data.get('token')
+        
+        if not token:
+            return Response({'detail': 'No token provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Store the token
+            token_obj, created = SocialBuToken.objects.update_or_create(
+                user=request.user,
+                defaults={
+                    'access_token': token,
+                    'refresh_token': request.data.get('refresh_token', '')
+                }
+            )
+            
+            return Response({'success': True})
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def logout(self, request):
+        """Logout from SocialBu API"""
+        try:
+            # Delete the token from our database
+            SocialBuToken.objects.filter(user=request.user).delete()
+            
+            # Call SocialBu logout endpoint
+            service = self.get_socialbu_service()
+            result = service.logout()
+            
+            return Response({'detail': 'Successfully logged out'})
+        except SocialBuAPIError as e:
+            return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def auth_redirect(self, request):
+        """Redirect to SocialBu auth pages"""
+        auth_type = request.query_params.get('type', 'login')
+        
+        if auth_type == 'register':
+            return redirect('https://socialbu.com/auth/register')
+        else:
+            return redirect('https://socialbu.com/auth/login')
+        
     @action(detail=False, methods=['post'])
     def get_connection_url(self, request):
         """Get URL for connecting a social platform"""

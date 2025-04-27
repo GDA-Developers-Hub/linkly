@@ -2,19 +2,23 @@
 import { toast } from "@/components/ui/use-toast"
 
 // API Base URL with trailing slash for consistency
-const API_BASE_URL = "/api/"
+const API_BASE_URL = "http://localhost:8000/api/"
 
 // API request helper function to ensure URLs are properly formed with trailing slashes
 const buildUrl = (endpoint: string): string => {
+  console.log(`Original endpoint: "${endpoint}"`);
+  
   // Remove leading slash if present
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint.substring(1) : endpoint;
+  console.log(`After removing leading slash: "${cleanEndpoint}"`);
   
   // Ensure endpoint has trailing slash
   const endpointWithSlash = cleanEndpoint.endsWith("/") ? cleanEndpoint : `${cleanEndpoint}/`;
+  console.log(`After ensuring trailing slash: "${endpointWithSlash}"`);
   
   // Construct URL
   const url = `${API_BASE_URL}${endpointWithSlash}`;
-  console.log(`Built URL: ${url} from endpoint: ${endpoint}`);
+  console.log(`Final URL: "${url}"`);
   
   return url;
 }

@@ -197,7 +197,8 @@ LINKEDIN_CLIENT_ID = os.getenv('LINKEDIN_CLIENT_ID', '')
 LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET', '')
 
 # SocialBu API URL
-SOCIALBU_API_URL = os.getenv('SOCIALBU_API_URL', 'https://socialbu.com/api/v1')
+# Use a generic base URL without API version - this will be provided by frontend
+SOCIALBU_API_URL = os.getenv('SOCIALBU_API_URL', 'https://socialbu.com')
 
 # Logging configuration
 LOGGING = {
