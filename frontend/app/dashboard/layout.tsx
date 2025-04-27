@@ -269,7 +269,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
           )}
           <Button variant="outline" size="sm" onClick={handleLogout}>
-            <LuLogOut size={16} style={{marginRight: '8px'}} />
+            <span className="mr-2">��</span>
             Logout
           </Button>
         </div>
@@ -280,6 +280,38 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
               <LuLayoutDashboard size={16} />
               Dashboard
+            </Link>
+            <Link href="/dashboard/analytics" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <span>📊</span>
+              Analytics
+            </Link>
+            <Link href="/dashboard/calendar" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <span>📅</span>
+              Calendar
+            </Link>
+            <Link href="/dashboard/posts" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <span>📝</span>
+              Posts
+            </Link>
+            <Link href="/dashboard/caption-generator" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <span>✨</span>
+              Caption Generator
+            </Link>
+            <Link href="/dashboard/hashtags" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <span>#️⃣</span>
+              Hashtags
+            </Link>
+            <Link href="/dashboard/messages" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <span>💬</span>
+              Messages
+            </Link>
+            <Link href="/dashboard/platform-connect" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <span>🔗</span>
+              Platform Connect
+            </Link>
+            <Link href="/dashboard/team" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <span>👥</span>
+              Team
             </Link>
             <Link href="/dashboard/settings" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
               <LuSettings size={16} />
