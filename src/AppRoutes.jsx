@@ -6,6 +6,9 @@ import TailwindTest from './TailwindTest.jsx'
 import PlatformConnect from './PlatformConnect/PlatformConnect.jsx'
 import OAuthCallback from './OAuthCallback.jsx'
 import Dashboard from './Dashboard/Dashboard.jsx'
+import OAuthSuccess from './Auth/OAuthSuccess.jsx'
+import OAuthError from './Auth/OAuthError.jsx'
+import SocialAuthSuccess from './SocialAuthSuccess.jsx'
 import { isAuthenticated } from './Utils/Auth'
 
 // Protected route component
@@ -41,6 +44,12 @@ function AppRoutes() {
         } 
       />
       <Route path="/oauth-callback" element={<OAuthCallback />} />
+      
+      {/* OAuth result pages */}
+      <Route path="/oauth-success" element={<OAuthSuccess />} />
+      <Route path="/oauth-error" element={<OAuthError />} />
+      <Route path="/social-auth/success" element={<SocialAuthSuccess />} />
+      <Route path="/social-auth/error" element={<OAuthError />} />
       
       {/* Dashboard route (placeholder) */}
       <Route 

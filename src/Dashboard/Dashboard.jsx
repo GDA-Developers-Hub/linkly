@@ -59,7 +59,7 @@ const Dashboard = () => {
   // Show loading state while checking platforms
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mb-4"></div>
           <p className="text-gray-600">Loading your dashboard...</p>

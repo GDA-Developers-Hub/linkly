@@ -41,7 +41,8 @@ export function LoginForm() {
         timerProgressBar: true
       })
     }
-  }, [searchParams]) // Keep dependencies simple
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run only once when component mounts
 
   const handleChange = (e) => { // Removed type React.ChangeEvent<HTMLInputElement>
     const { name, value } = e.target
@@ -232,9 +233,9 @@ export function LoginForm() {
 
   return (
     // Main container styling
-    <div className="flex min-h-screen items-center justify-center p-4 sm:p-8 bg-slate-900">
+    <div className="flex h-screen w-full items-center justify-center bg-slate-900">
       {/* Form container (Card replacement) */}
-      <div className="w-full max-w-[450px] border border-slate-700 rounded-xl p-6 sm:p-8 bg-slate-800 shadow-lg">
+      <div className="w-full max-w-[550px] border border-slate-700 rounded-xl p-6 sm:p-8 bg-slate-800/90 shadow-xl backdrop-blur-sm">
         {/* Header section (CardHeader replacement) */}
         <div className="mb-6 text-center">
           {/* Logo placeholder */}
@@ -254,6 +255,22 @@ export function LoginForm() {
           )}
         </div>
 
+        {/* Auth type selector tabs */}
+        <div className="flex w-full border border-slate-600 rounded-lg overflow-hidden mb-6">
+          <Link 
+            to="/login"
+            className="flex-1 py-3 px-4 flex items-center justify-center gap-2 text-base transition-all duration-200 bg-blue-600 text-white font-medium"
+          >
+            Sign In
+          </Link>
+          <Link 
+            to="/signup"
+            className="flex-1 py-3 px-4 flex items-center justify-center gap-2 text-base transition-all duration-200 text-slate-300 hover:bg-slate-700"
+          >
+            Create Account
+          </Link>
+        </div>
+
         {/* Content section (CardContent replacement) */}
         <div>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -271,7 +288,7 @@ export function LoginForm() {
                     onChange={handleChange}
                     required
                     disabled={isLoading}
-                    className={`w-full p-2 mt-1 border bg-slate-700 text-white ${fieldErrors.email ? 'border-red-500' : 'border-slate-600'} rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    className={`w-full p-2.5 mt-1 border bg-slate-700/80 text-white ${fieldErrors.email ? 'border-red-500' : 'border-slate-600'} rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   />
                   {fieldErrors.email && (
                     <p className="text-red-400 text-xs mt-1">{fieldErrors.email[0]}</p>
@@ -297,7 +314,7 @@ export function LoginForm() {
                       onChange={handleChange}
                       required
                       disabled={isLoading}
-                      className={`w-full p-2 pr-16 mt-1 border bg-slate-700 text-white ${fieldErrors.password ? 'border-red-500' : 'border-slate-600'} rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                      className={`w-full p-2.5 pr-16 mt-1 border bg-slate-700/80 text-white ${fieldErrors.password ? 'border-red-500' : 'border-slate-600'} rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     />
                     {/* Button for show/hide password */}
                     <button
@@ -323,13 +340,13 @@ export function LoginForm() {
                 <input
                   id="two_factor_code"
                   name="two_factor_code"
-                  type="text" // Or number with pattern for better mobile UX
+                  type="text"
                   placeholder="123456"
                   value={formData.two_factor_code}
                   onChange={handleChange}
                   required
                   disabled={isLoading}
-                  className={`w-full p-2 mt-1 border bg-slate-700 text-white ${fieldErrors.two_factor_code ? 'border-red-500' : 'border-slate-600'} rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full p-2.5 mt-1 border bg-slate-700/80 text-white ${fieldErrors.two_factor_code ? 'border-red-500' : 'border-slate-600'} rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 />
                 {fieldErrors.two_factor_code && (
                   <p className="text-red-400 text-xs mt-1">{fieldErrors.two_factor_code[0]}</p>
@@ -340,7 +357,7 @@ export function LoginForm() {
             {/* Submit Button */}
             <button 
               type="submit" 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium p-2.5 rounded-lg mt-2 transition-colors"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium p-3 rounded-lg mt-2 transition-colors shadow-md"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -367,36 +384,6 @@ export function LoginForm() {
               </Link>
             </div>
           </form>
-          
-          {/* Debug section - only visible in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-8 pt-4 border-t border-slate-600">
-              <p className="text-xs text-slate-400 mb-2">Debug Information</p>
-              <button
-                type="button"
-                onClick={() => {
-                  const accessToken = getAccessToken();
-                  const refreshToken = getRefreshToken();
-                  const user = localStorage.getItem('user');
-                  
-                  Swal.fire({
-                    title: 'LocalStorage Tokens',
-                    html: `
-                      <div class="text-left">
-                        <p><strong>Access Token:</strong> ${accessToken ? accessToken.slice(0, 15) + '...' : 'None'}</p>
-                        <p><strong>Refresh Token:</strong> ${refreshToken ? refreshToken.slice(0, 15) + '...' : 'None'}</p>
-                        <p><strong>User Object:</strong> ${user ? 'Present' : 'None'}</p>
-                      </div>
-                    `,
-                    icon: 'info'
-                  });
-                }}
-                className="w-full py-1 px-3 bg-slate-700 text-slate-300 text-xs rounded border border-slate-600 hover:bg-slate-600"
-              >
-                Check Auth Tokens
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>

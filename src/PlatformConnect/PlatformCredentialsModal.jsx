@@ -12,6 +12,10 @@ const PlatformCredentialsModal = ({ isOpen, onClose, platform, onConnect }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+
+
+  
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setCredentials(prev => ({ ...prev, [name]: value }));

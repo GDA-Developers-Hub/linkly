@@ -29,6 +29,16 @@ const OAuthCallback = () => {
           setStatus('error');
           setMessage(`Authentication failed: ${errorMsg}`);
           setDetails(`Error code: ${error}`);
+          
+          // Show error toast
+          Swal.fire({
+            title: 'Connection Failed',
+            text: errorMsg,
+            icon: 'error',
+            confirmButtonText: 'Close'
+          }).then(() => {
+            window.close();
+          });
           return;
         }
         
@@ -38,6 +48,16 @@ const OAuthCallback = () => {
           setStatus('error');
           setMessage('Missing required authentication parameters');
           setDetails(`Code exists: ${Boolean(code)}, State exists: ${Boolean(state)}`);
+          
+          // Show error toast
+          Swal.fire({
+            title: 'Connection Failed',
+            text: 'Missing required authentication parameters',
+            icon: 'error',
+            confirmButtonText: 'Close'
+          }).then(() => {
+            window.close();
+          });
           return;
         }
         
@@ -61,7 +81,6 @@ const OAuthCallback = () => {
         const codeVerifier = sessionStorage.getItem(storeKey);
         
         console.log(`Looking for code_verifier with key: ${storeKey}`);
-        
         if (!codeVerifier) {
           console.warn(`No code_verifier found for state: ${state}`);
           setDetails(`No code_verifier found for state: ${state}. This might cause authorization to fail.`);
@@ -86,24 +105,62 @@ const OAuthCallback = () => {
         setStatus('success');
         setMessage(`Successfully connected to ${platform}!`);
         
-        // Close this window with message to parent
+        // Send a message to the opener window if it exists
         if (window.opener) {
-          // Send a message to the opener window
           window.opener.postMessage({
             type: 'OAUTH_SUCCESS',
             platform: platform,
             data: result
           }, window.location.origin);
-          
-          // Close this popup window after a short delay
-          setTimeout(() => {
+        }
+        
+        // Platform-specific success messages
+        let title = 'Account Connected!';
+        let message = `Your ${platform} account has been successfully connected.`;
+        
+        if (platform === 'twitter') {
+          title = 'Twitter Connected!';
+          message = 'Your Twitter account has been successfully connected. You can now post tweets from Linkly!';
+        } else if (platform === 'youtube') {
+          title = 'YouTube Connected!';
+          message = 'Your YouTube account has been successfully connected. You can now manage your videos from Linkly!';
+        } else if (platform === 'facebook') {
+          title = 'Facebook Connected!';
+          message = 'Your Facebook account has been successfully connected. You can now manage your Facebook page from Linkly!';
+        } else if (platform === 'instagram') {
+          title = 'Instagram Connected!';
+          message = 'Your Instagram account has been successfully connected. You can now post photos from Linkly!';
+        } else if (platform === 'linkedin') {
+          title = 'LinkedIn Connected!';
+          message = 'Your LinkedIn account has been successfully connected. You can now post updates from Linkly!';
+        }
+        
+        // Show success toast with options based on whether we're in a popup
+        if (window.opener) {
+          // If in a popup, show auto-closing message
+          Swal.fire({
+            title: title,
+            text: message,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+          }).then(() => {
             window.close();
-          }, 1000);
+          });
         } else {
-          // No opener, redirect back to platforms page
-          setTimeout(() => {
-            navigate('/platform-connect');
-          }, 1500);
+          // If not in a popup (direct navigation), show regular options
+          Swal.fire({
+            title: title,
+            text: message,
+            icon: 'success',
+            showCancelButton: true,
+            confirmButtonText: 'Go to Dashboard',
+            cancelButtonText: 'Close'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              navigate('/dashboard');
+            }
+          });
         }
       } catch (error) {
         console.error('Error during OAuth callback processing:', error);
@@ -119,17 +176,22 @@ const OAuthCallback = () => {
           setDetails(error.stack || 'Unknown error occurred');
         }
         
+        // Show error toast
+        Swal.fire({
+          title: 'Connection Failed',
+          text: error.response?.data?.error || error.message || 'Authentication failed',
+          icon: 'error',
+          confirmButtonText: 'Close'
+        }).then(() => {
+          window.close();
+        });
+        
         if (window.opener) {
           // Send error to parent window
           window.opener.postMessage({
             type: 'OAUTH_ERROR',
             error: error.response?.data?.error || error.message || 'Authentication failed'
           }, window.location.origin);
-          
-          // Close this popup window after showing error briefly
-          setTimeout(() => {
-            window.close();
-          }, 5000);  // Longer timeout to allow reading the error
         }
       }
     }
@@ -161,13 +223,41 @@ const OAuthCallback = () => {
           </div>
         )}
         
-        <p className="text-sm text-gray-500 mt-4">
-          {status === 'success' ? 'This window will close automatically.' : ''}
-          {status === 'error' ? 'This window will close automatically soon. Check the console for more details.' : ''}
-        </p>
+        {status === 'success' && (
+          <div className="mt-6">
+            <button
+              onClick={() => {
+                if (window.opener) {
+                  window.opener.location.href = '/dashboard';
+                  window.close();
+                } else {
+                  navigate('/dashboard');
+                }
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors mr-3"
+            >
+              Go to Dashboard
+            </button>
+            <button
+              onClick={() => window.close()}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+            >
+              Close Window
+            </button>
+          </div>
+        )}
+        
+        {status === 'error' && (
+          <button
+            onClick={() => window.close()}
+            className="mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Close Window
+          </button>
+        )}
       </div>
     </div>
   );
 };
 
-export default OAuthCallback; 
+export default OAuthCallback;

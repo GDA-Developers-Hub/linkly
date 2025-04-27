@@ -2,8 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SUPPORTED_PLATFORMS, initOAuthFlow, getConnectedPlatforms, disconnectPlatform } from '../Utils/PlatformUtils';
 import { isAuthenticated, getAccessToken, getRefreshToken } from '../Utils/Auth';
+import { getFullCallbackURL } from '../Utils/OAuthUtils';
+import { logOAuthConfig } from '../Utils/OAuthDebug';
 import Swal from 'sweetalert2';
-import PlatformCredentialsModal from './PlatformCredentialsModal';
+import { 
+  Twitter, 
+  Facebook, 
+  Instagram, 
+  Linkedin, 
+  Youtube, 
+  Music, 
+  Send,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
+  ExternalLink,
+  ChevronRight
+} from 'lucide-react';
+import axios from 'axios';
+import API_BASE_URL from '../Utils/BaseUrl';
+import TelegramLoginWidget from '../Utils/TelegramLoginWidget';
+import ReactDOM from 'react-dom';
 
 const PlatformConnect = () => {
   const navigate = useNavigate();
@@ -15,8 +34,18 @@ const PlatformConnect = () => {
   const [connectedPlatforms, setConnectedPlatforms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [connectingPlatform, setConnectingPlatform] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState(null);
+  const [useCustomCredentials, setUseCustomCredentials] = useState(false);
+
+  // Map platform IDs to Lucide icons
+  const platformIcons = {
+    twitter: <Twitter className="h-6 w-6" />,
+    facebook: <Facebook className="h-6 w-6" />,
+    instagram: <Instagram className="h-6 w-6" />,
+    linkedin: <Linkedin className="h-6 w-6" />,
+    youtube: <Youtube className="h-6 w-6" />,
+    tiktok: <Music className="h-6 w-6" />,
+    telegram: <Send className="h-6 w-6" />
+  };
 
   useEffect(() => {
     // Redirect to login if not authenticated
@@ -40,7 +69,7 @@ const PlatformConnect = () => {
     
     // Add event listener for messages from popup
     const handleMessage = (event) => {
-      // Verify message is from our origin
+      // Verify message is from our origi
       if (event.origin !== window.location.origin) return;
       
       const { type, platform, data, error } = event.data;
@@ -116,71 +145,201 @@ const PlatformConnect = () => {
     }
   };
 
-  const handleConnect = async (platform, useCustomCredentials = false) => {
+  const handleConnect = (platform) => {
     setConnectingPlatform(platform.id);
-    let authWindow = null;
     
-    try {
-      // Open the window first, directly triggered by the user's click
-      authWindow = window.open('about:blank', `${platform.name} Authorization`, 'width=600,height=700');
-      
-      if (!authWindow) {
-        throw new Error('Popup blocked! Please allow popups for this site to connect your account.');
-      }
-      
-      // Get the current URL for the redirect_uri - make sure it matches backend expectations
-      const redirectUri = `${window.location.origin}/oauth-callback`;
-      console.log(`Using redirect URI: ${redirectUri} for ${platform.name}`);
-      
-      // Initialize OAuth flow
-      console.log(`Initializing OAuth flow for ${platform.name}...`);
-      const authUrl = await initOAuthFlow(platform.id, redirectUri, useCustomCredentials);
-      
-      // Navigate the already-opened window to the authorization URL
-      if (authWindow) {
-        console.log(`Redirecting popup to ${platform.name} authorization...`);
-        authWindow.location.href = authUrl;
-        
-        // For Twitter specifically, add a longer timeout
-        if (platform.id === 'twitter') {
-          console.log("Setting up Twitter-specific event handling");
-          // Set a timeout to check if we need to refresh the platforms list
-          // This is a fallback in case the window.postMessage doesn't work
+    // Special case for Telegram - use Telegram Login Widget
+    if (platform.id === 'telegram') {
+      Swal.fire({
+        title: 'Connect Telegram',
+        html: `
+          <div id="telegram-login-container" class="flex justify-center my-3">
+            <script 
+              async 
+              src="https://telegram.org/js/telegram-widget.js?22" 
+              data-telegram-login="linkly_ai_bot" 
+              data-size="large"
+              data-radius="8"
+              data-request-access="write"
+              data-userpic="true"
+              data-onauth="window.onTelegramAuth(user)"
+            ></script>
+            <div id="telegram-fallback" style="display:none; margin-top: 15px; text-align: center;">
+              <p>If the Telegram login button doesn't appear, please:</p>
+              <ol style="text-align: left; margin-top: 10px;">
+                <li>Make sure you're not blocking third-party scripts</li>
+                <li>Try refreshing the page</li>
+                <li>Ensure the Telegram bot token is correctly configured in the backend</li>
+              </ol>
+              <button id="manual-telegram-login" style="margin-top: 15px; background-color: #3390ec; color: white; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;">
+                Open Telegram Bot
+              </button>
+            </div>
+          </div>
+        `,
+        showCloseButton: true,
+        showConfirmButton: false,
+        didOpen: () => {
+          console.log('Initializing Telegram login widget');
+          
+          // Show fallback message if widget doesn't load within 3 seconds
           setTimeout(() => {
-            if (connectingPlatform === platform.id) {
-              console.log("Twitter connection timeout reached, refreshing platforms");
-              fetchConnectedPlatforms();
-              setConnectingPlatform(null);
+            const container = document.getElementById('telegram-login-container');
+            const fallback = document.getElementById('telegram-fallback');
+            if (container && !container.querySelector('.telegram-login-button') && fallback) {
+              console.log('Telegram widget not loaded, showing fallback');
+              fallback.style.display = 'block';
+              
+              // Add click handler for manual button
+              const manualButton = document.getElementById('manual-telegram-login');
+              if (manualButton) {
+                manualButton.addEventListener('click', () => {
+                  // Open Telegram bot in a new tab
+                  window.open('https://t.me/linkly_ai_bot', '_blank');
+                  
+                  Swal.fire({
+                    title: 'Manual Connection',
+                    text: 'Please message the bot on Telegram and follow the instructions there to connect your account.',
+                    icon: 'info'
+                  });
+                });
+              }
             }
-          }, 30000); // 30 second timeout for Twitter
+          }, 3000);
+          
+          // Define the global auth handler function
+          window.onTelegramAuth = async (userData) => {
+            console.log('Telegram auth data received:', userData);
+            
+            try {
+              // Send the auth data to the backend
+              const response = await axios.post(
+                `${API_BASE_URL}/users/connect/telegram/`, 
+                userData,
+                {
+                  headers: {
+                    'Authorization': `Bearer ${getAccessToken()}`
+                  }
+                }
+              );
+              
+              console.log('Telegram connection response:', response.data);
+              
+              // Close the dialog
+              Swal.close();
+              
+              // Show success message
+              Swal.fire({
+                title: 'Connected!',
+                text: 'Your Telegram account has been successfully connected.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+              });
+              
+              // Refresh connected platforms list
+              fetchConnectedPlatforms();
+            } catch (error) {
+              console.error('Error connecting Telegram account:', error);
+              Swal.fire({
+                title: 'Connection Error',
+                text: error.response?.data?.error || 'Failed to connect your Telegram account. Please try again.',
+                icon: 'error'
+              });
+            }
+          };
+        }
+      });
+      
+      // Reset connecting platform state
+      setConnectingPlatform(null);
+      return;
+    }
+    
+    // Handle direct login methods for Facebook and Instagram
+    if (platform.id === 'facebook' || platform.id === 'instagram') {
+      // Log OAuth configuration details for debugging
+      logOAuthConfig(platform.id);
+      
+      // Use the direct login endpoint
+      const loginUrl = `${API_BASE_URL}/users/auth/login/${platform.id}/`;
+      console.log(`Redirecting to ${platform.id} login URL:`, loginUrl);
+      window.location.href = loginUrl;
+      return;
+    }
+    
+    // Generate a unique state parameter for this OAuth flow
+    const stateParam = platform.id + '_' + Math.random().toString(36).substring(2, 15);
+    
+    // Store custom credentials flag in the state if needed
+    const effectiveState = useCustomCredentials ? `custom_${stateParam}` : stateParam;
+    
+    // Use the getFullCallbackURL utility for consistent redirect URIs
+    let redirectUri = getFullCallbackURL(platform.id);
+    
+    // Log the redirect URI for debugging
+    console.log(`Using redirect URI for ${platform.id}:`, redirectUri);
+    
+    // Use a direct URL for the API call to avoid parameter encoding issues
+    const apiUrl = `${API_BASE_URL}/users/auth/init/?platform=${platform.id}&redirect_uri=${encodeURIComponent(redirectUri)}&use_client_credentials=${useCustomCredentials}`;
+    console.log('Using direct API URL:', apiUrl);
+    
+    // Make the OAuth initialization call
+    axios.get(apiUrl, {
+      headers: {
+        'Authorization': `Bearer ${getAccessToken()}`
+      }
+    })
+    .then(response => {
+      if (response.data && response.data.auth_url) {
+        let authUrl = response.data.auth_url;
+        
+        // For Twitter, add personalization_id
+        if (platform.id === 'twitter' && authUrl.includes('twitter.com')) {
+          const personalizationId = `v1_${Math.random().toString(36).substring(2, 15)}`;
+          const separator = authUrl.includes('?') ? '&' : '?';
+          authUrl = `${authUrl}${separator}personalization_id=${personalizationId}`;
+          console.log('Added personalization_id to Twitter auth URL');
+        }
+        
+        console.log(`Redirecting to ${platform.id} auth URL:`, authUrl);
+        
+        // For all platforms, open in a popup window instead of redirecting the page
+        // Calculate center position for the popup
+        const width = 600;
+        const height = 700;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+        
+        // Open popup window
+        const popup = window.open(
+          authUrl,
+          `${platform.id.charAt(0).toUpperCase() + platform.id.slice(1)}Auth`,
+          `width=${width},height=${height},left=${left},top=${top},toolbar=0,scrollbars=1,status=1,resizable=1,location=1`
+        );
+        
+        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+          // Popup was blocked
+          setConnectingPlatform(null);
+          Swal.fire({
+            title: 'Popup Blocked',
+            text: `Please allow popups for this site to connect your ${platform.name} account.`,
+            icon: 'warning'
+          });
         }
       } else {
-        throw new Error('The authorization window was closed before it could be used.');
+        throw new Error('Failed to get authorization URL');
       }
-      
-      // We don't need to poll for window close anymore, as we'll receive a message
-      // when the authentication is complete
-      
-    } catch (error) {
-      console.error(`Error connecting to ${platform.name}:`, error);
-      if (authWindow && !authWindow.closed) {
-        authWindow.close();
-      }
-      
+    })
+    .catch(error => {
+      console.error(`Error initializing ${platform.id} OAuth flow:`, error);
+      setConnectingPlatform(null);
       Swal.fire({
         title: 'Connection Error',
-        text: error.message || `Failed to connect to ${platform.name}. Please try again.`,
-        icon: 'error',
+        text: `Failed to connect to ${platform.id}: ${error.response?.data?.error || error.message}`,
+        icon: 'error'
       });
-    } finally {
-      // Reset connecting state after a reasonable timeout if something goes wrong
-      setTimeout(() => {
-        if (connectingPlatform === platform.id) {
-          console.log(`Resetting connecting state for ${platform.id} after timeout`);
-          setConnectingPlatform(null);
-        }
-      }, 60000); // 1 minute timeout
-    }
+    });
   };
 
   const handleDisconnect = async (platform) => {
@@ -225,9 +384,15 @@ const PlatformConnect = () => {
     navigate('/dashboard');
   };
 
-  const openCredentialsModal = (platform) => {
-    setSelectedPlatform(platform);
-    setModalOpen(true);
+  const refreshConnections = () => {
+    fetchConnectedPlatforms();
+    Swal.fire({
+      title: 'Refreshing',
+      text: 'Updating your connected accounts...',
+      icon: 'info',
+      timer: 1500,
+      showConfirmButton: false
+    });
   };
 
   if (loading) {
@@ -243,49 +408,38 @@ const PlatformConnect = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-10">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-blue-600 mb-4">Connect Your Platforms</h1>
-          <p className="text-gray-600 max-w-2xl mx-auto">
+          <p className="text-gray-600 max-w-2xl mx-auto mb-6">
             Connect your social media accounts to manage them all in one place. 
             Linkly makes it easy to schedule posts, analyze performance, and grow your online presence.
           </p>
           
-          {/* Debug section - only visible in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-4 p-3 bg-gray-100 rounded-lg inline-block text-left text-xs">
-              <p className="font-medium mb-1">Auth Debug:</p>
-              <p>Access Token: {getAccessToken() ? '✅ Present' : '❌ Missing'}</p>
-              <p>Refresh Token: {getRefreshToken() ? '✅ Present' : '❌ Missing'}</p>
-              <button
-                className="mt-2 px-3 py-1 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
-                onClick={() => {
-                  const accessToken = getAccessToken();
-                  Swal.fire({
-                    title: 'Token Info',
-                    text: accessToken ? `Token: ${accessToken.slice(0, 20)}...` : 'No token found',
-                    icon: accessToken ? 'info' : 'warning'
-                  });
-                }}
-              >
-                Inspect Token
-              </button>
-            </div>
-          )}
+          <button 
+            onClick={refreshConnections}
+            className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Connections
+          </button>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
           {platforms.map((platform) => (
             <div 
               key={platform.id}
-              className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow"
+              className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden"
             >
               <div className="p-6">
                 <div className="flex items-center mb-4">
-                  <span className="text-2xl mr-3">{platform.icon}</span>
+                  <div className="p-2 rounded-full bg-blue-50 text-blue-600 mr-3">
+                    {platformIcons[platform.id] || <ExternalLink className="h-6 w-6" />}
+                  </div>
                   <h2 className="text-xl font-semibold text-gray-800">{platform.name}</h2>
                   {platform.connected && (
-                    <span className="ml-auto px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                    <span className="ml-auto flex items-center text-green-600 text-sm font-medium">
+                      <CheckCircle className="h-4 w-4 mr-1" />
                       Connected
                     </span>
                   )}
@@ -296,7 +450,7 @@ const PlatformConnect = () => {
                 </p>
                 
                 {platform.connected && platform.profileData && (
-                  <div className="mb-5 p-3 bg-gray-50 rounded-lg">
+                  <div className="mb-5 p-3 bg-gray-50 rounded-lg border border-gray-100">
                     <div className="flex items-center">
                       {platform.profileData.profile_picture && (
                         <img 
@@ -305,7 +459,7 @@ const PlatformConnect = () => {
                           className="w-10 h-10 rounded-full mr-3"
                         />
                       )}
-                      <div>
+                      <div className="flex-1">
                         <div className="font-medium">
                           {platform.profileData.username || platform.profileData.name || 'Connected Account'}
                         </div>
@@ -323,42 +477,38 @@ const PlatformConnect = () => {
                   <button
                     onClick={() => handleDisconnect(platform)}
                     disabled={connectingPlatform === platform.id}
-                    className="w-full py-2 rounded-lg font-medium transition-colors bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                    className="w-full py-2 rounded-lg font-medium transition-colors flex items-center justify-center bg-red-50 text-red-600 border border-red-100 hover:bg-red-100"
                   >
                     {connectingPlatform === platform.id ? (
-                      <span className="flex items-center justify-center">
-                        <div className="animate-spin h-5 w-5 border-2 border-t-transparent rounded-full mr-2"></div>
+                      <>
+                        <div className="animate-spin h-4 w-4 border-2 border-red-600 border-t-transparent rounded-full mr-2"></div>
                         Disconnecting...
-                      </span>
+                      </>
                     ) : (
-                      'Disconnect'
+                      <>
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Disconnect
+                      </>
                     )}
                   </button>
                 ) : (
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => handleConnect(platform)}
-                      disabled={connectingPlatform === platform.id}
-                      className="w-full py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
-                    >
-                      {connectingPlatform === platform.id ? (
-                        <span className="flex items-center justify-center">
-                          <div className="animate-spin h-5 w-5 border-2 border-t-transparent rounded-full mr-2"></div>
-                          Connecting...
-                        </span>
-                      ) : (
-                        'Connect'
-                      )}
-                    </button>
-                    
-                    <button
-                      onClick={() => openCredentialsModal(platform)}
-                      disabled={connectingPlatform === platform.id}
-                      className="w-full py-2 rounded-lg font-medium transition-colors border border-gray-300 text-gray-700 hover:bg-gray-100"
-                    >
-                      Use My Own Credentials
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleConnect(platform)}
+                    disabled={connectingPlatform === platform.id}
+                    className="w-full py-2 rounded-lg font-medium transition-colors flex items-center justify-center bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    {connectingPlatform === platform.id ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Connect
+                      </>
+                    )}
+                  </button>
                 )}
               </div>
             </div>
@@ -368,12 +518,13 @@ const PlatformConnect = () => {
         <div className="text-center">
           <button
             onClick={handleContinue}
-            className={`px-8 py-3 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ${
+            className={`px-8 py-3 rounded-lg font-medium flex items-center justify-center mx-auto bg-blue-600 text-white hover:bg-blue-700 transition-colors ${
               isRequired && connectedPlatforms.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
             }`}
             disabled={isRequired && connectedPlatforms.length === 0}
           >
             Continue to Dashboard
+            <ChevronRight className="h-4 w-4 ml-2" />
           </button>
           
           {isRequired && connectedPlatforms.length === 0 && (
@@ -383,14 +534,6 @@ const PlatformConnect = () => {
           )}
         </div>
       </div>
-      
-      {/* Credentials Modal */}
-      <PlatformCredentialsModal 
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        platform={selectedPlatform}
-        onConnect={handleConnect}
-      />
     </div>
   );
 };

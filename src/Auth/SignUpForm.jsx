@@ -178,185 +178,204 @@ export function SignupForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 sm:p-8 bg-slate-900">
-      <div className="w-full max-w-[550px] border border-slate-700 rounded-xl p-6 sm:p-10 bg-slate-800 shadow-lg">
-        <div className="mb-8 text-center">
-          <div className="flex justify-center mb-6">
+    <div className="flex h-screen w-full items-center justify-center bg-slate-900">
+      <div className="w-full max-w-[550px] border border-slate-700 rounded-xl p-6 sm:p-8 bg-slate-800/90 shadow-xl backdrop-blur-sm">
+        <div className="mb-6 text-center">
+          <div className="flex justify-center mb-4">
             <span className="text-4xl font-bold text-blue-400">Linkly</span>
           </div>
-          <h2 className="text-2xl font-semibold mb-3 text-white">Create an account</h2>
-          <p className="text-slate-300 text-base">Enter your information to get started with Linkly</p>
+          <h2 className="text-2xl font-semibold mb-2 text-white">Create an account</h2>
+          <p className="text-slate-300 text-sm">Enter your information to get started with Linkly</p>
           
           {fieldErrors.general && (
-            <div className="bg-red-900/50 border border-red-700 text-red-200 p-4 rounded-lg mt-4 text-sm" role="alert">
+            <div className="bg-red-900/50 border border-red-700 text-red-200 p-3 rounded-lg mt-3 text-sm" role="alert">
               <span>{fieldErrors.general[0]}</span>
             </div>
           )}
         </div>
         
         <div className="space-y-6">
-          <div className="grid grid-cols-2 w-full border border-slate-600 rounded-lg overflow-hidden">
+          {/* Auth type selector tabs */}
+          <div className="flex w-full border border-slate-600 rounded-lg overflow-hidden mb-6">
+            <Link 
+              to="/login"
+              className="flex-1 py-3 px-4 flex items-center justify-center gap-2 text-base transition-all duration-200 text-slate-300 hover:bg-slate-700"
+            >
+              Sign In
+            </Link>
+            <Link 
+              to="/signup"
+              className="flex-1 py-3 px-4 flex items-center justify-center gap-2 text-base transition-all duration-200 bg-blue-600 text-white font-medium"
+            >
+              Create Account
+            </Link>
+          </div>
+          
+          {/* Account type selector tabs */}
+          <div className="flex w-full border border-slate-600 rounded-lg overflow-hidden">
             <button 
               type="button"
-              className={`py-3 px-4 flex items-center justify-center gap-2 text-base transition-colors duration-200 ${
+              className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 text-base transition-all duration-200 ${
                 accountType === 'personal' 
-                  ? 'bg-blue-600/30 text-blue-300 font-medium' 
+                  ? 'bg-blue-600 text-white font-medium' 
                   : 'text-slate-300 hover:bg-slate-700'
               }`}
               onClick={() => handleAccountTypeChange('personal')}
             >
-              👤 Personal
+              <span className="inline-block mr-1.5">👤</span> Personal
             </button>
             <button 
               type="button"
-              className={`py-3 px-4 flex items-center justify-center gap-2 text-base transition-colors duration-200 ${
+              className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 text-base transition-all duration-200 ${
                 accountType === 'business' 
-                  ? 'bg-blue-600/30 text-blue-300 font-medium' 
+                  ? 'bg-blue-600 text-white font-medium' 
                   : 'text-slate-300 hover:bg-slate-700'
               }`}
               onClick={() => handleAccountTypeChange('business')}
             >
-              🏢 Business
+              <span className="inline-block mr-1.5">🏢</span> Business
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-1">
-                Email address
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700 text-white ${
-                  fieldErrors.email ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
-                }`}
-                placeholder="Enter your email"
-                required
-              />
-              {fieldErrors.email && (
-                <p className="mt-1 text-sm text-red-400">{fieldErrors.email[0]}</p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-slate-200 mb-1">
-                Username
-              </label>
-              <input
-                type="text"
-                id="username"
-                name="username"
-                value={formData.username}
-                onChange={handleChange}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700 text-white ${
-                  fieldErrors.username ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
-                }`}
-                placeholder="Choose a username"
-                required
-              />
-              {fieldErrors.username && (
-                <p className="mt-1 text-sm text-red-400">{fieldErrors.username[0]}</p>
-              )}
-            </div>
-
-            {accountType === 'business' && (
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div>
-                <label htmlFor="company_name" className="block text-sm font-medium text-slate-200 mb-1">
-                  Company Name
+                <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-1">
+                  Email address
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700/80 text-white ${
+                    fieldErrors.email ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
+                  }`}
+                  placeholder="Enter your email"
+                  required
+                />
+                {fieldErrors.email && (
+                  <p className="mt-1 text-sm text-red-400">{fieldErrors.email[0]}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="username" className="block text-sm font-medium text-slate-200 mb-1">
+                  Username
                 </label>
                 <input
                   type="text"
-                  id="company_name"
-                  name="company_name"
-                  value={formData.company_name}
+                  id="username"
+                  name="username"
+                  value={formData.username}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700 text-white ${
-                    fieldErrors.company_name ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700/80 text-white ${
+                    fieldErrors.username ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
                   }`}
-                  placeholder="Enter company name"
+                  placeholder="Choose a username"
+                  required
                 />
-                {fieldErrors.company_name && (
-                  <p className="mt-1 text-sm text-red-400">{fieldErrors.company_name[0]}</p>
+                {fieldErrors.username && (
+                  <p className="mt-1 text-sm text-red-400">{fieldErrors.username[0]}</p>
                 )}
               </div>
-            )}
 
-            <div>
-              <label htmlFor="phone_number" className="block text-sm font-medium text-slate-200 mb-1">
-                Phone Number (optional)
-              </label>
-              <input
-                type="tel"
-                id="phone_number"
-                name="phone_number"
-                value={formData.phone_number}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-slate-700 text-white"
-                placeholder="Enter phone number"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-200 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700 text-white ${
-                    fieldErrors.password ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
-                  }`}
-                  placeholder="Create a password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-white"
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-              {fieldErrors.password && (
-                <p className="mt-1 text-sm text-red-400">{fieldErrors.password[0]}</p>
+              {accountType === 'business' && (
+                <div>
+                  <label htmlFor="company_name" className="block text-sm font-medium text-slate-200 mb-1">
+                    Company Name
+                  </label>
+                  <input
+                    type="text"
+                    id="company_name"
+                    name="company_name"
+                    value={formData.company_name}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700/80 text-white ${
+                      fieldErrors.company_name ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
+                    }`}
+                    placeholder="Enter company name"
+                  />
+                  {fieldErrors.company_name && (
+                    <p className="mt-1 text-sm text-red-400">{fieldErrors.company_name[0]}</p>
+                  )}
+                </div>
               )}
-            </div>
 
-            <div>
-              <label htmlFor="password2" className="block text-sm font-medium text-slate-200 mb-1">
-                Confirm Password
-              </label>
-              <div className="relative">
+              <div>
+                <label htmlFor="phone_number" className="block text-sm font-medium text-slate-200 mb-1">
+                  Phone Number (optional)
+                </label>
                 <input
-                  type={showPassword ? "text" : "password"}
-                  id="password2"
-                  name="password2"
-                  value={formData.password2}
+                  type="tel"
+                  id="phone_number"
+                  name="phone_number"
+                  value={formData.phone_number}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700 text-white ${
-                    fieldErrors.password2 ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
-                  }`}
-                  placeholder="Confirm your password"
-                  required
+                  className="w-full px-4 py-2.5 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-slate-700/80 text-white"
+                  placeholder="Enter phone number"
                 />
               </div>
-              {fieldErrors.password2 && (
-                <p className="mt-1 text-sm text-red-400">{fieldErrors.password2[0]}</p>
-              )}
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-slate-200 mb-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    id="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700/80 text-white ${
+                      fieldErrors.password ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
+                    }`}
+                    placeholder="Create a password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-white"
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+                {fieldErrors.password && (
+                  <p className="mt-1 text-sm text-red-400">{fieldErrors.password[0]}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="password2" className="block text-sm font-medium text-slate-200 mb-1">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    id="password2"
+                    name="password2"
+                    value={formData.password2}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-slate-700/80 text-white ${
+                      fieldErrors.password2 ? 'border-red-500 bg-red-900/30' : 'border-slate-600'
+                    }`}
+                    placeholder="Confirm your password"
+                    required
+                  />
+                </div>
+                {fieldErrors.password2 && (
+                  <p className="mt-1 text-sm text-red-400">{fieldErrors.password2[0]}</p>
+                )}
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full py-2.5 px-4 text-white bg-blue-600 rounded-lg font-medium ${
+              className={`w-full py-3 px-4 text-white bg-blue-600 rounded-lg font-medium shadow-md ${
                 isLoading 
                   ? 'opacity-70 cursor-not-allowed' 
                   : 'hover:bg-blue-700 active:bg-blue-800'
