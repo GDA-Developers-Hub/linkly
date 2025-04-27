@@ -1,0 +1,352 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Calendar,
+  Facebook,
+  Instagram,
+  Linkedin,
+  MessageSquare,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Twitter,
+  RefreshCw,
+} from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { getSocialBuAPI, withErrorHandling, type Post, type Account } from "@/lib/socialbu-api"
+import { useToast } from "@/components/ui/use-toast"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+
+// Map platform names to icons and colors
+const platformConfig: Record<string, { icon: any; color: string }> = {
+  facebook: { icon: Facebook, color: "#1877F2" },
+  instagram: { icon: Instagram, color: "#E1306C" },
+  twitter: { icon: Twitter, color: "#1DA1F2" },
+  linkedin: { icon: Linkedin, color: "#0A66C2" },
+}
+
+export default function PostsPage() {
+  const [status, setStatus] = useState<string>("all")
+  const [posts, setPosts] = useState<Post[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [platformFilter, setPlatformFilter] = useState("all")
+  const [sortBy, setSortBy] = useState("newest")
+  const { toast } = useToast()
+  const router = useRouter()
+
+  // Fetch posts and accounts
+  const fetchData = async () => {
+    setIsLoading(true)
+    try {
+      await withErrorHandling(async () => {
+        const api = getSocialBuAPI()
+
+        // Fetch accounts first
+        const accountsData = await api.getAccounts()
+        setAccounts(accountsData)
+
+        // Fetch posts with status filter if not "all"
+        const statusParam = status !== "all" ? status : undefined
+        const accountParam = platformFilter !== "all" ? Number.parseInt(platformFilter) : undefined
+
+        const postsData = await api.getPosts({
+          status: statusParam,
+          account_id: accountParam,
+        })
+
+        // Sort posts
+        const sortedPosts = [...postsData]
+        if (sortBy === "newest") {
+          sortedPosts.sort((a, b) => {
+            const dateA = a.scheduled_at || a.published_at || ""
+            const dateB = b.scheduled_at || b.published_at || ""
+            return new Date(dateB).getTime() - new Date(dateA).getTime()
+          })
+        } else if (sortBy === "oldest") {
+          sortedPosts.sort((a, b) => {
+            const dateA = a.scheduled_at || a.published_at || ""
+            const dateB = b.scheduled_at || b.published_at || ""
+            return new Date(dateA).getTime() - new Date(dateB).getTime()
+          })
+        }
+
+        setPosts(sortedPosts)
+      }, "Failed to fetch posts")
+    } catch (error) {
+      console.error("Error fetching data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Delete a post
+  const deletePost = async (postId: number) => {
+    try {
+      await withErrorHandling(async () => {
+        const api = getSocialBuAPI()
+        await api.deletePost(postId)
+        toast({
+          title: "Post deleted",
+          description: "The post has been successfully deleted.",
+        })
+        // Refresh posts list
+        fetchData()
+      }, "Failed to delete post")
+    } catch (error) {
+      console.error("Error deleting post:", error)
+    }
+  }
+
+  // Fetch data on component mount and when filters change
+  useEffect(() => {
+    fetchData()
+  }, [status, platformFilter, sortBy])
+
+  // Get account names for a post
+  const getPostAccounts = (post: Post) => {
+    return post.account_ids
+      .map((id) => accounts.find((account) => account.id === id))
+      .filter((account) => account !== undefined) as Account[]
+  }
+
+  // Format date for display
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "Unknown date"
+
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (diffDays === 0) {
+      return "Today"
+    } else if (diffDays === 1) {
+      return "Yesterday"
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`
+    } else {
+      return date.toLocaleDateString()
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <header className="border-b">
+        <div className="container py-4 flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Posts</h1>
+          <Button className="bg-[#FF8C2A] hover:bg-[#e67e25]" asChild>
+            <Link href="/dashboard/posts/create">
+              <Plus className="mr-2 h-4 w-4" /> Create Post
+            </Link>
+          </Button>
+        </div>
+      </header>
+      <main className="flex-1 overflow-auto">
+        <div className="container py-6">
+          <Tabs defaultValue="all" value={status} onValueChange={setStatus}>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <TabsList>
+                <TabsTrigger value="all">All Posts</TabsTrigger>
+                <TabsTrigger value="published">Published</TabsTrigger>
+                <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
+                <TabsTrigger value="draft">Drafts</TabsTrigger>
+                <TabsTrigger value="failed">Failed</TabsTrigger>
+              </TabsList>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-auto">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Search posts..." className="pl-8 w-full sm:w-[200px] lg:w-[300px]" />
+                </div>
+                <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
+                  {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={platformFilter} onValueChange={setPlatformFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="All Platforms" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Platforms</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id.toString()}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest First</SelectItem>
+                    <SelectItem value="oldest">Oldest First</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="h-9">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Date Range
+                </Button>
+              </div>
+            </div>
+
+            <TabsContent value="all" className="mt-0">
+              {isLoading ? (
+                <div className="flex justify-center p-8">
+                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : posts.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center p-8 text-center">
+                    <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium">No Posts Found</h3>
+                    <p className="text-muted-foreground mt-2">
+                      You don't have any posts yet. Create your first post to get started.
+                    </p>
+                    <Button className="mt-4" asChild>
+                      <Link href="/dashboard/posts/create">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Post
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {posts.map((post) => {
+                    const postAccounts = getPostAccounts(post)
+                    const firstAccount = postAccounts[0] || { platform: "unknown" }
+                    const platform = platformConfig[firstAccount.platform] || { icon: MessageSquare, color: "#666" }
+                    const PlatformIcon = platform.icon
+
+                    return (
+                      <Card key={post.id} className="overflow-hidden">
+                        <CardContent className="p-0">
+                          <div className="p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center space-x-2">
+                                {postAccounts.map((account, i) => {
+                                  const accountPlatform = platformConfig[account.platform] || {
+                                    icon: MessageSquare,
+                                    color: "#666",
+                                  }
+                                  const AccountIcon = accountPlatform.icon
+                                  return (
+                                    <div
+                                      key={i}
+                                      className="p-1 rounded-full"
+                                      style={{ backgroundColor: `${accountPlatform.color}20` }}
+                                    >
+                                      <AccountIcon className="h-4 w-4" style={{ color: accountPlatform.color }} />
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-xs px-2 py-1 rounded-full ${
+                                    post.status === "published"
+                                      ? "bg-green-100 text-green-700"
+                                      : post.status === "scheduled"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : post.status === "draft"
+                                          ? "bg-yellow-100 text-yellow-700"
+                                          : "bg-red-100 text-red-700"
+                                  }`}
+                                >
+                                  {post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+                                </span>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/posts/edit/${post.id}`)}>
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem>Duplicate</DropdownMenuItem>
+                                    <DropdownMenuItem>View Analytics</DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-destructive" onClick={() => deletePost(post.id)}>
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </div>
+
+                            <div className="mb-3">
+                              <p className="text-sm">{post.content}</p>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <div className="flex items-center">
+                                <Calendar className="mr-1 h-3 w-3" />
+                                <span>
+                                  {post.status === "published"
+                                    ? `Posted ${formatDate(post.published_at)}`
+                                    : post.status === "scheduled"
+                                      ? `Scheduled for ${formatDate(post.scheduled_at)}`
+                                      : post.status === "draft"
+                                        ? "Draft"
+                                        : "Failed"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="published" className="mt-0">
+              {/* Similar structure as "all" tab but filtered for published posts */}
+              {/* This is handled by the API call when status changes */}
+            </TabsContent>
+
+            <TabsContent value="scheduled" className="mt-0">
+              {/* Similar structure as "all" tab but filtered for scheduled posts */}
+              {/* This is handled by the API call when status changes */}
+            </TabsContent>
+
+            <TabsContent value="draft" className="mt-0">
+              {/* Similar structure as "all" tab but filtered for draft posts */}
+              {/* This is handled by the API call when status changes */}
+            </TabsContent>
+
+            <TabsContent value="failed" className="mt-0">
+              {/* Similar structure as "all" tab but filtered for failed posts */}
+              {/* This is handled by the API call when status changes */}
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+    </div>
+  )
+}

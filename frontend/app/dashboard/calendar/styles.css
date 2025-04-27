@@ -1,0 +1,91 @@
+/* Custom styles for react-big-calendar */
+.rbc-calendar {
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+}
+
+.rbc-header {
+  padding: 8px 4px;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.rbc-today {
+  background-color: rgba(var(--primary), 0.1);
+}
+
+.rbc-event {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.rbc-day-slot .rbc-event {
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+.rbc-month-view,
+.rbc-time-view,
+.rbc-agenda-view {
+  border-radius: 8px;
+  border-color: hsl(var(--border));
+}
+
+.rbc-toolbar button {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+
+.rbc-toolbar button:hover {
+  background-color: hsl(var(--muted));
+}
+
+.rbc-toolbar button.rbc-active {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.rbc-toolbar button.rbc-active:hover {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.rbc-time-content {
+  border-color: hsl(var(--border));
+}
+
+.rbc-time-header {
+  border-color: hsl(var(--border));
+}
+
+.rbc-timeslot-group {
+  border-color: hsl(var(--border));
+}
+
+.rbc-day-bg + .rbc-day-bg {
+  border-color: hsl(var(--border));
+}
+
+.rbc-month-row + .rbc-month-row {
+  border-color: hsl(var(--border));
+}
+
+.rbc-off-range-bg {
+  background-color: hsl(var(--muted));
+}
+
+.rbc-off-range {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Dark mode adjustments */
+.dark .rbc-off-range-bg {
+  background-color: hsl(var(--muted));
+}
+
+.dark .rbc-today {
+  background-color: rgba(var(--primary), 0.2);
+}

@@ -1,0 +1,26 @@
+# Django and REST framework
+Django==4.2.10
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.3.1
+django-filter==23.5
+Pillow==9.5.0
+
+
+# AI and NLP
+openai==1.13.3
+langchain==0.1.4
+python-dotenv==1.0.1
+
+# Social media APIs
+python-twitter-v2==0.8.1
+facebook-sdk==3.1.0
+linkedin-api==2.0.0a4
+instagrapi==2.0.0
+
+# Utilities
+requests==2.31.0
+celery==5.3.6
+redis==5.0.1
+gunicorn==21.2.0
+whitenoise==6.6.0
