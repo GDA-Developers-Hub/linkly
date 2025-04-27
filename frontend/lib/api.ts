@@ -1,8 +1,23 @@
 // API client for our Django backend
 import { toast } from "@/components/ui/use-toast"
 
-// API Base URL - use environment variable
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
+// API Base URL with trailing slash for consistency
+const API_BASE_URL = "/api/"
+
+// API request helper function to ensure URLs are properly formed with trailing slashes
+const buildUrl = (endpoint: string): string => {
+  // Remove leading slash if present
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint.substring(1) : endpoint;
+  
+  // Ensure endpoint has trailing slash
+  const endpointWithSlash = cleanEndpoint.endsWith("/") ? cleanEndpoint : `${cleanEndpoint}/`;
+  
+  // Construct URL
+  const url = `${API_BASE_URL}${endpointWithSlash}`;
+  console.log(`Built URL: ${url} from endpoint: ${endpoint}`);
+  
+  return url;
+}
 
 // Types
 export interface User {
@@ -173,13 +188,12 @@ class API {
     if (!this.refreshToken) return false
 
     try {
-      const response = await fetch(`${API_BASE_URL}/users/token/refresh/`, {
+      const response = await fetch(buildUrl("users/token/refresh/"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ refresh: this.refreshToken }),
-        credentials: 'include',
       })
 
       if (response.ok) {
@@ -202,18 +216,17 @@ class API {
 
   // API request with token refresh
   async request<T>(endpoint: string, method = "GET", data?: any): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`
+    const url = buildUrl(endpoint);
     const options: RequestInit = {
       method,
       headers: this.getHeaders(),
-      credentials: 'include',
     }
 
     if (data) {
       options.body = JSON.stringify(data)
     }
 
-    console.log(`API Request to ${endpoint}`, { 
+    console.log(`API Request to ${url}`, { 
       hasAccessToken: !!this.accessToken,
       hasRefreshToken: !!this.refreshToken,
       method
@@ -222,7 +235,7 @@ class API {
     let response = await fetch(url, options)
 
     // Log response status
-    console.log(`API Response from ${endpoint}:`, { 
+    console.log(`API Response from ${url}:`, { 
       status: response.status,
       ok: response.ok
     });
@@ -237,7 +250,7 @@ class API {
         console.log("Token refreshed successfully, retrying request");
         options.headers = this.getHeaders()
         response = await fetch(url, options)
-        console.log(`API Retry Response from ${endpoint}:`, { 
+        console.log(`API Retry Response from ${url}:`, { 
           status: response.status,
           ok: response.ok
         });
@@ -251,7 +264,7 @@ class API {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      console.error(`API Error for ${endpoint}:`, errorData);
+      console.error(`API Error for ${url}:`, errorData);
       const error: any = new Error(errorData.detail || errorData.message || `Request failed with status ${response.status}`)
       
       // Attach the response data to the error for better error handling
@@ -297,7 +310,8 @@ class API {
     try {
       console.log("API: Starting login process", { email: data.email });
       
-      const response = await this.request<LoginResponse>("/users/login/", "POST", data)
+      // Explicitly use endpoint with trailing slash
+      const response = await this.request<LoginResponse>("users/login/", "POST", data)
       console.log("API: Login successful, response:", response);
       console.log("API: Tokens received:", response.tokens);
       
@@ -330,7 +344,11 @@ class API {
     try {
       // This endpoint will automatically try to authenticate with SocialBu
       // using the stored credentials in the user model
-      await this.request("/socialbu/accounts/");
+      console.log("Attempting to authenticate with SocialBu accounts endpoint");
+      
+      // Use an empty object for the body to prevent JSON parsing errors
+      await this.request("socialbu/accounts/", "GET", undefined);
+      
       console.log("Successfully authenticated with SocialBu");
     } catch (error) {
       console.error("Error authenticating with SocialBu (will retry later):", error);
@@ -454,13 +472,12 @@ class API {
     const formData = new FormData()
     formData.append("file", file)
 
-    const response = await fetch(`${API_BASE_URL}/content/media/`, {
+    const response = await fetch(buildUrl("content/media/"), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
       },
       body: formData,
-      credentials: 'include',
     })
 
     if (!response.ok) {

@@ -1,94 +1,294 @@
 "use client"
 
-import type React from "react"
-
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { AppSidebar } from "@/components/app-sidebar"
+import Link from "next/link"
+import { redirect } from "next/navigation"
+import { useRouter } from 'next/navigation'
+import React, { useEffect, useState } from "react"
+import { LuLayoutDashboard, LuSettings, LuCode, LuLink, LuClipboardList, LuLogOut } from "react-icons/lu"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import Swal from 'sweetalert2'
 import { useAuth } from "@/contexts/auth-context"
-import { getAPI } from "@/lib/api"
-import { useToast } from "@/components/ui/use-toast"
+import { getAPI, type Plan as APIPlan } from "@/lib/api"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-export default function DashboardLayout({
-  children,
-}: {
+// Adapt the Plan interface to match what's used in this component
+interface Plan {
+  id: number
+  name: string
+  description: string
+  price: string | number
+  interval?: string
+  frequency?: string
+  features: string[]
+  is_active: boolean
+}
+
+interface DashboardLayoutProps {
   children: React.ReactNode
-}) {
-  const { isAuthenticated, isLoading, user } = useAuth()
-  const [authChecked, setAuthChecked] = useState(false)
+}
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const { user, hasValidToken, isLoading, validateToken, logout } = useAuth()
+  const [hasSubscription, setHasSubscription] = useState<boolean | null>(null)
+  const [plans, setPlans] = useState<Plan[]>([])
+  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null)
+  const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(false)
+  const [isPlansLoading, setIsPlansLoading] = useState(false)
   const router = useRouter()
-  const { toast } = useToast()
   const api = getAPI()
 
-  // Debug log current authentication state
+  // Check for valid token and subscription status
   useEffect(() => {
-    console.log("Dashboard layout - auth state:", { 
-      isAuthenticated, 
-      isLoading, 
-      hasUser: !!user,
-      hasToken: api.isAuthenticated(),
-    });
-  }, [isAuthenticated, isLoading, user]);
-
-  useEffect(() => {
-    const checkSubscription = async () => {
+    const checkAuth = async () => {
       try {
-        // Only check if authenticated and not loading
-        if (isAuthenticated && !isLoading) {
-          console.log("Dashboard - checking subscription status");
-          const subscription = await api.getCurrentSubscription();
-          console.log("Dashboard - subscription status:", subscription);
-          
-          if (!subscription) {
-            console.log("Dashboard - no active subscription found, redirecting");
-            toast({
-              title: "Subscription required",
-              description: "Please select a subscription plan to continue.",
-              variant: "destructive",
-            });
-            router.push("/auth/subscription");
-          } else {
-            setAuthChecked(true);
-          }
-        }
+        console.log("Dashboard: No authentication check - unrestricted access")
+        
+        // Load available plans
+        fetchPlans()
       } catch (error) {
-        console.error("Error checking subscription:", error);
-        // Don't redirect on error, might be temporary backend issue
+        console.error("Dashboard: Error loading plans:", error)
+      } finally {
+        setIsSubscriptionLoading(false)
       }
-    };
-
-    if (isAuthenticated && !isLoading) {
-      checkSubscription();
     }
-  }, [isAuthenticated, isLoading, router, toast]);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      console.log("Dashboard - not authenticated, redirecting to login");
-      toast({
-        title: "Authentication required",
-        description: "Please log in to access the dashboard.",
-      });
-      router.push("/auth/login");
+    
+    if (!isLoading) {
+      checkAuth()
     }
-  }, [isAuthenticated, isLoading, router, toast]);
+  }, [isLoading])
 
+  const fetchPlans = async () => {
+    try {
+      setIsPlansLoading(true)
+      const availablePlans = await api.getPlans()
+      console.log("Available plans:", availablePlans)
+      
+      // Transform API plans to match our component's Plan interface
+      const transformedPlans = availablePlans.map(plan => ({
+        id: plan.id,
+        name: plan.name,
+        description: plan.description,
+        price: plan.price,
+        interval: plan.frequency,
+        features: [
+          `${plan.post_limit} posts`,
+          `${plan.account_limit} accounts`,
+          `${plan.team_members} team members`,
+          plan.analytics_access ? 'Analytics access' : '',
+          plan.ai_generation ? 'AI generation' : '',
+          plan.post_scheduling ? 'Post scheduling' : '',
+          plan.calendar_view ? 'Calendar view' : ''
+        ].filter(feature => feature !== ''),
+        is_active: plan.is_active
+      }))
+      
+      setPlans(transformedPlans)
+    } catch (error) {
+      console.error("Error fetching plans:", error)
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to load subscription plans. Please try again later.',
+        icon: 'error',
+        confirmButtonText: 'Ok'
+      })
+    } finally {
+      setIsPlansLoading(false)
+    }
+  }
+
+  const handleSubscribe = async () => {
+    if (!selectedPlanId) {
+      Swal.fire({
+        title: 'Please select a plan',
+        text: 'You need to select a subscription plan to continue',
+        icon: 'warning',
+        confirmButtonText: 'Ok'
+      })
+      return
+    }
+
+    try {
+      setIsSubscriptionLoading(true)
+      // Pass the numeric ID directly
+      const subscription = await api.createSubscription(selectedPlanId)
+      console.log("Subscription created:", subscription)
+      Swal.fire({
+        title: 'Success',
+        text: 'Your subscription has been activated!',
+        icon: 'success',
+        confirmButtonText: 'Continue'
+      }).then(() => {
+        setHasSubscription(true)
+      })
+    } catch (error) {
+      console.error("Error creating subscription:", error)
+      Swal.fire({
+        title: 'Subscription Failed',
+        text: 'There was an error activating your subscription. Please try again.',
+        icon: 'error',
+        confirmButtonText: 'Ok'
+      })
+    } finally {
+      setIsSubscriptionLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    await logout()
+  }
+
+  // Show loading state while initial auth check is in progress
   if (isLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="space-y-4 w-full max-w-md p-8">
+          <Skeleton className="h-12 w-1/2 mx-auto" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-8 w-3/4 mx-auto" />
+          <Skeleton className="h-8 w-1/2 mx-auto" />
+        </div>
       </div>
-    );
+    )
   }
 
-  if (!isAuthenticated) {
-    return null;
+  // If subscription status is still loading, show loading state
+  if (hasSubscription === null && isSubscriptionLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="space-y-4 w-full max-w-md p-8">
+          <Skeleton className="h-12 w-1/2 mx-auto" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-8 w-3/4 mx-auto" />
+          <Skeleton className="h-8 w-1/2 mx-auto" />
+        </div>
+      </div>
+    )
   }
 
+  // If no subscription, show subscription selection UI
+  if (hasSubscription === false) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <div className="flex min-h-[calc(100vh-4rem)] flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+          <div className="mx-auto max-w-6xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">Choose a Subscription Plan</h1>
+                <p className="text-muted-foreground">
+                  Subscribe to a plan to access all features.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {isPlansLoading ? (
+                // Show skeleton loading for plans
+                Array(3).fill(0).map((_, index) => (
+                  <Card key={index} className="overflow-hidden">
+                    <CardHeader className="p-6">
+                      <Skeleton className="h-6 w-1/2" />
+                      <Skeleton className="h-10 w-full" />
+                    </CardHeader>
+                    <CardContent className="p-6 pt-0">
+                      <Skeleton className="h-6 w-full mb-2" />
+                      <Skeleton className="h-6 w-full mb-2" />
+                      <Skeleton className="h-6 w-full mb-2" />
+                      <div className="mt-6">
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                plans.map((plan) => (
+                  <Card 
+                    key={plan.id} 
+                    className={`overflow-hidden cursor-pointer transition-all ${selectedPlanId === plan.id ? 'ring-2 ring-primary' : ''}`}
+                    onClick={() => setSelectedPlanId(plan.id)}
+                  >
+                    <CardHeader className="p-6">
+                      <CardTitle className="flex items-center justify-between">
+                        {plan.name}
+                        <span className="text-2xl font-bold">${plan.price}/{plan.interval}</span>
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground">{plan.description}</p>
+                    </CardHeader>
+                    <CardContent className="p-6 pt-0">
+                      <ul className="space-y-2">
+                        {plan.features.map((feature, index) => (
+                          <li key={index} className="flex items-center gap-2 text-sm">
+                            <span className="text-green-500">✓</span> {feature}
+                          </li>
+                        ))}
+                      </ul>
+                      <Button 
+                        className="mt-6 w-full" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPlanId(plan.id);
+                        }}
+                      >
+                        {selectedPlanId === plan.id ? 'Selected' : 'Select Plan'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+            <div className="flex justify-end mt-6">
+              <Button 
+                size="lg" 
+                onClick={handleSubscribe} 
+                disabled={!selectedPlanId || isSubscriptionLoading}
+              >
+                {isSubscriptionLoading ? 'Processing...' : 'Continue with Selected Plan'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Regular dashboard layout when authenticated and subscribed
   return (
-    <div className="flex min-h-screen">
-      <AppSidebar />
-      <main className="flex-1 overflow-auto p-4 md:p-6 md:ml-64">{children}</main>
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+        <Link className="flex items-center gap-2 font-semibold" href="/">
+          <span className="h-6 w-6 text-primary">🔗</span>
+          <span>Linkly</span>
+        </Link>
+        <div className="ml-auto flex items-center gap-4">
+          {user && (
+            <div className="flex items-center gap-2">
+              <Avatar>
+                <AvatarFallback>{user.first_name?.[0]}{user.last_name?.[0]}</AvatarFallback>
+              </Avatar>
+              <span>{user.first_name} {user.last_name}</span>
+            </div>
+          )}
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            <LuLogOut size={16} style={{marginRight: '8px'}} />
+            Logout
+          </Button>
+        </div>
+      </header>
+      <div className="grid flex-1 md:grid-cols-[220px_1fr]">
+        <nav className="border-r p-4 hidden md:block">
+          <div className="space-y-2">
+            <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <LuLayoutDashboard size={16} />
+              Dashboard
+            </Link>
+            <Link href="/dashboard/settings" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
+              <LuSettings size={16} />
+              Settings
+            </Link>
+          </div>
+        </nav>
+        <main className="flex flex-col p-4 md:p-8">{children}</main>
+      </div>
     </div>
-  );
+  )
 }
