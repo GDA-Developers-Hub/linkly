@@ -213,6 +213,8 @@ class SocialBuService:
     # Posts
     def get_posts(self, limit=None, status=None):
         """Get posts from SocialBu API"""
+        logger.info(f"Fetching posts from SocialBu API with limit={limit}, status={status}")
+        
         endpoint = 'posts'
         params = []
         
@@ -224,12 +226,56 @@ class SocialBuService:
             
         if params:
             endpoint += f"?{'&'.join(params)}"
-            
-        return self.make_request(endpoint)
+        
+        logger.info(f"Calling SocialBu API endpoint: {endpoint}")
+        result = self.make_request(endpoint)
+        
+        # Handle both expected response formats
+        # New format: { "items": [...], "currentPage": n, "lastPage": n, "nextPage": n, "total": n }
+        # Old format: [...] (array of posts)
+        if isinstance(result, dict) and 'items' in result:
+            logger.info(f"Received paginated posts response. Total posts: {result.get('total', 0)}")
+            return result
+        else:
+            # If we got a simple array, wrap it in the expected format
+            logger.info(f"Received array posts response. Total posts: {len(result) if result else 0}")
+            return {
+                "items": result or [],
+                "currentPage": 1,
+                "lastPage": 1,
+                "nextPage": None,
+                "total": len(result) if result else 0
+            }
     
     def create_post(self, data):
         """Create a post in SocialBu API"""
-        return self.make_request('posts', 'POST', data)
+        logger.info(f"Creating post with data: {json.dumps(data, indent=2)}")
+        
+        # Make sure we're using the correct endpoint as per the requirements
+        endpoint = 'posts'
+        
+        # Ensure all required fields are present according to SocialBu API
+        if 'accounts' not in data:
+            logger.error("'accounts' field is missing in post data")
+            raise SocialBuAPIError("'accounts' field is required")
+        
+        if 'content' not in data:
+            logger.error("'content' field is missing in post data")
+            raise SocialBuAPIError("'content' field is required")
+        
+        logger.info(f"Sending post creation request to {endpoint}")
+        
+        try:
+            # Make the API call with the validated data
+            result = self.make_request(endpoint, 'POST', data)
+            logger.info(f"Post creation successful. Response: {json.dumps(result, indent=2)}")
+            return result
+        except SocialBuAPIError as e:
+            logger.error(f"Post creation failed: {e.message}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during post creation: {str(e)}")
+            raise SocialBuAPIError(f"Unexpected error during post creation: {str(e)}")
     
     def update_post(self, post_id, data):
         """Update a post in SocialBu API"""

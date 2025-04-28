@@ -11,17 +11,39 @@ class SocialBuAuthSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(style={'input_type': 'password'})
 
+class AttachmentSerializer(serializers.Serializer):
+    upload_token = serializers.CharField()
+
+class PostOptionsSerializer(serializers.Serializer):
+    comment = serializers.CharField(required=False, allow_blank=True)
+    post_as_story = serializers.BooleanField(required=False, default=False)
+
 class SocialBuPostSerializer(serializers.Serializer):
+    accounts = serializers.ListField(child=serializers.IntegerField())
+    team_id = serializers.IntegerField(required=False, allow_null=True)
+    publish_at = serializers.DateTimeField(required=False, allow_null=True)
     content = serializers.CharField()
-    platforms = serializers.ListField(child=serializers.CharField())
-    media_ids = serializers.ListField(child=serializers.IntegerField(), required=False)
-    scheduled_at = serializers.DateTimeField(required=False)
+    draft = serializers.BooleanField(required=False, default=False)
+    existing_attachments = serializers.ListField(
+        child=AttachmentSerializer(), 
+        required=False,
+        default=list
+    )
+    postback_url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
+    options = PostOptionsSerializer(required=False, allow_null=True)
     
 class SocialBuPostUpdateSerializer(serializers.Serializer):
+    accounts = serializers.ListField(child=serializers.IntegerField(), required=False)
+    team_id = serializers.IntegerField(required=False, allow_null=True)
+    publish_at = serializers.DateTimeField(required=False, allow_null=True)
     content = serializers.CharField(required=False)
-    platforms = serializers.ListField(child=serializers.CharField(), required=False)
-    media_ids = serializers.ListField(child=serializers.IntegerField(), required=False)
-    scheduled_at = serializers.DateTimeField(required=False)
+    draft = serializers.BooleanField(required=False)
+    existing_attachments = serializers.ListField(
+        child=AttachmentSerializer(), 
+        required=False
+    )
+    postback_url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
+    options = PostOptionsSerializer(required=False, allow_null=True)
 
 class SocialBuTeamSerializer(serializers.Serializer):
     name = serializers.CharField()

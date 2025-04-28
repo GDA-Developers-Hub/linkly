@@ -211,14 +211,41 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def posts(self, request):
         """Get posts from SocialBu API"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
-            service = self.get_socialbu_service()
+            logger.info("Posts endpoint called")
+            
+            # Extract query parameters
             limit = request.query_params.get('limit')
             post_status = request.query_params.get('status')
+            page = request.query_params.get('page', '1')
+            
+            logger.info(f"Fetching posts with params: limit={limit}, status={post_status}, page={page}")
+            
+            # Get the service with the user's authentication
+            service = self.get_socialbu_service()
+            
+            # Call the SocialBu API to get posts
             result = service.get_posts(limit=limit, status=post_status)
+            
+            # Log the result structure
+            if isinstance(result, dict):
+                logger.info(f"Posts result format: dictionary with keys {', '.join(result.keys())}")
+                logger.info(f"Total posts: {result.get('total', 0)}")
+                logger.info(f"Current page: {result.get('currentPage', 0)}")
+                logger.info(f"Last page: {result.get('lastPage', 0)}")
+            else:
+                logger.warning(f"Unexpected posts result format: {type(result)}")
+            
             return Response(result)
         except SocialBuAPIError as e:
+            logger.error(f"SocialBu API error when fetching posts: {e.message}")
             return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Unexpected error when fetching posts: {str(e)}")
+            return Response({'detail': f"Failed to fetch posts: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['post'])
     def create_post(self, request):
@@ -227,8 +254,18 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         
         try:
+            # Log the payload for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Creating post with data: {serializer.validated_data}")
+            
+            # Get the service with the user's token
             service = self.get_socialbu_service()
+            
+            # Make the API call with the validated data
             result = service.create_post(serializer.validated_data)
+            logger.info(f"Post creation result: {result}")
+            
             return Response(result)
         except SocialBuAPIError as e:
             return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)

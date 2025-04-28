@@ -45,41 +45,72 @@ export default function PostsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [platformFilter, setPlatformFilter] = useState("all")
   const [sortBy, setSortBy] = useState("newest")
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    lastPage: 1,
+    total: 0
+  })
   const { toast } = useToast()
   const router = useRouter()
 
   // Fetch posts and accounts
-  const fetchData = async () => {
+  const fetchData = async (page = 1) => {
     setIsLoading(true)
     try {
       await withErrorHandling(async () => {
+        console.log('[Posts] Fetching data. Status:', status, 'Platform:', platformFilter, 'Sort:', sortBy, 'Page:', page);
+        
         const api = getSocialBuAPI()
 
         // Fetch accounts first
+        console.log('[Posts] Fetching accounts');
         const accountsData = await api.getAccounts()
+        console.log('[Posts] Received accounts:', accountsData.length);
         setAccounts(accountsData)
 
         // Fetch posts with status filter if not "all"
         const statusParam = status !== "all" ? status : undefined
-        const accountParam = platformFilter !== "all" ? Number.parseInt(platformFilter) : undefined
+        const limit = 15; // Set desired page size
+        
+        console.log('[Posts] Fetching posts with params:', { 
+          status: statusParam, 
+          limit,
+          page
+        });
 
-        const postsData = await api.getPosts({
-          status: statusParam,
-          account_id: accountParam,
-        })
+        // Fetch posts with pagination
+        const postsResponse = await api.getPosts(limit, statusParam, page);
+        console.log('[Posts] Received posts response:', JSON.stringify({
+          currentPage: postsResponse.currentPage,
+          lastPage: postsResponse.lastPage,
+          total: postsResponse.total,
+          itemsCount: postsResponse.items?.length || 0
+        }, null, 2));
+        
+        // Store pagination data
+        setPagination({
+          currentPage: postsResponse.currentPage,
+          lastPage: postsResponse.lastPage,
+          total: postsResponse.total
+        });
+
+        // Get the posts from the items array
+        const postsData = postsResponse.items || [];
 
         // Sort posts
         const sortedPosts = [...postsData]
         if (sortBy === "newest") {
+          console.log('[Posts] Sorting by newest');
           sortedPosts.sort((a, b) => {
-            const dateA = a.scheduled_at || a.published_at || ""
-            const dateB = b.scheduled_at || b.published_at || ""
+            const dateA = a.publish_at || a.published_at || a.created_at
+            const dateB = b.publish_at || b.published_at || b.created_at
             return new Date(dateB).getTime() - new Date(dateA).getTime()
           })
         } else if (sortBy === "oldest") {
+          console.log('[Posts] Sorting by oldest');
           sortedPosts.sort((a, b) => {
-            const dateA = a.scheduled_at || a.published_at || ""
-            const dateB = b.scheduled_at || b.published_at || ""
+            const dateA = a.publish_at || a.published_at || a.created_at
+            const dateB = b.publish_at || b.published_at || b.created_at
             return new Date(dateA).getTime() - new Date(dateB).getTime()
           })
         }
@@ -87,16 +118,23 @@ export default function PostsPage() {
         setPosts(sortedPosts)
       }, "Failed to fetch posts")
     } catch (error) {
-      console.error("Error fetching data:", error)
+      console.error("[Posts] Error fetching data:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Change page
+  const changePage = (newPage: number) => {
+    console.log('[Posts] Changing to page:', newPage);
+    fetchData(newPage);
+  };
+
   // Delete a post
   const deletePost = async (postId: number) => {
     try {
       await withErrorHandling(async () => {
+        console.log('[Posts] Deleting post:', postId);
         const api = getSocialBuAPI()
         await api.deletePost(postId)
         toast({
@@ -107,20 +145,21 @@ export default function PostsPage() {
         fetchData()
       }, "Failed to delete post")
     } catch (error) {
-      console.error("Error deleting post:", error)
+      console.error("[Posts] Error deleting post:", error)
     }
   }
 
   // Fetch data on component mount and when filters change
   useEffect(() => {
-    fetchData()
+    console.log('[Posts] Filter changed, fetching new data');
+    fetchData(1) // Reset to page 1 when filters change
   }, [status, platformFilter, sortBy])
 
   // Get account names for a post
   const getPostAccounts = (post: Post) => {
-    return post.account_ids
+    return post.accounts
       .map((id) => accounts.find((account) => account.id === id))
-      .filter((account) => account !== undefined) as Account[]
+      .filter((account): account is Account => account !== undefined)
   }
 
   // Format date for display
@@ -321,6 +360,38 @@ export default function PostsPage() {
                       </Card>
                     )
                   })}
+                </div>
+              )}
+              
+              {/* Pagination Controls */}
+              {!isLoading && posts.length > 0 && (
+                <div className="flex justify-center mt-6">
+                  <div className="flex items-center space-x-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => changePage(pagination.currentPage - 1)}
+                      disabled={pagination.currentPage <= 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <div className="text-sm">
+                      Page {pagination.currentPage} of {pagination.lastPage || 1}
+                      <span className="text-muted-foreground ml-2">
+                        ({pagination.total} total posts)
+                      </span>
+                    </div>
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => changePage(pagination.currentPage + 1)}
+                      disabled={pagination.currentPage >= pagination.lastPage}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               )}
             </TabsContent>

@@ -52,16 +52,30 @@ export default function DashboardPage() {
     try {
       setIsLoading(true)
       await withErrorHandling(async () => {
+        console.log('[Dashboard] Fetching dashboard data');
         const api = getSocialBuAPI()
 
         // Fetch insights
+        console.log('[Dashboard] Fetching insights');
         const insightsData = await api.getInsights()
         
         // Fetch connected accounts
+        console.log('[Dashboard] Fetching connected accounts');
         const connectedAccounts = await api.getAccounts()
+        console.log('[Dashboard] Received', connectedAccounts.length, 'connected accounts');
 
-        // Fetch recent posts
-        const postsData = await api.getPosts()
+        // Fetch recent posts - limit to 5 posts
+        console.log('[Dashboard] Fetching recent posts');
+        const postsResponse = await api.getPosts(5)
+        console.log('[Dashboard] Received posts:', 
+          postsResponse.items?.length, 
+          'of', 
+          postsResponse.total, 
+          'total posts'
+        );
+        
+        // Extract posts from the paginated response
+        const postsData = postsResponse.items || [];
 
         // Get basic metrics from insights (simplified for demo)
         const totalFollowers = insightsData.reduce((sum, insight) => 
@@ -81,16 +95,19 @@ export default function DashboardPage() {
           posts: {
             scheduled: postsData.filter((post) => post.status === "scheduled").length,
             published: postsData.filter((post) => post.status === "published").length,
-            total: postsData.length,
+            total: postsResponse.total, // Use the total from the response
           },
-          connectedAccounts: connectedAccounts.map(account => ({
-            id: account.id,
-            name: account.name,
-            _type: account._type || account.type || 'Unknown',
-            type: account.type || '',
-            image: account.image || '',
-            active: typeof account.active === 'boolean' ? account.active : true
-          }))
+          connectedAccounts: connectedAccounts.map(account => {
+            // Extract properties safely with defaults
+            return {
+              id: account.id,
+              name: account.name,
+              _type: (account as any)._type || account.type || 'Unknown',
+              type: account.type || '',
+              image: (account as any).image || '',
+              active: typeof (account as any).active === 'boolean' ? (account as any).active : true
+            }
+          })
         }
 
         // Transform posts data
@@ -98,8 +115,8 @@ export default function DashboardPage() {
           id: post.id,
           content: post.content,
           status: post.status,
-          scheduled_at: post.scheduled_at,
-          platform: post.platforms?.[0] || "unknown",
+          scheduled_at: post.publish_at,
+          platform: post.accounts?.[0]?.toString() || "unknown",
           engagement: {
             likes: Math.floor(Math.random() * 100),
             comments: Math.floor(Math.random() * 30),
@@ -109,9 +126,10 @@ export default function DashboardPage() {
 
         setInsights(transformedInsights)
         setRecentPosts(transformedPosts)
+        console.log('[Dashboard] Dashboard data loaded successfully');
       }, "Failed to fetch dashboard data")
     } catch (error) {
-      console.error("Error fetching dashboard data:", error)
+      console.error("[Dashboard] Error fetching dashboard data:", error)
     } finally {
       setIsLoading(false)
     }

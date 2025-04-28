@@ -10,19 +10,36 @@ export interface Account {
   name: string
   platform: string
   type: string
-  status: string
-  connected_at: string
+  status?: string
+  connected_at?: string
+  _type?: string
+  image?: string
+  active?: boolean
+  attachment_types?: string[]
+  post_maxlength?: number
+  max_attachments?: number
+  post_media_required?: boolean
 }
 
 export interface Post {
   id: number
   content: string
-  platforms: string[]
-  media: Media[]
+  accounts: number[]
+  media?: {
+    id: number
+    url: string
+    type: string
+  }[]
   status: string
-  scheduled_at: string | null
-  published_at: string | null
+  publish_at?: string | null
+  published_at?: string | null
   created_at: string
+  draft?: boolean
+  team_id?: number
+  options?: {
+    comment?: string
+    post_as_story?: boolean
+  }
 }
 
 export interface Media {
@@ -60,6 +77,14 @@ export interface TeamMember {
   email: string
   role: string
   joined_at: string
+}
+
+export interface PaginatedPosts {
+  items: Post[];
+  currentPage: number;
+  lastPage: number;
+  nextPage: number | null;
+  total: number;
 }
 
 // Error handling wrapper
@@ -417,7 +442,7 @@ class SocialBuAPI {
   }
 
   // Posts
-  async getPosts(limit?: number, status?: string): Promise<Post[]> {
+  async getPosts(limit?: number, status?: string, page?: number): Promise<PaginatedPosts> {
     // Do not use leading slash
     let endpoint = "socialbu/posts"
     const params = [`base_url=${this.baseUrl}`]
@@ -430,28 +455,52 @@ class SocialBuAPI {
       params.push(`status=${status}`)
     }
 
-    endpoint += `?${params.join("&")}`
+    if (page) {
+      params.push(`page=${page}`)
+    }
 
-    return this.api.request<Post[]>(endpoint)
+    endpoint += `?${params.join("&")}`
+    
+    console.log(`Fetching posts with endpoint: ${endpoint}`)
+    
+    const result = await this.api.request<PaginatedPosts>(endpoint)
+    console.log(`Received posts response with ${result.items?.length || 0} items of ${result.total} total posts`)
+    
+    return result
   }
 
-  async createPost(content: string, platforms: string[], mediaIds?: number[], scheduledAt?: Date): Promise<Post> {
-    const data: any = {
-      content,
-      platforms,
+  async createPost(data: {
+    accounts: number[];
+    team_id?: number;
+    publish_at?: string;
+    content: string;
+    draft?: boolean;
+    existing_attachments?: Array<{ upload_token: string }>;
+    postback_url?: string;
+    options?: {
+      comment?: string;
+      post_as_story?: boolean;
+    };
+  }): Promise<Post> {
+    // Log the post creation request
+    console.log('[SocialBu] Creating post with data:', JSON.stringify(data, null, 2));
+    
+    // Format the data according to SocialBu API requirements
+    const postData = {
+      ...data,
       base_url: this.baseUrl
-    }
+    };
 
-    if (mediaIds && mediaIds.length > 0) {
-      data.media_ids = mediaIds
+    try {
+      // Do not use leading slash
+      console.log('[SocialBu] Sending post creation request to socialbu/create_post');
+      const result = await this.api.request<Post>("socialbu/create_post", "POST", postData);
+      console.log('[SocialBu] Post creation successful:', JSON.stringify(result, null, 2));
+      return result;
+    } catch (error) {
+      console.error('[SocialBu] Post creation failed:', error);
+      throw error;
     }
-
-    if (scheduledAt) {
-      data.scheduled_at = scheduledAt.toISOString()
-    }
-
-    // Do not use leading slash
-    return this.api.request<Post>("socialbu/create_post", "POST", data)
   }
 
   async updatePost(postId: number, data: Partial<Post>): Promise<Post> {
@@ -478,7 +527,7 @@ class SocialBuAPI {
     formData.append("media", file)
     formData.append("base_url", this.baseUrl)
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/socialbu/upload_media`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/socialbu/upload_media`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.api.getAccessToken()}`,

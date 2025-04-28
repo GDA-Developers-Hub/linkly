@@ -131,12 +131,24 @@ export default function CreatePostPage() {
         const [hours, minutes] = time.split(":").map(Number)
         scheduledDate.setHours(hours, minutes)
 
-        // Create post data
+        // Create post data in the new format required by SocialBu API
         const postData = {
+          accounts: selectedPlatforms,
           content,
-          account_ids: selectedPlatforms,
-          media_ids: uploadedMedia.map((media) => media.id),
-          scheduled_at: isDraft ? undefined : scheduledDate.toISOString(),
+          draft: isDraft,
+          publish_at: isDraft ? undefined : scheduledDate.toISOString(),
+          // Convert uploaded media to the format expected by SocialBu
+          existing_attachments: uploadedMedia.length > 0 
+            ? uploadedMedia.map(media => ({ 
+                upload_token: media.id.toString() 
+              }))
+            : undefined,
+          // Optional fields
+          team_id: undefined, // Set this if working with teams
+          postback_url: window.location.origin + "/dashboard/posts",
+          options: {
+            post_as_story: false // Set to true for story-type posts
+          }
         }
 
         // Create post
