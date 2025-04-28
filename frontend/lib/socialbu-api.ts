@@ -90,11 +90,32 @@ class SocialBuAPI {
   // Check if user has valid token
   async checkToken(): Promise<boolean> {
     try {
-      // Try to make a simple API call that requires authentication
-      await this.getAccounts()
-      return true
+      // Get user info from the backend
+      const userInfo = await this.getUserInfo();
+      return userInfo.has_token && userInfo.token_valid;
     } catch (error) {
-      return false
+      console.error("Error checking token:", error);
+      return false;
+    }
+  }
+
+  // Get user's SocialBu info from the backend
+  async getUserInfo(): Promise<{
+    has_token: boolean;
+    token_valid: boolean;
+    user_id?: string;
+    name?: string;
+    email?: string;
+    verified?: boolean;
+    created_at?: string;
+    updated_at?: string;
+  }> {
+    try {
+      // Call the backend endpoint to get user info
+      return this.api.request<any>("socialbu/user_info/", "GET");
+    } catch (error) {
+      console.error("Error fetching user info:", error);
+      return { has_token: false, token_valid: false };
     }
   }
 
@@ -148,10 +169,22 @@ async authenticate(email: string, password: string): Promise<{ token: string }> 
 
   // Social Platform Connection
   async getConnectionUrl(provider: string, accountId?: string): Promise<{ url: string }> {
-    const data: any = { provider, base_url: this.baseUrl }
+    // Get the app URL dynamically from the environment
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+    
+    // Build the proper postback URL
+    const postbackUrl = `${appUrl}/api/socialbu/connection-callback`;
+    
+    const data: any = { 
+      provider, 
+      postback_url: postbackUrl,
+      base_url: this.baseUrl 
+    }
+    
     if (accountId) {
       data.account_id = accountId
     }
+    
     // Do not use leading slash
     return this.api.request<{ url: string }>("socialbu/get_connection_url", "POST", data)
   }

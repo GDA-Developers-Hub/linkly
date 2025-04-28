@@ -69,27 +69,46 @@ export default function PlatformConnectPage() {
   const [hasToken, setHasToken] = useState(true)
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false)
   const [authType, setAuthType] = useState<"register" | "login">("login")
+  const [userInfo, setUserInfo] = useState<{
+    name?: string;
+    email?: string;
+    verified?: boolean;
+    user_id?: string;
+  } | null>(null);
   const [authForm, setAuthForm] = useState({
     email: "",
     password: "",
   })
   const { toast } = useToast()
 
-  // Check if user has a token
+  // Check if user has a token and get user info
   const checkUserToken = async () => {
     try {
       await withErrorHandling(async () => {
-        const api = getSocialBuAPI()
-        const hasValidToken = await api.checkToken()
-        setHasToken(hasValidToken)
-        if (!hasValidToken) {
-          setIsAuthDialogOpen(true)
-          setAuthType("register")
+        const api = getSocialBuAPI();
+        
+        // Get user info from the backend
+        const info = await api.getUserInfo();
+        
+        if (info.has_token && info.token_valid) {
+          setHasToken(true);
+          setUserInfo({
+            name: info.name,
+            email: info.email,
+            verified: info.verified,
+            user_id: info.user_id
+          });
+        } else {
+          setHasToken(false);
+          setUserInfo(null);
+          setIsAuthDialogOpen(true);
+          setAuthType("register");
         }
-      }, "Failed to verify authentication status")
+      }, "Failed to verify authentication status");
     } catch (error) {
-      console.error("Error checking token:", error)
-      setHasToken(false)
+      console.error("Error checking token:", error);
+      setHasToken(false);
+      setUserInfo(null);
     }
   }
 
@@ -119,8 +138,11 @@ export default function PlatformConnectPage() {
         description: "You have been authenticated with SocialBu.",
       });
       
-      setHasToken(true);
+      // Update user info and token status
+      await checkUserToken();
+      
       setIsAuthDialogOpen(false);
+      
       // Refresh accounts after successful login
       fetchAccounts();
     } catch (error) {
@@ -300,6 +322,30 @@ export default function PlatformConnectPage() {
       description: "Share pins and manage your Pinterest boards",
       popular: false,
     },
+    {
+      name: "Facebook",
+      platform: "facebook",
+      description: "Share posts and manage your Facebook page",
+      popular: false,
+    },
+    {
+      name: "Twitter",
+      platform: "twitter",
+      description: "Share tweets and manage your Twitter account",
+      popular: false,
+    },
+    {
+      name: "Instagram",
+      platform: "instagram",
+      description: "Share posts and manage your Instagram account",
+      popular: false,
+    },
+    {
+      name: "LinkedIn",
+      platform: "linkedin",
+      description: "Share posts and manage your LinkedIn account",
+      popular: false,
+    },
   ]
 
   // Function to initiate OAuth flow for connecting a new account
@@ -410,6 +456,17 @@ export default function PlatformConnectPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Platform Connect</h2>
           <p className="text-muted-foreground">Connect and manage your social media accounts</p>
+          {userInfo && (
+            <div className="mt-2 text-sm text-muted-foreground">
+              Connected as <span className="font-medium">{userInfo.name}</span> ({userInfo.email})
+              {userInfo.verified && (
+                <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 dark:bg-green-900/20">
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Verified
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {!hasToken && (

@@ -294,6 +294,24 @@ function PlatformConnectPage() {
     }, []);
     var availablePlatforms = [
         {
+            name: "Facebook",
+            platform: "facebook",
+            description: "Share posts and manage your Facebook pages",
+            popular: true,
+        },
+        {
+            name: "Instagram",
+            platform: "instagram",
+            description: "Share photos and videos to your Instagram account",
+            popular: true,
+        },
+        {
+            name: "Twitter",
+            platform: "twitter",
+            description: "Share tweets and manage your Twitter account",
+            popular: true,
+        },
+        {
             name: "TikTok",
             platform: "tiktok",
             description: "Share short-form videos to your TikTok account",
@@ -314,7 +332,7 @@ function PlatformConnectPage() {
     ];
     // Function to initiate OAuth flow for connecting a new account
     var connectAccount = function (platform) { return __awaiter(_this, void 0, void 0, function () {
-        var api, result, error_6;
+        var api, token, result, error_6;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -331,13 +349,17 @@ function PlatformConnectPage() {
                         title: "Connecting account",
                         description: "Initiating connection to ".concat(platform, "..."),
                     });
+                    
                     api = (0, socialbu_api_1.getSocialBuAPI)();
+                    
+                    // Make sure we are authenticated with the SocialBu API
+                    console.log("Connecting to platform:", platform);
                     return [4 /*yield*/, api.openConnectionPopup(platform)];
                 case 2:
                     result = _a.sent();
                     toast({
                         title: "Account connected",
-                        description: "Successfully connected to ".concat(result.accountName),
+                        description: "Successfully connected to ".concat(result.accountName, " on ").concat(platform),
                     });
                     // Refresh accounts list
                     fetchAccounts();
@@ -347,7 +369,7 @@ function PlatformConnectPage() {
                     console.error("Error connecting account:", error_6);
                     toast({
                         title: "Connection failed",
-                        description: error_6 instanceof Error ? error_6.message : "Failed to connect account",
+                        description: "Failed to connect to ".concat(platform, ": ").concat(error_6 instanceof Error ? error_6.message : "Unknown error"),
                         variant: "destructive",
                     });
                     return [3 /*break*/, 4];

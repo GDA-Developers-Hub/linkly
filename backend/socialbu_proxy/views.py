@@ -126,13 +126,17 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
                     status=status.HTTP_401_UNAUTHORIZED
                 )
             
-            # If user is authenticated, store the token
+            # If user is authenticated, store the token and additional info
             if request.user.is_authenticated:
                 token_obj, created = SocialBuToken.objects.update_or_create(
                     user=request.user,
                     defaults={
                         'access_token': result['token'],
-                        'refresh_token': result.get('refresh_token', '')
+                        'refresh_token': result.get('refresh_token', ''),
+                        'socialbu_user_id': str(result.get('user_id', '')),
+                        'name': result.get('name', ''),
+                        'email': result.get('email', ''),
+                        'verified': result.get('verified', False)
                     }
                 )
             
@@ -199,23 +203,36 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
         else:
             return redirect('https://socialbu.com/auth/login')
         
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='get_connection_url')
     def get_connection_url(self, request):
         """Get URL for connecting a social platform"""
         provider = request.data.get('provider')
         account_id = request.data.get('account_id')
+        postback_url = request.data.get('postback_url')
         
+        # Input validation
         if not provider:
             return Response({'detail': 'Provider is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Generate a postback URL
-        postback_url = request.build_absolute_uri(
-            reverse('socialbu-connection-callback')
-        )
+        if not postback_url:
+            return Response({'detail': 'Postback URL is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get the user ID to be used in postback
+        user_id = request.user.id
+        
+        # Add user ID to postback URL
+        if '?' in postback_url:
+            postback_url = f"{postback_url}&user_id={user_id}"
+        else:
+            postback_url = f"{postback_url}?user_id={user_id}"
         
         try:
+            # Get service with proper authentication
             service = self.get_socialbu_service()
+            
+            # Use the service to get connection URL, passing all parameters
             result = service.get_connection_url(provider, postback_url, account_id)
+            
             return Response(result)
         except SocialBuAPIError as e:
             return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
@@ -435,6 +452,47 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
             return Response(result)
         except SocialBuAPIError as e:
             return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def user_info(self, request):
+        """Get current user's SocialBu information"""
+        try:
+            # Check if the user has a SocialBu token
+            try:
+                token_obj = SocialBuToken.objects.get(user=request.user)
+                
+                # Serialize the token data
+                data = {
+                    'has_token': True,
+                    'user_id': token_obj.socialbu_user_id,
+                    'name': token_obj.name,
+                    'email': token_obj.email,
+                    'verified': token_obj.verified,
+                    'created_at': token_obj.created_at.isoformat() if token_obj.created_at else None,
+                    'updated_at': token_obj.updated_at.isoformat() if token_obj.updated_at else None
+                }
+                
+                # Verify token with a simple API call to make sure it's still valid
+                try:
+                    service = SocialBuService(token=token_obj.access_token)
+                    # Try a simple API call
+                    service.get_accounts()
+                    data['token_valid'] = True
+                except SocialBuAPIError:
+                    # Token is invalid
+                    data['token_valid'] = False
+                
+                return Response(data)
+            except SocialBuToken.DoesNotExist:
+                return Response({'has_token': False, 'token_valid': False})
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error retrieving user SocialBu info: {str(e)}")
+            return Response(
+                {'detail': 'Error retrieving SocialBu information'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class SocialBuConnectionCallbackView(APIView):

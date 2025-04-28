@@ -167,7 +167,8 @@ class SocialBuService:
                 'token': result.get('authToken') or result.get('token') or result.get('access_token'),
                 'user_id': result.get('id') or result.get('user_id'),
                 'name': result.get('name'),
-                'email': result.get('email')
+                'email': result.get('email'),
+                'verified': result.get('verified', False)
             }
         except Exception as e:
             logger.error(f"Authentication exception: {str(e)}")
@@ -194,6 +195,9 @@ class SocialBuService:
     # Social Platform Connection
     def get_connection_url(self, provider, postback_url, account_id=None):
         """Get URL for connecting a social platform"""
+        logger.info(f"Getting connection URL for provider: {provider}, postback: {postback_url}")
+        
+        # Prepare the data in the format SocialBu API expects
         data = {
             'provider': provider,
             'postback_url': postback_url
@@ -202,7 +206,8 @@ class SocialBuService:
         if account_id:
             data['account_id'] = account_id
             
-        return self.make_request('connect/url', 'POST', data)
+        # Make the API call to the accounts endpoint
+        return self.make_request('accounts', 'POST', data)
     
     # Posts
     def get_posts(self, limit=None, status=None):

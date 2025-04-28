@@ -7,7 +7,11 @@ class SocialBuToken(models.Model):
     """
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='socialbu_token')
     access_token = models.CharField(max_length=255)
-    refresh_token = models.CharField(max_length=255)
+    refresh_token = models.CharField(max_length=255, blank=True)
+    socialbu_user_id = models.CharField(max_length=255, blank=True)
+    name = models.CharField(max_length=255, blank=True)
+    email = models.CharField(max_length=255, blank=True)
+    verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
