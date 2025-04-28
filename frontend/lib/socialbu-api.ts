@@ -251,7 +251,7 @@ class SocialBuAPI {
     }
   }
 
-  async getConnectionUrl(provider: string, accountId?: string): Promise<{ url: string }> {
+  async getConnectionUrl(provider: string, accountId?: string): Promise<{ connect_url: string }> {
     // Get the app URL dynamically from the environment
     // const appUrl = process.env.NEXT_PUBLIC_API_URL;
     const appUrl = "https://cd7b-41-139-175-41.ngrok-free.app/api";
@@ -314,58 +314,106 @@ class SocialBuAPI {
     return await response.json();
   }
 
-  // Open a popup for social platform connection
   openConnectionPopup(provider: string): Promise<{ platform: string; accountId: string; accountName: string }> {
     return new Promise(async (resolve, reject) => {
       try {
         console.log('[SocialBu] openConnectionPopup called for provider:', provider);
-        // Get connection URL
-        const { url } = await this.getConnectionUrl(provider)
-
+        
+        // Get connection URL - adjust this to match your actual API response structure
+        const response = await this.getConnectionUrl(provider);
+        const url = response.connect_url;
+        
+        if (!url) {
+          throw new Error('No connection URL received from server');
+        }
+  
+        console.log('[SocialBu] Got connection URL:', url);
+  
         // Calculate popup dimensions
-        const width = 600
-        const height = 700
-        const left = window.innerWidth / 2 - width / 2
-        const top = window.innerHeight / 2 - height / 2
-
-        // Open popup
+        const width = 600;
+        const height = 700;
+        const left = window.innerWidth / 2 - width / 2;
+        const top = window.innerHeight / 2 - height / 2;
+  
+        // Try to open popup
         const popup = window.open(
           url,
           `Connect ${provider}`,
           `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`,
-        )
-
+        );
+  
         if (!popup) {
-          throw new Error("Popup blocked. Please allow popups for this site.")
+          console.warn('[SocialBu] Popup was blocked by browser');
+          
+          // Alert user to enable popups
+          if (confirm('Popup was blocked. Please enable popups and try again, or click OK to open in a new tab.')) {
+            const newTab = window.open(url, '_blank');
+            
+            if (!newTab) {
+              throw new Error("Both popup and new tab were blocked. Please allow popups or new tabs for this site.");
+            }
+            
+            // Since we can't control the new tab, we'll just resolve after a delay
+            setTimeout(() => {
+              resolve({
+                platform: provider,
+                accountId: 'unknown',
+                accountName: `${provider.charAt(0).toUpperCase() + provider.slice(1)} Account`
+              });
+            }, 5000);
+          } else {
+            throw new Error('Connection cancelled by user');
+          }
+          
+          return;
         }
-
+  
         // Listen for message from popup
         const messageHandler = (event: MessageEvent) => {
-          console.log('[SocialBu] openConnectionPopup received message:', event.data);
+          console.log('[SocialBu] Received message:', event.data);
+          
+          // Check if the message is from our popup and has the expected format
           if (event.data && event.data.type === "SOCIAL_CONNECTION_SUCCESS") {
-            window.removeEventListener("message", messageHandler)
+            window.removeEventListener("message", messageHandler);
+            
+            if (popup && !popup.closed) {
+              popup.close();
+            }
+            
             resolve({
-              platform: event.data.platform,
-              accountId: event.data.accountId,
-              accountName: event.data.accountName,
-            })
+              platform: event.data.platform || provider,
+              accountId: event.data.accountId || 'unknown',
+              accountName: event.data.accountName || `${provider.charAt(0).toUpperCase() + provider.slice(1)} Account`,
+            });
           }
-        }
-
-        window.addEventListener("message", messageHandler)
-
+        };
+  
+        window.addEventListener("message", messageHandler);
+  
         // Check if popup was closed
         const checkClosed = setInterval(() => {
           if (popup.closed) {
-            clearInterval(checkClosed)
-            window.removeEventListener("message", messageHandler)
-            reject(new Error("Connection was cancelled."))
+            clearInterval(checkClosed);
+            window.removeEventListener("message", messageHandler);
+            reject(new Error("Connection was cancelled."));
           }
-        }, 500)
+        }, 500);
+        
+        // Set a timeout in case the popup doesn't respond
+        setTimeout(() => {
+          if (popup && !popup.closed) {
+            // Don't close the popup, user might still be authenticating
+            window.removeEventListener("message", messageHandler);
+            clearInterval(checkClosed);
+            reject(new Error("Connection timed out. Please try again."));
+          }
+        }, 120000); // 2 minutes timeout
+        
       } catch (error) {
-        reject(error)
+        console.error('[SocialBu] Connection error:', error);
+        reject(error);
       }
-    })
+    });
   }
 
   // Posts
