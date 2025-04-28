@@ -69,6 +69,7 @@ export default function PlatformConnectPage() {
   const [hasToken, setHasToken] = useState(true)
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false)
   const [authType, setAuthType] = useState<"register" | "login">("login")
+  const [isAuthenticatedWithSocialBu, setIsAuthenticatedWithSocialBu] = useState(false)
   const [userInfo, setUserInfo] = useState<{
     name?: string;
     email?: string;
@@ -84,31 +85,56 @@ export default function PlatformConnectPage() {
   // Check if user has a token and get user info
   const checkUserToken = async () => {
     try {
-      await withErrorHandling(async () => {
-        const api = getSocialBuAPI();
+      console.log("Checking for SocialBu token");
+      
+      // Get SocialBu API client
+      const socialBuAPI = getSocialBuAPI();
+      
+      // Check authentication state from localStorage first
+      const authState = socialBuAPI.loadAuthState();
+      console.log("Found SocialBu auth state in localStorage:", authState);
+      
+      // Set initial auth state based on what's in localStorage
+      setIsAuthenticatedWithSocialBu(authState.authenticated);
+      setHasToken(authState.authenticated);
+      
+      if (authState.authenticated && authState.userData) {
+        setUserInfo(authState.userData);
+        return; // We're already authenticated with valid user data
+      }
+      
+      // If no valid auth state in localStorage, check with API
+      const isTokenValid = await socialBuAPI.checkToken();
+      console.log("SocialBu token is valid:", isTokenValid);
+      
+      setHasToken(isTokenValid);
+      setIsAuthenticatedWithSocialBu(isTokenValid);
+      
+      // If token is valid, get user info
+      if (isTokenValid) {
+        const userInfoResponse = await socialBuAPI.getUserInfo();
+        const userData = {
+          name: userInfoResponse.name,
+          email: userInfoResponse.email,
+          verified: userInfoResponse.verified,
+          user_id: userInfoResponse.user_id
+        };
+        setUserInfo(userData);
         
-        // Get user info from the backend
-        const info = await api.getUserInfo();
-        
-        if (info.has_token && info.token_valid) {
-          setHasToken(true);
-          setUserInfo({
-            name: info.name,
-            email: info.email,
-            verified: info.verified,
-            user_id: info.user_id
-          });
-        } else {
-          setHasToken(false);
-          setUserInfo(null);
-          setIsAuthDialogOpen(true);
-          setAuthType("register");
-        }
-      }, "Failed to verify authentication status");
+        // Update localStorage with the authenticated state
+        socialBuAPI.storeAuthState({
+          authenticated: true,
+          userData
+        });
+      } else {
+        // Update localStorage with the unauthenticated state
+        socialBuAPI.storeAuthState({ authenticated: false });
+      }
     } catch (error) {
       console.error("Error checking token:", error);
       setHasToken(false);
-      setUserInfo(null);
+      setIsAuthenticatedWithSocialBu(false);
+      getSocialBuAPI().storeAuthState({ authenticated: false });
     }
   }
 
@@ -138,6 +164,10 @@ export default function PlatformConnectPage() {
         description: "You have been authenticated with SocialBu.",
       });
       
+      // Set authentication status
+      setIsAuthenticatedWithSocialBu(true);
+      setHasToken(true);
+      
       // Update user info and token status
       await checkUserToken();
       
@@ -147,6 +177,7 @@ export default function PlatformConnectPage() {
       fetchAccounts();
     } catch (error) {
       console.error("Login error:", error);
+      setIsAuthenticatedWithSocialBu(false);
       toast({
         title: "Login failed",
         description: error instanceof Error 
@@ -299,9 +330,9 @@ export default function PlatformConnectPage() {
 
   // Fetch accounts and check token on component mount
   useEffect(() => {
-    checkUserToken()
-    fetchAccounts()
-  }, [])
+    checkUserToken();
+    fetchAccounts();
+  }, []);
 
   const availablePlatforms = [
     {
@@ -469,7 +500,7 @@ export default function PlatformConnectPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {!hasToken && (
+          {!isAuthenticatedWithSocialBu && (
             <Button onClick={() => {
               setIsAuthDialogOpen(true)
               setAuthType("login")
@@ -515,7 +546,7 @@ export default function PlatformConnectPage() {
         </Alert>
       )}
 
-      {!hasToken && (
+      {!isAuthenticatedWithSocialBu && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Authentication Required</AlertTitle>

@@ -361,6 +361,32 @@ class API {
     }
   }
 
+  // Get SocialBu user information
+  async getSocialBuUserInfo(): Promise<{
+    has_token: boolean;
+    user_id?: string;
+    name?: string;
+    email?: string;
+    verified?: boolean;
+    created_at?: string;
+    updated_at?: string;
+  }> {
+    try {
+      console.log("Fetching SocialBu user info from backend");
+      
+      // Ensure we have the access token
+      const accessToken = this.getAccessToken();
+      console.log(`Using access token for SocialBu request: ${accessToken ? 'Token exists' : 'No token'}`);
+      
+      // Make the request (the token is automatically included in headers via getHeaders method)
+      const response = await this.request<any>("socialbu/user_info/", "GET");
+      return response;
+    } catch (error) {
+      console.error("Error fetching SocialBu user info:", error);
+      return { has_token: false};
+    }
+  }
+
   async logout(): Promise<void> {
     try {
       await this.request("/users/logout/", "POST", { refresh: this.refreshToken })

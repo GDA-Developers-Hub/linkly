@@ -82,19 +82,79 @@ class SocialBuAPI {
   private api = getAPI()
   private baseUrl = SOCIALBU_BASE_URL
 
+  // Store SocialBu authentication state in localStorage
+  storeAuthState(authState: {
+    authenticated: boolean;
+    userData?: {
+      name?: string;
+      email?: string;
+      verified?: boolean;
+      user_id?: string;
+    }
+  }): void {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("socialbu_auth_state", JSON.stringify(authState));
+      console.log("Stored SocialBu auth state in localStorage:", authState);
+    }
+  }
+
+  // Load SocialBu authentication state from localStorage
+  loadAuthState(): {
+    authenticated: boolean;
+    userData?: {
+      name?: string;
+      email?: string;
+      verified?: boolean;
+      user_id?: string;
+    }
+  } {
+    if (typeof window !== "undefined") {
+      const storedState = localStorage.getItem("socialbu_auth_state");
+      if (storedState) {
+        try {
+          const parsedState = JSON.parse(storedState);
+          console.log("Loaded SocialBu auth state from localStorage:", parsedState);
+          return parsedState;
+        } catch (e) {
+          console.error("Error parsing stored auth state:", e);
+        }
+      }
+    }
+    return { authenticated: false };
+  }
+
   // Check if authenticated
   isAuthenticated(): boolean {
-    return this.api.isAuthenticated()
+    const authState = this.loadAuthState();
+    return authState.authenticated;
   }
 
   // Check if user has valid token
   async checkToken(): Promise<boolean> {
     try {
-      // Get user info from the backend
-      const userInfo = await this.getUserInfo();
-      return userInfo.has_token && userInfo.token_valid;
+      // Get user info from the backend using the central API client
+      const userInfo = await this.api.getSocialBuUserInfo();
+      
+      // Log the response for debugging
+      console.log('SocialBu user info response:', userInfo);
+      
+      // Store authentication state in localStorage
+      const isAuthenticated = userInfo.has_token;
+      this.storeAuthState({
+        authenticated: isAuthenticated,
+        userData: isAuthenticated ? {
+          name: userInfo.name,
+          email: userInfo.email,
+          verified: userInfo.verified,
+          user_id: userInfo.user_id
+        } : undefined
+      });
+      
+      // Check if we have a token and if it's valid
+      return userInfo.has_token;
     } catch (error) {
       console.error("Error checking token:", error);
+      this.storeAuthState({ authenticated: false });
       return false;
     }
   }
@@ -102,7 +162,6 @@ class SocialBuAPI {
   // Get user's SocialBu info from the backend
   async getUserInfo(): Promise<{
     has_token: boolean;
-    token_valid: boolean;
     user_id?: string;
     name?: string;
     email?: string;
@@ -111,11 +170,22 @@ class SocialBuAPI {
     updated_at?: string;
   }> {
     try {
-      // Call the backend endpoint to get user info
-      return this.api.request<any>("socialbu/user_info/", "GET");
+      // First try to get from localStorage
+      const authState = this.loadAuthState();
+      if (authState.authenticated && authState.userData) {
+        console.log("Using cached SocialBu user info from localStorage");
+        return {
+          has_token: true,
+          ...authState.userData,
+        };
+      }
+      
+      // If no cached data, use the central API client
+      console.log("Fetching fresh SocialBu user info from API");
+      return this.api.getSocialBuUserInfo();
     } catch (error) {
-      console.error("Error fetching user info:", error);
-      return { has_token: false, token_valid: false };
+      console.error("Error in getUserInfo:", error);
+      return { has_token: false };
     }
   }
 
@@ -137,35 +207,49 @@ class SocialBuAPI {
     }
   }
 
-// Authentication
-async authenticate(email: string, password: string): Promise<{ token: string }> {
-  // Use our backend proxy to avoid CORS issues
-  try {
-    console.log("Attempting authentication with SocialBu");
-    console.log("Base URL:", this.baseUrl);
-    
-    // IMPORTANT: Do not use leading slash to avoid incorrect URL construction
-    const result = await this.api.request<{ token: string; user_id?: string; name?: string; email?: string }>(
-      "socialbu/authenticate", 
-      "POST", 
-      { 
-        email, 
-        password, 
-        base_url: this.baseUrl 
+  // Authentication
+  async authenticate(email: string, password: string): Promise<{ token: string }> {
+    // Use our backend proxy to avoid CORS issues
+    try {
+      console.log("Attempting authentication with SocialBu");
+      console.log("Base URL:", this.baseUrl);
+      
+      // IMPORTANT: Do not use leading slash to avoid incorrect URL construction
+      const result = await this.api.request<{ token: string; user_id?: string; name?: string; email?: string }>(
+        "socialbu/authenticate", 
+        "POST", 
+        { 
+          email, 
+          password, 
+          base_url: this.baseUrl 
+        }
+      );
+      
+      if (!result.token) {
+        throw new Error("Authentication failed: No token received");
       }
-    );
-    
-    if (!result.token) {
-      throw new Error("Authentication failed: No token received");
+      
+      // Store authentication state
+      this.storeAuthState({
+        authenticated: true,
+        userData: {
+          name: result.name,
+          email: result.email,
+          user_id: result.user_id
+        }
+      });
+      
+      return { token: result.token };
+    } catch (error: any) {
+      const errorMessage = error.message || "Authentication failed";
+      console.error("Authentication error:", errorMessage);
+      
+      // Clear authentication state
+      this.storeAuthState({ authenticated: false });
+      
+      throw error;
     }
-    
-    return { token: result.token };
-  } catch (error: any) {
-    const errorMessage = error.message || "Authentication failed";
-    console.error("Authentication error:", errorMessage);
-    throw error;
   }
-}
 
   // Social Platform Connection
   async getConnectionUrl(provider: string, accountId?: string): Promise<{ url: string }> {

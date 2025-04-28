@@ -493,6 +493,47 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
                 {'detail': 'Error retrieving SocialBu information'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    @action(detail=False, methods=['get'])
+    def debug_auth(self, request):
+        """Debug endpoint to check auth headers"""
+        try:
+            # Get authorization header
+            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+            
+            # Log it for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Debug Auth Header: {auth_header}")
+            
+            # Get the user info
+            user_info = {
+                'user_id': request.user.id,
+                'username': request.user.username,
+                'email': request.user.email,
+                'is_authenticated': request.user.is_authenticated,
+                'auth_header': auth_header,
+            }
+            
+            # Check if user has a SocialBu token
+            try:
+                token_obj = SocialBuToken.objects.get(user=request.user)
+                user_info['has_socialbu_token'] = True
+                user_info['socialbu_name'] = token_obj.name
+                user_info['socialbu_email'] = token_obj.email
+                user_info['socialbu_verified'] = token_obj.verified
+            except SocialBuToken.DoesNotExist:
+                user_info['has_socialbu_token'] = False
+            
+            return Response(user_info)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in debug_auth: {str(e)}")
+            return Response(
+                {'detail': f'Error: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class SocialBuConnectionCallbackView(APIView):
