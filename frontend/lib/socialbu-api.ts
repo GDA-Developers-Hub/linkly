@@ -251,32 +251,74 @@ class SocialBuAPI {
     }
   }
 
-  // Social Platform Connection
   async getConnectionUrl(provider: string, accountId?: string): Promise<{ url: string }> {
     // Get the app URL dynamically from the environment
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-    
+    // const appUrl = process.env.NEXT_PUBLIC_API_URL;
+    const appUrl = "https://cd7b-41-139-175-41.ngrok-free.app/api";
     // Build the proper postback URL
-    const postbackUrl = `${appUrl}/api/socialbu/connection-callback`;
+    const postbackUrl = `${appUrl}/socialbu/connection-callback/`;
     
-    const data: any = { 
+    // Get account ID (user_id) from localStorage that has your user data
+    let account_Id = '';  
+    // Check localStorage for authentication data
+    const keys = Object.keys(localStorage);
+    for (const key of keys) {
+      try {
+        const value = JSON.parse(localStorage.getItem(key) || '');
+        if (value && value.authenticated && value.userData && value.userData.user_id) {
+          account_Id = value.userData.user_id;
+          break;
+        }
+      } catch (e) {
+        // Skip this key if it doesn't contain valid JSON
+        console.log(`Skipping key: ${key}, not valid JSON`);
+      }
+    }
+
+    
+    // Prepare payload according to the SocialBu API requirements
+    const payload: { 
+      provider: string; 
+      postback_url: string;
+      account_id?: string;
+    } = { 
       provider, 
       postback_url: postbackUrl,
-      base_url: this.baseUrl 
+      account_id: account_Id
+    };
+    
+    
+    // Get Linkly access token from localStorage
+    let linklyAccessToken = '';
+    if (typeof window !== 'undefined') {
+      linklyAccessToken = localStorage.getItem('linkly_access_token') || '';
     }
     
-    if (accountId) {
-      data.account_id = accountId
+    // Determine the base URL for the backend
+    const baseApiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+    const response = await fetch(`${baseApiUrl}/socialbu/get_connection_url/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(linklyAccessToken ? { 'Authorization': `Bearer ${linklyAccessToken}` } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.detail || errorData.message || `Failed to get connection URL with status ${response.status}`;
+      throw new Error(errorMessage);
     }
     
-    // Do not use leading slash
-    return this.api.request<{ url: string }>("socialbu/get_connection_url", "POST", data)
+    return await response.json();
   }
 
   // Open a popup for social platform connection
   openConnectionPopup(provider: string): Promise<{ platform: string; accountId: string; accountName: string }> {
     return new Promise(async (resolve, reject) => {
       try {
+        console.log('[SocialBu] openConnectionPopup called for provider:', provider);
         // Get connection URL
         const { url } = await this.getConnectionUrl(provider)
 
@@ -299,6 +341,7 @@ class SocialBuAPI {
 
         // Listen for message from popup
         const messageHandler = (event: MessageEvent) => {
+          console.log('[SocialBu] openConnectionPopup received message:', event.data);
           if (event.data && event.data.type === "SOCIAL_CONNECTION_SUCCESS") {
             window.removeEventListener("message", messageHandler)
             resolve({

@@ -12,7 +12,7 @@ const buildUrl = (endpoint: string): string => {
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint.substring(1) : endpoint;
   console.log(`After removing leading slash: "${cleanEndpoint}"`);
   
-  // Ensure endpoint has trailing slash
+  // Always add trailing slash
   const endpointWithSlash = cleanEndpoint.endsWith("/") ? cleanEndpoint : `${cleanEndpoint}/`;
   console.log(`After ensuring trailing slash: "${endpointWithSlash}"`);
   

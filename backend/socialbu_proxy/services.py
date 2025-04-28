@@ -5,6 +5,7 @@ import string
 import random
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from .models import SocialBuToken
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class SocialBuService:
         
         # Use the BASE_URL directly without any additional processing
         # The frontend will provide the complete base URL including any api/v1
-        url = f"{self.BASE_URL}/{endpoint}"
+        url = f"{self.BASE_URL}/api/v1/{endpoint}"
         logger.info(f"Constructed URL: {url}")
             
         headers = self.get_headers()
@@ -304,4 +305,20 @@ class SocialBuAPIError(Exception):
         self.message = message
         self.status_code = status_code
         super().__init__(self.message)
+
+def get_socialbu_token_for_user(user):
+    try:
+        token_obj = SocialBuToken.objects.get(user=user)
+        # Optionally: check if token is expired and refresh if needed
+        return token_obj.access_token
+    except SocialBuToken.DoesNotExist:
+        # If you store SocialBu credentials on the user model
+        if hasattr(user, 'socialbu_email') and hasattr(user, 'socialbu_password') and user.socialbu_email and user.socialbu_password:
+            service = SocialBuService()
+            result = service.authenticate(user.socialbu_email, user.socialbu_password)
+            token = result['token']
+            SocialBuToken.objects.create(user=user, access_token=token)
+            return token
+        else:
+            raise Exception("No SocialBu token or credentials found for user")
  

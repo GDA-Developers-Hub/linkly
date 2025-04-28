@@ -17,43 +17,14 @@ from .serializers import (
     SocialBuTeamMemberSerializer,
     SocialPlatformConnectionSerializer
 )
-from .services import SocialBuService, SocialBuAPIError
+from .services import SocialBuService, SocialBuAPIError, get_socialbu_token_for_user
 
 class SocialBuProxyViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_socialbu_service(self):
-        """Get SocialBu service with user's token"""
-        try:
-            token_obj = SocialBuToken.objects.get(user=self.request.user)
-            return SocialBuService(token=token_obj.access_token)
-        except SocialBuToken.DoesNotExist:
-            # If no token exists, try to authenticate with stored credentials
-            if self.request.user.socialbu_email and self.request.user.socialbu_password:
-                try:
-                    service = SocialBuService()
-                    result = service.authenticate(
-                        self.request.user.socialbu_email,
-                        self.request.user.socialbu_password
-                    )
-                    
-                    # Store the token
-                    token_obj, created = SocialBuToken.objects.update_or_create(
-                        user=self.request.user,
-                        defaults={
-                            'access_token': result['token'],
-                            'refresh_token': result.get('refresh_token', '')
-                        }
-                    )
-                    
-                    return SocialBuService(token=result['token'])
-                except Exception as e:
-                    # Log the error but return unauthenticated service
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Failed to authenticate with SocialBu: {str(e)}")
-            
-            return SocialBuService()
+        token = get_socialbu_token_for_user(self.request.user)
+        return SocialBuService(token=token)
     
     @action(detail=False, methods=['get'])
     def check_token(self, request):
