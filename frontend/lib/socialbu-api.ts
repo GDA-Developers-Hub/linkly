@@ -502,8 +502,31 @@ class SocialBuAPI {
 
   // Accounts
   async getAccounts(): Promise<Account[]> {
-    // Remove leading slash
-    return this.api.request<Account[]>(`socialbu/accounts?base_url=${this.baseUrl}`)
+    // Make a direct request to the SocialBu API endpoint
+    const endpoint = `${this.baseUrl}/accounts`;
+    
+    // Get the Linkly access token from localStorage to use for the request
+    let linklyAccessToken = '';
+    if (typeof window !== 'undefined') {
+      linklyAccessToken = localStorage.getItem('linkly_access_token') || '';
+    }
+    
+    // Make the request using fetch API
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/socialbu/accounts`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(linklyAccessToken ? { 'Authorization': `Bearer ${linklyAccessToken}` } : {})
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.detail || errorData.message || `Failed to fetch accounts with status ${response.status}`;
+      throw new Error(errorMessage);
+    }
+    
+    return await response.json();
   }
 
   async disconnectAccount(accountId: number): Promise<void> {

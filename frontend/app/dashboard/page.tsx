@@ -18,13 +18,21 @@ interface InsightsData {
     published: number
     total: number
   }
+  connectedAccounts: Array<{
+    id: number
+    name: string
+    _type?: string
+    type?: string
+    image?: string
+    active: boolean
+  }>
 }
 
 interface RecentPost {
   id: number
   content: string
   status: string
-  scheduled_at?: string
+  scheduled_at?: string | null
   platform: string
   engagement?: {
     likes: number
@@ -48,20 +56,41 @@ export default function DashboardPage() {
 
         // Fetch insights
         const insightsData = await api.getInsights()
+        
+        // Fetch connected accounts
+        const connectedAccounts = await api.getAccounts()
 
         // Fetch recent posts
-        const postsData = await api.getPosts({ limit: 5 })
+        const postsData = await api.getPosts()
+
+        // Get basic metrics from insights (simplified for demo)
+        const totalFollowers = insightsData.reduce((sum, insight) => 
+          insight.metric === 'followers' ? sum + insight.value : sum, 0);
+          
+        const avgEngagement = insightsData.reduce((sum, insight) => 
+          insight.metric === 'engagement' ? sum + insight.value : sum, 0);
+          
+        const totalReach = insightsData.reduce((sum, insight) => 
+          insight.metric === 'reach' ? sum + insight.value : sum, 0);
 
         // Transform data for the dashboard
         const transformedInsights: InsightsData = {
-          followers: insightsData.followers || 0,
-          engagement: insightsData.engagement || 0,
-          reach: insightsData.reach || 0,
+          followers: totalFollowers,
+          engagement: avgEngagement,
+          reach: totalReach,
           posts: {
             scheduled: postsData.filter((post) => post.status === "scheduled").length,
             published: postsData.filter((post) => post.status === "published").length,
             total: postsData.length,
           },
+          connectedAccounts: connectedAccounts.map(account => ({
+            id: account.id,
+            name: account.name,
+            _type: account._type || account.type || 'Unknown',
+            type: account.type || '',
+            image: account.image || '',
+            active: typeof account.active === 'boolean' ? account.active : true
+          }))
         }
 
         // Transform posts data
@@ -70,7 +99,7 @@ export default function DashboardPage() {
           content: post.content,
           status: post.status,
           scheduled_at: post.scheduled_at,
-          platform: post.account_ids?.[0]?.toString() || "unknown",
+          platform: post.platforms?.[0] || "unknown",
           engagement: {
             likes: Math.floor(Math.random() * 100),
             comments: Math.floor(Math.random() * 30),
@@ -250,44 +279,78 @@ export default function DashboardPage() {
                 )}
               </CardContent>
             </Card>
-
+            
             <Card className="col-span-3">
               <CardHeader>
-                <CardTitle>Content Performance</CardTitle>
-                <CardDescription>Your content engagement metrics</CardDescription>
+                <CardTitle>Connected Accounts</CardTitle>
+                <CardDescription>Your connected social media platforms</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-8">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="font-medium">Instagram</div>
-                    <div className="text-muted-foreground">72%</div>
+              <CardContent>
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="flex items-center space-x-4">
+                        <div className="h-10 w-10 animate-pulse rounded-full bg-muted"></div>
+                        <div className="space-y-2">
+                          <div className="h-4 w-32 animate-pulse rounded bg-muted"></div>
+                          <div className="h-3 w-20 animate-pulse rounded bg-muted"></div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <Progress value={72} className="h-2" />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="font-medium">Facebook</div>
-                    <div className="text-muted-foreground">54%</div>
+                ) : insights && insights.connectedAccounts && insights.connectedAccounts.length > 0 ? (
+                  <div className="space-y-3">
+                    {insights.connectedAccounts.map((account) => (
+                      <div key={account.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {account.image ? (
+                            <img 
+                              src={account.image} 
+                              alt={account.name} 
+                              className="h-10 w-10 rounded-full object-cover" 
+                            />
+                          ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                              <Users className="h-5 w-5 text-primary" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-sm font-medium">{account.name}</p>
+                            <p className="text-xs text-muted-foreground">{account._type || account.type}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center">
+                          {account.active ? (
+                            <div className="flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800 dark:bg-green-800/30 dark:text-green-500">
+                              <div className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500"></div>
+                              Active
+                            </div>
+                          ) : (
+                            <div className="flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-800/30 dark:text-amber-500">
+                              <div className="mr-1 h-1.5 w-1.5 rounded-full bg-amber-500"></div>
+                              Inactive
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <Button variant="outline" className="mt-2 w-full text-xs" asChild>
+                      <a href="/dashboard/platform-connect">Manage Accounts</a>
+                    </Button>
                   </div>
-                  <Progress value={54} className="h-2" />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="font-medium">Twitter</div>
-                    <div className="text-muted-foreground">48%</div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center space-y-3 py-6">
+                    <Users className="h-8 w-8 text-muted-foreground" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium">No connected accounts</p>
+                      <p className="text-xs text-muted-foreground">Connect your social media accounts to get started</p>
+                    </div>
+                    <Button variant="outline" size="sm" asChild>
+                      <a href="/dashboard/platform-connect">Connect Accounts</a>
+                    </Button>
                   </div>
-                  <Progress value={48} className="h-2" />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="font-medium">LinkedIn</div>
-                    <div className="text-muted-foreground">35%</div>
-                  </div>
-                  <Progress value={35} className="h-2" />
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>

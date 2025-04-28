@@ -298,13 +298,32 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
             
             # Store accounts in our database for reference
             for account in result:
+                # Extract platform from type or _type if platform key doesn't exist
+                platform = account.get('platform')
+                if not platform and account.get('type'):
+                    # Extract platform from type string (e.g., 'facebook.page' -> 'facebook')
+                    platform = account.get('type', '').split('.')[0]
+                elif not platform and account.get('_type'):
+                    # Try to get platform from _type (e.g., 'Facebook Page' -> 'facebook')
+                    platform_name = account.get('_type', '').split(' ')[0].lower()
+                    if platform_name:
+                        platform = platform_name
+
+                # Skip if we can't determine the platform
+                if not platform:
+                    continue
+                
+                # Add 'active' field to the account data for frontend use
+                account['platform'] = platform
+                account['active'] = account.get('active', True)  # Default to active if not specified
+                
                 SocialPlatformConnection.objects.update_or_create(
                     user=request.user,
-                    platform=account['platform'],
+                    platform=platform,
                     account_id=account['id'],
                     defaults={
-                        'account_name': account['name'],
-                        'status': account['status']
+                        'account_name': account.get('name', f"Account {account['id']}"),
+                        'status': account.get('status', 'connected')
                     }
                 )
             
