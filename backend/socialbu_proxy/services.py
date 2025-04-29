@@ -185,12 +185,26 @@ class SocialBuService:
                 
             # Log the endpoint we're going to call
             endpoint = 'auth/get_token'
-            url = f"{self.BASE_URL}/{endpoint}"
+            
+            # Check if BASE_URL already includes /api/v1 to avoid duplication
+            if self.BASE_URL.endswith('/api/v1'):
+                url = f"{self.BASE_URL.rstrip('/')}/{endpoint}"
+            else:
+                url = f"{self.BASE_URL}/api/v1/{endpoint}"
+                
             logger.info(f"Authentication endpoint: {endpoint}")
             logger.info(f"Full authentication URL: {url}")
                 
-            # Call the endpoint
-            result = self.make_request('auth/get_token', 'POST', payload)
+            # Direct HTTP call to avoid URL construction issues
+            headers = {
+                'Content-Type': 'application/json',
+            }
+            
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            
+            # Parse the response
+            result = response.json()
             
             logger.info(f"Authentication result: {result}")
             
@@ -202,6 +216,22 @@ class SocialBuService:
                 'email': result.get('email'),
                 'verified': result.get('verified', False)
             }
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Authentication request error: {str(e)}")
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_message = error_data.get('message', str(e))
+                    logger.error(f"API error response: {error_data}")
+                except ValueError:
+                    error_message = str(e)
+                    
+                status_code = e.response.status_code
+            else:
+                error_message = str(e)
+                status_code = 500
+                
+            raise SocialBuAPIError(error_message, status_code)
         except Exception as e:
             logger.error(f"Authentication exception: {str(e)}")
             raise
@@ -306,6 +336,75 @@ class SocialBuService:
             logger.error("'content' field is missing in post data")
             raise SocialBuAPIError("'content' field is required")
         
+        if 'platform' in data and data['platform']:
+            logger.info(f"Using platform-specific options for platform: {data['platform']}")
+            
+            # Check if we need to format options based on the platform
+            if 'options' in data and data['options']:
+                platform = data['platform'].lower()
+                
+                if platform == 'facebook':
+                    # Facebook only needs these options
+                    filtered_options = {
+                        k: v for k, v in data['options'].items() 
+                        if k in ['comment', 'post_as_story']
+                    }
+                    data['options'] = filtered_options
+                    
+                elif platform == 'instagram':
+                    # Instagram options
+                    filtered_options = {
+                        k: v for k, v in data['options'].items() 
+                        if k in ['post_as_reel', 'post_as_story', 'share_reel_to_feed', 'comment', 'thumbnail']
+                    }
+                    data['options'] = filtered_options
+                    
+                elif platform in ['twitter', 'x']:
+                    # Twitter/X options
+                    filtered_options = {
+                        k: v for k, v in data['options'].items() 
+                        if k in ['media_alt_text', 'threaded_replies']
+                    }
+                    data['options'] = filtered_options
+                    
+                elif platform == 'linkedin':
+                    # LinkedIn options
+                    filtered_options = {
+                        k: v for k, v in data['options'].items() 
+                        if k in [
+                            'link', 'trim_link_from_content', 'customize_link', 'link_description',
+                            'link_title', 'thumbnail', 'comment', 'document_title'
+                        ]
+                    }
+                    data['options'] = filtered_options
+                    
+                elif platform == 'youtube':
+                    # YouTube options
+                    filtered_options = {
+                        k: v for k, v in data['options'].items() 
+                        if k in [
+                            'video_title', 'video_tags', 'category_id', 'privacy_status',
+                            'post_as_short', 'made_for_kids'
+                        ]
+                    }
+                    data['options'] = filtered_options
+                    
+                elif platform == 'tiktok':
+                    # TikTok options
+                    filtered_options = {
+                        k: v for k, v in data['options'].items() 
+                        if k in [
+                            'title', 'privacy_status', 'allow_stitch', 'allow_duet',
+                            'allow_comment', 'disclose_content', 'branded_content', 'own_brand'
+                        ]
+                    }
+                    data['options'] = filtered_options
+                
+                logger.info(f"Processed platform-specific options for {platform}: {data['options']}")
+            
+            # Keep the platform field in the request
+            # data['platform'] is kept intentionally
+            
         logger.info(f"Sending post creation request to {endpoint}")
         
         try:

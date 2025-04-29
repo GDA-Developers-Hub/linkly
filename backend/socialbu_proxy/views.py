@@ -262,8 +262,30 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
             # Get the service with the user's token
             service = self.get_socialbu_service()
             
+            # If platform is not specified but accounts are provided, try to determine platform
+            validated_data = serializer.validated_data.copy()
+            
+            if not validated_data.get('platform') and validated_data.get('accounts'):
+                # Get the first account ID
+                first_account_id = validated_data['accounts'][0] if validated_data['accounts'] else None
+                
+                if first_account_id:
+                    try:
+                        # Get the platform from our database
+                        connection = SocialPlatformConnection.objects.filter(
+                            user=request.user,
+                            account_id=first_account_id
+                        ).first()
+                        
+                        if connection:
+                            # Add platform to the validated data
+                            validated_data['platform'] = connection.platform
+                            logger.info(f"Determined platform for account {first_account_id}: {connection.platform}")
+                    except Exception as e:
+                        logger.warning(f"Error determining platform for account {first_account_id}: {str(e)}")
+            
             # Make the API call with the validated data
-            result = service.create_post(serializer.validated_data)
+            result = service.create_post(validated_data)
             logger.info(f"Post creation result: {result}")
             
             return Response(result)

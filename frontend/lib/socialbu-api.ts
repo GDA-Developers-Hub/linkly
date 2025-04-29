@@ -36,9 +36,76 @@ export interface Post {
   created_at: string
   draft?: boolean
   team_id?: number
+  platform?: string
   options?: {
+    // Common options
     comment?: string
     post_as_story?: boolean
+    
+    // Instagram specific
+    post_as_reel?: boolean
+    share_reel_to_feed?: boolean
+    thumbnail?: {
+      name?: string
+      mimeType?: string
+      extension?: string
+      key?: string
+      url?: string
+      secureKey?: string
+      temporary?: boolean
+      _metaData?: {
+        width?: number
+        height?: number
+      }
+    }
+    
+    // Twitter specific
+    media_alt_text?: string[]
+    threaded_replies?: Array<{
+      tweet?: string
+      media?: Array<{
+        name?: string
+        size?: number
+        mimeType?: string
+        extension?: string
+        key?: string
+        url?: string
+        secureKey?: string
+        temporary?: boolean
+        _metaData?: {
+          width?: number
+          height?: number
+        }
+        type?: string
+        ext?: string
+        mime?: string
+      }>
+    }>
+    
+    // LinkedIn specific
+    link?: string
+    trim_link_from_content?: boolean
+    customize_link?: boolean
+    link_description?: string
+    link_title?: string
+    document_title?: string
+    
+    // YouTube specific
+    video_title?: string
+    video_tags?: string
+    category_id?: number
+    privacy_status?: string
+    post_as_short?: boolean
+    made_for_kids?: boolean
+    
+    // TikTok specific
+    title?: string
+    allow_stitch?: boolean
+    allow_duet?: boolean
+    allow_comment?: boolean
+    disclose_content?: boolean
+    branded_content?: boolean
+    own_brand?: boolean
   }
 }
 
@@ -237,7 +304,13 @@ class SocialBuAPI {
     // Use our backend proxy to avoid CORS issues
     try {
       console.log("Attempting authentication with SocialBu");
-      console.log("Base URL:", this.baseUrl);
+      
+      // Ensure base URL doesn't include /api/v1 twice
+      const baseUrl = this.baseUrl.endsWith('/api/v1') 
+        ? this.baseUrl.substring(0, this.baseUrl.length - 7) // Remove /api/v1
+        : this.baseUrl;
+        
+      console.log("Base URL for authentication:", baseUrl);
       
       // IMPORTANT: Do not use leading slash to avoid incorrect URL construction
       const result = await this.api.request<{ token: string; user_id?: string; name?: string; email?: string }>(
@@ -246,7 +319,7 @@ class SocialBuAPI {
         { 
           email, 
           password, 
-          base_url: this.baseUrl 
+          base_url: baseUrl 
         }
       );
       
@@ -477,13 +550,34 @@ class SocialBuAPI {
     draft?: boolean;
     existing_attachments?: Array<{ upload_token: string }>;
     postback_url?: string;
-    options?: {
-      comment?: string;
-      post_as_story?: boolean;
-    };
+    platform?: string;
+    options?: Record<string, any>;
   }): Promise<Post> {
     // Log the post creation request
     console.log('[SocialBu] Creating post with data:', JSON.stringify(data, null, 2));
+    
+    // If platform is not provided but accounts are, try to determine platform
+    if (!data.platform && data.accounts && data.accounts.length > 0) {
+      try {
+        // Get accounts if not already cached
+        const accounts = await this.getAccounts();
+        const accountId = data.accounts[0];
+        const account = accounts.find(acc => acc.id === accountId);
+        
+        if (account && account.platform) {
+          data.platform = account.platform;
+          console.log(`[SocialBu] Determined platform from account: ${data.platform}`);
+        }
+      } catch (error) {
+        console.warn('[SocialBu] Could not determine platform from account:', error);
+      }
+    }
+    
+    // If we have a platform, filter options to only include relevant ones for that platform
+    if (data.platform && data.options) {
+      data.options = getPlatformOptions(data.platform, data.options);
+      console.log(`[SocialBu] Using platform-specific options for ${data.platform}:`, data.options);
+    }
     
     // Format the data according to SocialBu API requirements
     const postData = {
@@ -645,6 +739,77 @@ class SocialBuAPI {
 
 // Singleton instance
 let socialBuAPIInstance: SocialBuAPI | null = null
+
+// Get platform-specific default options
+export function getPlatformOptions(platform: string, baseOptions: Record<string, any> = {}): Record<string, any> {
+  const options = { ...baseOptions };
+  
+  switch(platform.toLowerCase()) {
+    case 'facebook':
+      // Only include Facebook-specific options
+      return {
+        comment: options.comment,
+        post_as_story: options.post_as_story
+      };
+      
+    case 'instagram':
+      return {
+        post_as_reel: options.post_as_reel || false,
+        post_as_story: options.post_as_story || false,
+        share_reel_to_feed: options.share_reel_to_feed || false,
+        comment: options.comment,
+        thumbnail: options.thumbnail
+      };
+      
+    case 'twitter':
+    case 'x':
+      return {
+        media_alt_text: options.media_alt_text || [],
+        threaded_replies: options.threaded_replies || []
+      };
+      
+    case 'linkedin':
+      return {
+        link: options.link,
+        trim_link_from_content: options.trim_link_from_content || false,
+        customize_link: options.customize_link || false,
+        link_description: options.link_description,
+        link_title: options.link_title,
+        thumbnail: options.thumbnail,
+        comment: options.comment,
+        document_title: options.document_title
+      };
+      
+    case 'youtube':
+      return {
+        video_title: options.video_title,
+        video_tags: options.video_tags,
+        category_id: options.category_id,
+        privacy_status: options.privacy_status,
+        post_as_short: options.post_as_short || false,
+        made_for_kids: options.made_for_kids || false
+      };
+      
+    case 'tiktok':
+      return {
+        title: options.title,
+        privacy_status: options.privacy_status,
+        allow_stitch: options.allow_stitch !== undefined ? options.allow_stitch : true,
+        allow_duet: options.allow_duet !== undefined ? options.allow_duet : true,
+        allow_comment: options.allow_comment !== undefined ? options.allow_comment : true,
+        disclose_content: options.disclose_content || false,
+        branded_content: options.branded_content || false,
+        own_brand: options.own_brand || false
+      };
+      
+    default:
+      // Return the default options for unknown platform
+      return {
+        comment: options.comment,
+        post_as_story: options.post_as_story
+      };
+  }
+}
 
 // Get SocialBu API instance
 export function getSocialBuAPI(): SocialBuAPI {

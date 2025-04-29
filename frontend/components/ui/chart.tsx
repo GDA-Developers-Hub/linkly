@@ -333,4 +333,12 @@ export {
   Pie,
   Cell,
 }
-export { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, ChartStyle }
+export { 
+  ChartContainer as Chart,
+  ChartContainer,
+  ChartTooltip, 
+  ChartTooltipContent, 
+  ChartLegend, 
+  ChartLegendContent, 
+  ChartStyle 
+}
