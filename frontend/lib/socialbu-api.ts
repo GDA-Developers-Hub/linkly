@@ -523,16 +523,19 @@ class SocialBuAPI {
   }
 
   async uploadMedia(file: File): Promise<Media> {
-    const formData = new FormData()
-    formData.append("media", file)
-    formData.append("base_url", this.baseUrl)
+    // Step 1: Create media slot with metadata
+    const metadata = {
+      name: file.name,
+      mime_type: file.type
+    }
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/socialbu/upload_media`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/socialbu/upload_media/`, {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${this.api.getAccessToken()}`,
       },
-      body: formData,
+      body: JSON.stringify(metadata)
     })
 
     if (!response.ok) {
@@ -541,7 +544,32 @@ class SocialBuAPI {
       throw new Error(errorMessage)
     }
 
-    return await response.json()
+    const data = await response.json()
+    
+    if (!data.upload_url) {
+      throw new Error("No upload URL received from server")
+    }
+
+    // Step 2: Upload file to presigned URL
+    const uploadResponse = await fetch(data.upload_url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type
+      },
+      body: file
+    })
+
+    if (!uploadResponse.ok) {
+      throw new Error(`Failed to upload file: ${uploadResponse.statusText}`)
+    }
+
+    // Return the media info from the first response
+    return {
+      id: data.id,
+      url: data.media_url,
+      type: file.type,
+      created_at: new Date().toISOString()
+    }
   }
 
   async deleteMedia(mediaId: number): Promise<void> {

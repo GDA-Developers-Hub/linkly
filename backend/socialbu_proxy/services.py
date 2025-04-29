@@ -287,9 +287,32 @@ class SocialBuService:
     
     # Media
     def upload_media(self, file):
-        """Upload media to SocialBu API"""
-        files = {'media': file}
-        return self.make_request('media', 'POST', {}, files)
+        """Upload media to SocialBu API using two-step process"""
+        # Step 1: Create media slot with metadata
+        metadata = {
+            'name': file.name,
+            'mime_type': file.content_type
+        }
+        
+        # Make initial request to get upload URL
+        response = self.make_request('upload_media', 'POST', metadata)
+        
+        if not response.get('upload_url'):
+            raise SocialBuAPIError("No upload URL received from SocialBu API")
+            
+        # Step 2: Upload file to presigned URL
+        try:
+            upload_response = requests.put(
+                response['upload_url'],
+                data=file.read(),
+                headers={'Content-Type': file.content_type}
+            )
+            upload_response.raise_for_status()
+            
+            # Return the media info from the first response
+            return response
+        except requests.exceptions.RequestException as e:
+            raise SocialBuAPIError(f"Failed to upload file: {str(e)}")
     
     def get_media(self):
         """Get media from SocialBu API"""
