@@ -6,9 +6,17 @@ import random
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from .models import SocialBuToken
+from datetime import datetime
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+# Add a custom JSON encoder that can handle datetime objects
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 def generate_secure_password(length=16):
     """Generate a secure random password"""
@@ -51,6 +59,13 @@ class SocialBuService:
         headers = self.get_headers()
         logger.info(f"Request headers: {headers}")
         
+        # Pre-process data to convert datetime objects to strings
+        if data and not files:
+            # Convert any datetime objects to strings
+            processed_data = self._prepare_data_for_json(data)
+        else:
+            processed_data = data
+        
         # Use the existing logger instead of redefining it
         logger.info(f"Making {method} request to SocialBu API: {url}")
         if data:
@@ -65,9 +80,11 @@ class SocialBuService:
                     headers.pop('Content-Type', None)
                     response = requests.post(url, headers=headers, data=data, files=files)
                 else:
-                    response = requests.post(url, headers=headers, json=data)
+                    # Use standard json parameter with processed data
+                    response = requests.post(url, headers=headers, json=processed_data, timeout=30)
             elif method == 'PUT':
-                response = requests.put(url, headers=headers, json=data)
+                # Use standard json parameter with processed data
+                response = requests.put(url, headers=headers, json=processed_data, timeout=30)
             elif method == 'DELETE':
                 response = requests.delete(url, headers=headers)
             else:
@@ -114,6 +131,20 @@ class SocialBuService:
                 status_code = 500
                 
             raise SocialBuAPIError(error_message, status_code)
+    
+    def _prepare_data_for_json(self, data):
+        """Convert data with datetime objects to JSON-serializable format"""
+        if isinstance(data, dict):
+            result = {}
+            for key, value in data.items():
+                result[key] = self._prepare_data_for_json(value)
+            return result
+        elif isinstance(data, list):
+            return [self._prepare_data_for_json(item) for item in data]
+        elif isinstance(data, datetime):
+            return data.isoformat()
+        else:
+            return data
     
     # User Management
     def register(self, name, email, password):
@@ -249,7 +280,19 @@ class SocialBuService:
     
     def create_post(self, data):
         """Create a post in SocialBu API"""
-        logger.info(f"Creating post with data: {json.dumps(data, indent=2)}")
+        # Log the data with proper datetime handling
+        try:
+            # Create a copy of the data for logging
+            log_data = data.copy() if hasattr(data, 'copy') else dict(data)
+            
+            # Convert datetime objects to ISO format strings
+            if 'publish_at' in log_data and log_data['publish_at']:
+                log_data['publish_at'] = log_data['publish_at'].isoformat()
+                
+            logger.info(f"Creating post with data: {json.dumps(log_data, indent=2)}")
+        except Exception as e:
+            # Don't let logging errors block the API call
+            logger.warning(f"Error logging post data: {str(e)}")
         
         # Make sure we're using the correct endpoint as per the requirements
         endpoint = 'posts'
@@ -297,20 +340,32 @@ class SocialBuService:
         # Make initial request to get upload URL
         response = self.make_request('upload_media', 'POST', metadata)
         
-        if not response.get('upload_url'):
-            raise SocialBuAPIError("No upload URL received from SocialBu API")
+        if not response.get('signed_url'):
+            raise SocialBuAPIError("No signed URL received from SocialBu API")
             
         # Step 2: Upload file to presigned URL
         try:
+            # Read the file content
+            file_content = file.read()
+            
+            # Upload to the presigned URL
             upload_response = requests.put(
-                response['upload_url'],
-                data=file.read(),
-                headers={'Content-Type': file.content_type}
+                response['signed_url'],
+                data=file_content,
+                headers={
+                    'Content-Type': file.content_type,
+                    'x-amz-acl': 'private'  # Add this header for S3 upload
+                }
             )
             upload_response.raise_for_status()
             
             # Return the media info from the first response
-            return response
+            return {
+                'id': response.get('key', '').split('/')[-1].split('.')[0],  # Extract ID from key
+                'url': response.get('url'),
+                'type': file.content_type,
+                'created_at': datetime.now().isoformat()
+            }
         except requests.exceptions.RequestException as e:
             raise SocialBuAPIError(f"Failed to upload file: {str(e)}")
     

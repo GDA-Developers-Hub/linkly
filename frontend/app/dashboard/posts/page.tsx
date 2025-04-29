@@ -163,7 +163,7 @@ export default function PostsPage() {
   }
 
   // Format date for display
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString: string | undefined) => {
     if (!dateString) return "Unknown date"
 
     const date = new Date(dateString)
@@ -209,7 +209,14 @@ export default function PostsPage() {
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input placeholder="Search posts..." className="pl-8 w-full sm:w-[200px] lg:w-[300px]" />
                 </div>
-                <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={() => {
+                    void fetchData();
+                  }} 
+                  disabled={isLoading}
+                >
                   {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 </Button>
               </div>
@@ -346,9 +353,9 @@ export default function PostsPage() {
                                 <Calendar className="mr-1 h-3 w-3" />
                                 <span>
                                   {post.status === "published"
-                                    ? `Posted ${formatDate(post.published_at)}`
+                                    ? `Posted ${formatDate(post.published_at || '')}`
                                     : post.status === "scheduled"
-                                      ? `Scheduled for ${formatDate(post.scheduled_at)}`
+                                      ? `Scheduled for ${formatDate(post.publish_at || '')}`
                                       : post.status === "draft"
                                         ? "Draft"
                                         : "Failed"}

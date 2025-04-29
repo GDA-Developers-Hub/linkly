@@ -136,7 +136,8 @@ export default function CreatePostPage() {
           accounts: selectedPlatforms,
           content,
           draft: isDraft,
-          publish_at: isDraft ? undefined : scheduledDate.toISOString(),
+          // Format the date as "YYYY-MM-DD HH:MM:SS" string instead of ISO format
+          publish_at: isDraft ? undefined : format(scheduledDate, "yyyy-MM-dd HH:mm:ss"),
           // Convert uploaded media to the format expected by SocialBu
           existing_attachments: uploadedMedia.length > 0 
             ? uploadedMedia.map(media => ({ 
@@ -144,8 +145,8 @@ export default function CreatePostPage() {
               }))
             : undefined,
           // Optional fields
-          team_id: undefined, // Set this if working with teams
-          postback_url: window.location.origin + "/dashboard/posts",
+          team_id: 0, // Default to 0 if no specific team ID is available
+          postback_url: "https://186b-41-139-175-41.ngrok-free.app/dashboard/posts",
           options: {
             post_as_story: false // Set to true for story-type posts
           }
@@ -195,7 +196,12 @@ export default function CreatePostPage() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="end">
-                <CalendarComponent mode="single" selected={date} onSelect={setDate} initialFocus />
+                <CalendarComponent 
+                  mode="single" 
+                  selected={date} 
+                  onSelect={(newDate) => newDate && setDate(newDate)} 
+                  initialFocus 
+                />
                 <div className="p-3 border-t">
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-muted-foreground" />

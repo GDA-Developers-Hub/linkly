@@ -303,15 +303,18 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
         except SocialBuAPIError as e:
             return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    @action(detail=False, methods=['post'])
     def upload_media(self, request):
         """Upload media to SocialBu API"""
-        if 'media' not in request.FILES:
-            return Response({'detail': 'No media file provided'}, status=status.HTTP_400_BAD_REQUEST)
-        
         try:
             service = self.get_socialbu_service()
-            result = service.upload_media(request.FILES['media'])
+            
+            # Get file from request
+            if 'file' not in request.FILES:
+                return Response({'detail': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            file = request.FILES['file']
+            result = service.upload_media(file)
             return Response(result)
         except SocialBuAPIError as e:
             return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
