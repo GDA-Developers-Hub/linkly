@@ -336,80 +336,96 @@ class SocialBuService:
             logger.error("'content' field is missing in post data")
             raise SocialBuAPIError("'content' field is required")
         
+        # Format request data according to platform requirements
+        request_data = {
+            'accounts': data['accounts'],
+            'team_id': data.get('team_id', 0),
+            'content': data['content'],
+            'draft': data.get('draft', False),
+            'postback_url': data.get('postback_url'),
+        }
+
+        # Add publish_at if provided
+        if 'publish_at' in data and data['publish_at']:
+            request_data['publish_at'] = data['publish_at'].isoformat()
+
+        # Add existing_attachments if provided
+        if 'existing_attachments' in data and data['existing_attachments']:
+            request_data['existing_attachments'] = data['existing_attachments']
+
+        # Process platform-specific options
         if 'platform' in data and data['platform']:
-            logger.info(f"Using platform-specific options for platform: {data['platform']}")
+            platform = data['platform'].lower()
+            logger.info(f"Using platform-specific options for platform: {platform}")
             
-            # Check if we need to format options based on the platform
+            # Add platform to request data
+            request_data['platform'] = platform
+            
+            # Initialize options
+            options = {}
+            
             if 'options' in data and data['options']:
-                platform = data['platform'].lower()
-                
                 if platform == 'facebook':
                     # Facebook only needs these options
-                    filtered_options = {
+                    options = {
                         k: v for k, v in data['options'].items() 
                         if k in ['comment', 'post_as_story']
                     }
-                    data['options'] = filtered_options
                     
                 elif platform == 'instagram':
                     # Instagram options
-                    filtered_options = {
+                    options = {
                         k: v for k, v in data['options'].items() 
                         if k in ['post_as_reel', 'post_as_story', 'share_reel_to_feed', 'comment', 'thumbnail']
                     }
-                    data['options'] = filtered_options
                     
                 elif platform in ['twitter', 'x']:
                     # Twitter/X options
-                    filtered_options = {
+                    options = {
                         k: v for k, v in data['options'].items() 
                         if k in ['media_alt_text', 'threaded_replies']
                     }
-                    data['options'] = filtered_options
                     
                 elif platform == 'linkedin':
                     # LinkedIn options
-                    filtered_options = {
+                    options = {
                         k: v for k, v in data['options'].items() 
                         if k in [
                             'link', 'trim_link_from_content', 'customize_link', 'link_description',
                             'link_title', 'thumbnail', 'comment', 'document_title'
                         ]
                     }
-                    data['options'] = filtered_options
                     
                 elif platform == 'youtube':
                     # YouTube options
-                    filtered_options = {
+                    options = {
                         k: v for k, v in data['options'].items() 
                         if k in [
                             'video_title', 'video_tags', 'category_id', 'privacy_status',
                             'post_as_short', 'made_for_kids'
                         ]
                     }
-                    data['options'] = filtered_options
                     
                 elif platform == 'tiktok':
                     # TikTok options
-                    filtered_options = {
+                    options = {
                         k: v for k, v in data['options'].items() 
                         if k in [
                             'title', 'privacy_status', 'allow_stitch', 'allow_duet',
                             'allow_comment', 'disclose_content', 'branded_content', 'own_brand'
                         ]
                     }
-                    data['options'] = filtered_options
                 
-                logger.info(f"Processed platform-specific options for {platform}: {data['options']}")
-            
-            # Keep the platform field in the request
-            # data['platform'] is kept intentionally
+                # Only add options if there are any
+                if options:
+                    request_data['options'] = options
+                    logger.info(f"Processed platform-specific options for {platform}: {options}")
             
         logger.info(f"Sending post creation request to {endpoint}")
         
         try:
             # Make the API call with the validated data
-            result = self.make_request(endpoint, 'POST', data)
+            result = self.make_request(endpoint, 'POST', request_data)
             logger.info(f"Post creation successful. Response: {json.dumps(result, indent=2)}")
             return result
         except SocialBuAPIError as e:

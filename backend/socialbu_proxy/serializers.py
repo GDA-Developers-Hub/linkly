@@ -124,7 +124,7 @@ class PostOptionsSerializer(serializers.Serializer):
 
 class SocialBuPostSerializer(serializers.Serializer):
     accounts = serializers.ListField(child=serializers.IntegerField())
-    team_id = serializers.IntegerField(required=False, allow_null=True)
+    team_id = serializers.IntegerField(required=False, allow_null=True, default=0)
     publish_at = serializers.DateTimeField(required=False, allow_null=True)
     content = serializers.CharField()
     draft = serializers.BooleanField(required=False, default=False)
@@ -135,12 +135,44 @@ class SocialBuPostSerializer(serializers.Serializer):
     )
     postback_url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
     
-    # Include platform info to determine which options to use
-    platform = serializers.CharField(required=False, allow_blank=True)
+    # Platform field is required to determine which options to use
+    platform = serializers.CharField(required=True)
     
-    # Generic options that work with any platform
-    options = PostOptionsSerializer(required=False, allow_null=True)
+    # Platform-specific options
+    options = serializers.DictField(required=False, allow_null=True)
     
+    def validate(self, data):
+        """
+        Validate platform-specific options based on the platform.
+        """
+        platform = data.get('platform', '').lower()
+        options = data.get('options', {})
+        
+        if not platform:
+            raise serializers.ValidationError({'platform': 'Platform field is required'})
+        
+        if options:
+            if platform == 'facebook':
+                serializer = FacebookOptionsSerializer(data=options)
+            elif platform == 'instagram':
+                serializer = InstagramOptionsSerializer(data=options)
+            elif platform in ['twitter', 'x']:
+                serializer = TwitterOptionsSerializer(data=options)
+            elif platform == 'linkedin':
+                serializer = LinkedInOptionsSerializer(data=options)
+            elif platform == 'youtube':
+                serializer = YouTubeOptionsSerializer(data=options)
+            elif platform == 'tiktok':
+                serializer = TikTokOptionsSerializer(data=options)
+            else:
+                # For unknown platforms, use the generic options serializer
+                serializer = PostOptionsSerializer(data=options)
+                
+            serializer.is_valid(raise_exception=True)
+            data['options'] = serializer.validated_data
+            
+        return data
+
 class SocialBuPostUpdateSerializer(serializers.Serializer):
     accounts = serializers.ListField(child=serializers.IntegerField(), required=False)
     team_id = serializers.IntegerField(required=False, allow_null=True)
@@ -156,8 +188,37 @@ class SocialBuPostUpdateSerializer(serializers.Serializer):
     # Include platform info to determine which options to use
     platform = serializers.CharField(required=False, allow_blank=True)
     
-    # Generic options that work with any platform
-    options = PostOptionsSerializer(required=False, allow_null=True)
+    # Platform-specific options
+    options = serializers.DictField(required=False, allow_null=True)
+    
+    def validate(self, data):
+        """
+        Validate platform-specific options based on the platform.
+        """
+        platform = data.get('platform', '').lower()
+        options = data.get('options', {})
+        
+        if platform and options:
+            if platform == 'facebook':
+                serializer = FacebookOptionsSerializer(data=options)
+            elif platform == 'instagram':
+                serializer = InstagramOptionsSerializer(data=options)
+            elif platform in ['twitter', 'x']:
+                serializer = TwitterOptionsSerializer(data=options)
+            elif platform == 'linkedin':
+                serializer = LinkedInOptionsSerializer(data=options)
+            elif platform == 'youtube':
+                serializer = YouTubeOptionsSerializer(data=options)
+            elif platform == 'tiktok':
+                serializer = TikTokOptionsSerializer(data=options)
+            else:
+                # For unknown platforms, use the generic options serializer
+                serializer = PostOptionsSerializer(data=options)
+                
+            serializer.is_valid(raise_exception=True)
+            data['options'] = serializer.validated_data
+            
+        return data
 
 class SocialBuTeamSerializer(serializers.Serializer):
     name = serializers.CharField()
