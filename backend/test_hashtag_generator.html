@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hashtag Generator Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            cursor: pointer;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            display: none;
+        }
+        .hashtag {
+            display: inline-block;
+            background-color: #e0f0ff;
+            padding: 5px 10px;
+            margin: 5px;
+            border-radius: 15px;
+        }
+        .login-form, .generator-form {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hashtag Generator Test</h1>
+    
+    <div class="login-form">
+        <h2>Login</h2>
+        <div class="form-group">
+            <label for="api-url">API Base URL:</label>
+            <input type="text" id="api-url" value="http://localhost:8000/api" placeholder="http://localhost:8000/api">
+        </div>
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" placeholder="Your username">
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" placeholder="Your password">
+        </div>
+        <button id="login-btn">Login</button>
+        <p id="login-status"></p>
+    </div>
+    
+    <div class="generator-form">
+        <h2>Generate Hashtags</h2>
+        <div class="form-group">
+            <label for="query">Query (Keywords):</label>
+            <input type="text" id="query" value="travel photography" placeholder="e.g., travel photography">
+        </div>
+        <div class="form-group">
+            <label for="platform">Platform:</label>
+            <select id="platform">
+                <option value="instagram">Instagram</option>
+                <option value="facebook">Facebook</option>
+                <option value="twitter">Twitter</option>
+                <option value="tiktok">TikTok</option>
+                <option value="linkedin">LinkedIn</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="count">Number of Hashtags:</label>
+            <input type="number" id="count" value="10" min="1" max="30">
+        </div>
+        <div class="form-group">
+            <label for="content-type">Content Type:</label>
+            <input type="text" id="content-type" value="General Post" placeholder="e.g., General Post, Travel Photo, Food Review">
+        </div>
+        <div class="form-group">
+            <label for="popularity-mix">Popularity Mix:</label>
+            <select id="popularity-mix">
+                <option value="balanced">Balanced</option>
+                <option value="trending">Trending</option>
+                <option value="niche">Niche</option>
+            </select>
+        </div>
+        <button id="generate-btn" disabled>Generate Hashtags</button>
+    </div>
+    
+    <div class="results" id="results">
+        <h2>Generated Hashtags</h2>
+        <div id="hashtags-container"></div>
+        <p id="tokens-used"></p>
+    </div>
+    
+    <script>
+        let accessToken = '';
+        
+        // Login function
+        document.getElementById('login-btn').addEventListener('click', async () => {
+            const apiUrl = document.getElementById('api-url').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginStatus = document.getElementById('login-status');
+            
+            if (!username || !password) {
+                loginStatus.textContent = 'Please enter username and password';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${apiUrl}/auth/token/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    accessToken = data.access;
+                    loginStatus.textContent = 'Login successful!';
+                    loginStatus.style.color = 'green';
+                    document.getElementById('generate-btn').disabled = false;
+                } else {
+                    loginStatus.textContent = `Login failed: ${data.detail || 'Invalid credentials'}`;
+                    loginStatus.style.color = 'red';
+                }
+            } catch (error) {
+                loginStatus.textContent = `Error: ${error.message}`;
+                loginStatus.style.color = 'red';
+            }
+        });
+        
+        // Generate hashtags function
+        document.getElementById('generate-btn').addEventListener('click', async () => {
+            const apiUrl = document.getElementById('api-url').value;
+            const query = document.getElementById('query').value;
+            const platform = document.getElementById('platform').value;
+            const count = document.getElementById('count').value;
+            const contentType = document.getElementById('content-type').value;
+            const popularityMix = document.getElementById('popularity-mix').value;
+            
+            if (!query) {
+                alert('Please enter a query');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${apiUrl}/content/generate-hashtags/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query,
+                        platform,
+                        count: parseInt(count),
+                        content_type: contentType,
+                        popularity_mix: popularityMix
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResults(data);
+                } else {
+                    alert(`Error: ${data.error || 'Failed to generate hashtags'}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+        
+        // Display results
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            const hashtagsContainer = document.getElementById('hashtags-container');
+            const tokensUsed = document.getElementById('tokens-used');
+            
+            // Clear previous results
+            hashtagsContainer.innerHTML = '';
+            
+            // Display hashtags
+            if (data.hashtags && data.hashtags.length > 0) {
+                data.hashtags.forEach(hashtag => {
+                    const tag = document.createElement('div');
+                    tag.className = 'hashtag';
+                    tag.textContent = `#${hashtag.name}`;
+                    hashtagsContainer.appendChild(tag);
+                });
+            } else {
+                hashtagsContainer.textContent = 'No hashtags generated';
+            }
+            
+            // Display tokens used
+            if (data.tokens_used) {
+                tokensUsed.textContent = `Tokens used: ${data.tokens_used}`;
+            } else {
+                tokensUsed.textContent = '';
+            }
+            
+            // Show results
+            resultsDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html> 

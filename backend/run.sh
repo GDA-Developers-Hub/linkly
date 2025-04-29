@@ -1,18 +1,31 @@
 #!/bin/bash
 
-# Activate virtual environment if it exists
-if [ -d "venv" ]; then
-    source venv/bin/activate
+# Exit if any command fails
+set -e
+
+# Create virtual environment if it doesn't exist
+if [ ! -d "venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv venv
+fi
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Upgrade pip
+pip install --upgrade pip
+
+# Install dependencies if requirements.txt exists
+if [ -f "requirements.txt" ]; then
+    echo "Installing dependencies..."
+    pip install -r requirements.txt
 fi
 
 # Run migrations
-python manage.py migrate
+echo "Running migrations..."
+python3 manage.py migrate
 
-# Create superuser if it doesn't exist
-echo "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(email='admin@socialbu.com').exists() or User.objects.create_superuser('admin@socialbu.com', 'adminpassword')" | python manage.py shell
 
-# Start server
-python manage.py runserver 0.0.0.  'adminpassword')" | python manage.py shell
-
-# Start server
-python manage.py runserver 0.0.0.0:8000
+# Start the Django development server
+echo "Starting server..."
+python3 manage.py runserver 0.0.0.0:8000

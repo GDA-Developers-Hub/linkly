@@ -98,3 +98,5 @@ class HashtagGenerateSerializer(serializers.Serializer):
     query = serializers.CharField(required=True)
     platform = serializers.CharField(required=False, default='instagram')
     count = serializers.IntegerField(required=False, default=10, min_value=1, max_value=30)
+    content_type = serializers.CharField(required=False, default='General Post')
+    popularity_mix = serializers.CharField(required=False, default='balanced')
