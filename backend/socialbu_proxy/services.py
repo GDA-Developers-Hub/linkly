@@ -104,9 +104,23 @@ class SocialBuService:
                 logger.info("SocialBu API returned no content")
                 return None
             
-            result = response.json()
-            logger.info(f"SocialBu API Response data: {result}")
-            return result
+            # Check if the response is JSON before trying to parse it
+            content_type = response.headers.get('Content-Type', '')
+            if 'application/json' not in content_type:
+                # If the response is not JSON, raise an exception with the response text
+                logger.error(f"Expected JSON response but got {content_type}. Response text: {response.text[:200]}...")
+                raise SocialBuAPIError(f"API returned non-JSON response: {response.text[:100]}...", response.status_code)
+            
+            try:
+                result = response.json()
+                logger.info(f"SocialBu API Response data: {result}")
+                return result
+            except ValueError as e:
+                # Failed to parse JSON
+                logger.error(f"Failed to parse JSON response: {str(e)}")
+                logger.error(f"Response content: {response.text[:200]}...")  # Log first 200 chars
+                raise SocialBuAPIError(f"Invalid JSON response: {str(e)}", response.status_code)
+                
         except requests.exceptions.ConnectionError as e:
             logger.error(f"CONNECTION ERROR: Could not connect to SocialBu API: {url}")
             logger.error(f"Connection error details: {str(e)}")
@@ -342,16 +356,36 @@ class SocialBuService:
             'team_id': data.get('team_id', 0),
             'content': data['content'],
             'draft': data.get('draft', False),
-            'postback_url': data.get('postback_url'),
         }
+
+        # Add postback_url if provided
+        if 'postback_url' in data and data['postback_url']:
+            request_data['postback_url'] = data['postback_url']
 
         # Add publish_at if provided
         if 'publish_at' in data and data['publish_at']:
             request_data['publish_at'] = data['publish_at'].isoformat()
 
-        # Add existing_attachments if provided
+        # Add existing_attachments if provided - fix the format for SocialBu API
         if 'existing_attachments' in data and data['existing_attachments']:
-            request_data['existing_attachments'] = data['existing_attachments']
+            # SocialBu expects a flat array of upload tokens for existing_attachments
+            if isinstance(data['existing_attachments'], list):
+                # Check if it's an array of objects
+                if data['existing_attachments'] and isinstance(data['existing_attachments'][0], dict):
+                    # Extract just the upload_token values
+                    tokens = []
+                    for attachment in data['existing_attachments']:
+                        if 'upload_token' in attachment:
+                            tokens.append(attachment['upload_token'])
+                    request_data['existing_attachments'] = tokens
+                else:
+                    # Already in correct format (array of tokens)
+                    request_data['existing_attachments'] = data['existing_attachments']
+            else:
+                # Not a list, use as is (though this is likely incorrect)
+                request_data['existing_attachments'] = data['existing_attachments']
+            
+            logger.info(f"Processed existing_attachments: {request_data['existing_attachments']}")
 
         # Process platform-specific options
         if 'platform' in data and data['platform']:
@@ -430,6 +464,10 @@ class SocialBuService:
             return result
         except SocialBuAPIError as e:
             logger.error(f"Post creation failed: {e.message}")
+            # Check if the error is related to authentication/session
+            if 'non-JSON response' in e.message and 'DOCTYPE html' in e.message:
+                logger.error("Received HTML response instead of JSON. Authentication might have expired.")
+                raise SocialBuAPIError("SocialBu authentication has expired or is invalid. Please re-authenticate.", 401)
             raise
         except Exception as e:
             logger.error(f"Unexpected error during post creation: {str(e)}")

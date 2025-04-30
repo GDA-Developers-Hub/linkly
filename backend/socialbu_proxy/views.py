@@ -198,15 +198,26 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
             postback_url = f"{postback_url}?user_id={user_id}"
         
         try:
-            # Get service with proper authentication
             service = self.get_socialbu_service()
-            
-            # Use the service to get connection URL, passing all parameters
             result = service.get_connection_url(provider, postback_url, account_id)
-            
             return Response(result)
-        except SocialBuAPIError as e:
-            return Response({'detail': e.message}, status=e.status_code or status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error getting connection URL: {str(e)}")
+            
+            # Check if token exists
+            has_token = SocialBuToken.objects.filter(user=request.user).exists()
+            
+            error_response = {
+                'detail': str(e),
+                'solution': 'You need to authenticate with SocialBu first before connecting social accounts.',
+                'has_token': has_token,
+                'authenticate_endpoint': '/api/socialbu/authenticate/',
+                'error_type': 'NO_TOKEN' if 'No SocialBu token or credentials found' in str(e) else 'OTHER'
+            }
+            
+            return Response(error_response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['get'])
     def posts(self, request):
@@ -586,6 +597,62 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
                 {'detail': f'Error: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    @action(detail=False, methods=['get'])
+    def test_connection(self, request):
+        """Test the connection to SocialBu API"""
+        try:
+            # Try to get service with token
+            try:
+                service = self.get_socialbu_service()
+                
+                # Test a simple endpoint that should return quickly
+                result = service.get_accounts()
+                
+                return Response({
+                    'status': 'success',
+                    'message': 'Successfully connected to SocialBu API',
+                    'accounts_count': len(result) if isinstance(result, list) else 0,
+                    'token_valid': True
+                })
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error testing SocialBu connection: {str(e)}")
+                
+                # Check if it's an authentication error
+                if 'No SocialBu token' in str(e):
+                    return Response({
+                        'status': 'error',
+                        'message': 'No SocialBu token found. Please authenticate first.',
+                        'error': str(e),
+                        'token_valid': False,
+                        'auth_required': True
+                    }, status=401)
+                
+                # Check if it's a non-JSON response (usually HTML login page)
+                if 'non-JSON response' in str(e) and 'DOCTYPE html' in str(e):
+                    return Response({
+                        'status': 'error',
+                        'message': 'Authentication has expired. Please login again.',
+                        'error': 'Session expired',
+                        'token_valid': False,
+                        'auth_required': True
+                    }, status=401)
+                
+                # Other errors
+                return Response({
+                    'status': 'error',
+                    'message': 'Error connecting to SocialBu API',
+                    'error': str(e),
+                    'token_valid': False
+                }, status=500)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': f'Unexpected error: {str(e)}',
+                'error': str(e)
+            }, status=500)
 
 
 class SocialBuConnectionCallbackView(APIView):
