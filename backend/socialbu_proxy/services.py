@@ -24,6 +24,14 @@ def generate_secure_password(length=16):
     password = ''.join(random.choice(characters) for i in range(length))
     return password
 
+# Error Handling
+class SocialBuAPIError(Exception):
+    """Exception raised for SocialBu API errors"""
+    def __init__(self, message, status_code=None):
+        self.message = message
+        self.status_code = status_code
+        super().__init__(self.message)
+
 class SocialBuService:
     """
     Service to interact with SocialBu API
@@ -327,6 +335,67 @@ class SocialBuService:
                 "nextPage": None,
                 "total": len(result) if result else 0
             }
+
+    def upload_media(self, file):
+        """Upload media to SocialBu API's official media endpoint"""
+        try:
+            # Step 1: Get the signed URL and secure key
+            file_data = {
+                'name': file.name,
+                'mime_type': file.content_type
+            }
+            
+            # Make request to SocialBu's upload_media endpoint
+            response = self.make_request('upload_media', method='POST', data=file_data, files={
+                'file': (file.name, file.read(), file.content_type)
+            })
+            
+            # Reset file pointer to beginning for second upload
+            file.seek(0)
+            
+            # Validate the response
+            if not isinstance(response, dict):
+                raise SocialBuAPIError("Invalid response format from SocialBu media endpoint")
+                
+            if 'secure_key' not in response or 'signed_url' not in response:
+                raise SocialBuAPIError("Missing secure_key or signed_url in response")
+
+            # Step 2: Upload the file to the signed URL
+            try:
+                # Make a PUT request to the signed URL with the file content
+                upload_response = requests.put(
+                    response['signed_url'],
+                    data=file.read(),
+                    headers={
+                        'Content-Type': file.content_type,
+                        'x-amz-acl': 'private'
+                    }
+                )
+                upload_response.raise_for_status()
+                
+                logger.info(f"File uploaded successfully to signed URL with status: {upload_response.status_code}")
+            except Exception as e:
+                logger.error(f"Error uploading to signed URL: {str(e)}")
+                raise SocialBuAPIError(f"Failed to upload file content: {str(e)}")
+                
+            # Return the media info in the expected format
+            return {
+                'id': response['secure_key'],
+                'url': response.get('url', ''),
+                'type': file.content_type,
+                'name': file.name,
+                'upload_token': response['secure_key'],
+                'secure_key': response['secure_key'],
+                'key': response.get('key', ''),
+                'signed_url': response.get('signed_url', ''),
+                'created_at': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error uploading media: {str(e)}")
+            if isinstance(e, SocialBuAPIError):
+                raise
+            raise SocialBuAPIError(f"Failed to upload media: {str(e)}")
     
     def create_post(self, data):
         """Create a post in SocialBu API"""
@@ -348,9 +417,6 @@ class SocialBuService:
         endpoint = 'posts'
         
         # Validate request according to SocialBu API documentation
-        # See: https://socialbu.com/developers/docs#tag/posts
-        
-        # Ensure all required fields are present according to SocialBu API
         if 'accounts' not in data:
             logger.error("'accounts' field is missing in post data")
             raise SocialBuAPIError("'accounts' field is required")
@@ -363,217 +429,75 @@ class SocialBuService:
             logger.error("Either 'content' or media attachments are required")
             raise SocialBuAPIError("Either 'content' or media attachments are required")
         
-        # Validate platform-specific requirements
-        platform = data.get('platform', '').lower()
-        if platform and platform in ['instagram', 'facebook', 'twitter', 'linkedin']:
-            logger.info(f"Validating platform-specific requirements for {platform}")
-            
-            # Instagram requires at least one image or video
-            if platform == 'instagram' and not data.get('existing_attachments'):
-                logger.warning(f"Instagram posts typically require media attachments")
-                
-            # Twitter has character limits
-            if platform == 'twitter' and data.get('content') and len(data.get('content', '')) > 280:
-                logger.warning(f"Twitter content exceeds 280 character limit: {len(data.get('content', ''))} characters")
-                
-            # LinkedIn may need special handling for articles
-            if platform == 'linkedin' and data.get('options', {}).get('article_mode'):
-                logger.info("LinkedIn article mode enabled")
-        
-        # Log validation success
-        logger.info("Post data validation successful")
-        
         # Format request data according to platform requirements
-        # Create a copy of the data to avoid modifying the original
         request_data = {
             'team_id': data.get('team_id', 0),
-            'content': data['content'],
+            'content': data.get('content', ''),
             'draft': data.get('draft', False),
+            'accounts': data['accounts']
         }
-        
-        # CRITICAL FIX: Always check the database for the correct SocialBu account ID
-        # This approach is platform-agnostic and handles all account types
-        try:
-            # Import here to avoid circular imports
-            from django.apps import apps
-            SocialBuToken = apps.get_model('socialbu_proxy', 'SocialBuToken')
+
+        # Handle platform-specific options
+        platform = data.get('platform', '').lower()
+        options = data.get('options', {})
+
+        if platform == 'facebook':
+            # Facebook-specific options
+            request_data['options'] = {
+                'comment': options.get('comment', ''),
+                'post_as_story': options.get('post_as_story', False)
+            }
+        elif platform == 'twitter':
+            # Twitter-specific options
+            twitter_options = {}
             
-            # Look up the authenticated user associated with this token
-            # This requires that the token was originally obtained by a logged-in user
-            if self.token:
-                # CRITICAL FIX: Always check the database for the correct SocialBu account ID
-                # AND verify we have access to the account
-                token_obj = SocialBuToken.objects.filter(access_token=self.token).first()
-                if token_obj and token_obj.socialbu_user_id:
-                    # Use the account ID from the database
-                    account_id = int(token_obj.socialbu_user_id)
-                    request_data['accounts'] = [account_id]
-                    logger.info(f"Using SocialBu account ID from database: {account_id}")
-                    
-                    # Additional verification step: Check if we can access this account
-                    try:
-                        # Verify account access by fetching the list of accounts
-                        accounts_response = self.make_request('GET', 'accounts', {})
-                        
-                        # Extract account IDs from the response
-                        accessible_account_ids = []
-                        if accounts_response and 'data' in accounts_response:
-                            for account in accounts_response['data']:
-                                if 'id' in account:
-                                    accessible_account_ids.append(int(account['id']))
-                        
-                        logger.info(f"Accessible account IDs: {accessible_account_ids}")
-                        
-                        # Check if our account ID is in the list of accessible accounts
-                        if account_id not in accessible_account_ids:
-                            logger.warning(f"Account ID {account_id} is not in the list of accessible accounts: {accessible_account_ids}")
-                            # If not accessible but we have other accounts, use the first accessible one
-                            if accessible_account_ids:
-                                request_data['accounts'] = [accessible_account_ids[0]]
-                                logger.warning(f"Using alternative account ID: {accessible_account_ids[0]}")
-                    except Exception as e:
-                        logger.error(f"Error verifying account access: {str(e)}")
-                        # Continue with the account ID we have
-                else:
-                    logger.warning("No SocialBu user ID found in token object, using provided account IDs")
-                    logger.warning("No token object or socialbu_user_id found in database")
-                    # Fall back to original account IDs
-                    request_data['accounts'] = data['accounts']
-            else:
-                logger.warning("No token available to look up SocialBu user")
-                # Fall back to original account IDs
-                request_data['accounts'] = data['accounts']
-        except Exception as e:
-            logger.error(f"Error while looking up SocialBu user ID: {str(e)}")
-            # Fall back to original account IDs if there was an error
-            request_data['accounts'] = data['accounts']
+            # Handle media alt text
+            if 'media_alt_text' in options:
+                twitter_options['media_alt_text'] = options['media_alt_text']
+            
+            # Handle threaded replies
+            if 'threaded_replies' in options:
+                twitter_options['threaded_replies'] = options['threaded_replies']
+            
+            if twitter_options:
+                request_data['options'] = twitter_options
 
         # Add postback_url if provided
-        if 'postback_url' in data and data['postback_url']:
+        if data.get('postback_url'):
             request_data['postback_url'] = data['postback_url']
 
-        # Add publish_at if provided - ensure it's in the exact format required by SocialBu API: Y-m-d H:i:s
+        # Handle publish_at datetime
         if 'publish_at' in data and data['publish_at']:
-            # Check if it's already a properly formatted string
             if isinstance(data['publish_at'], str):
                 # Verify it matches the required format (YYYY-MM-DD HH:MM:SS)
                 import re
                 if re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', data['publish_at']):
                     request_data['publish_at'] = data['publish_at']
-                    logger.info(f"Using publish_at as provided: {data['publish_at']}")
                 else:
-                    # Try to parse and reformat
                     try:
-                        from datetime import datetime
                         dt = datetime.fromisoformat(data['publish_at'].replace('Z', '+00:00'))
                         request_data['publish_at'] = dt.strftime('%Y-%m-%d %H:%M:%S')
-                        logger.info(f"Reformatted publish_at to: {request_data['publish_at']}")
                     except Exception as e:
-                        logger.error(f"Failed to parse publish_at date: {str(e)}")
                         raise SocialBuAPIError(f"Invalid publish_at format. Must be 'Y-m-d H:i:s' (e.g. '2025-04-30 17:25:00')")
-            # If it's a datetime object, format it correctly
             elif hasattr(data['publish_at'], 'strftime'):
                 request_data['publish_at'] = data['publish_at'].strftime('%Y-%m-%d %H:%M:%S')
-                logger.info(f"Formatted datetime object to: {request_data['publish_at']}")
             else:
-                logger.error(f"Invalid publish_at type: {type(data['publish_at'])}")
                 raise SocialBuAPIError(f"Invalid publish_at format. Must be 'Y-m-d H:i:s' (e.g. '2025-04-30 17:25:00')")
 
-        # Add existing_attachments if provided - fix the format for SocialBu API
-        if 'existing_attachments' in data and data['existing_attachments']:
-            # SocialBu expects an array of objects with 'upload_token' field
+        # Handle media attachments
+        if data.get('existing_attachments'):
             if isinstance(data['existing_attachments'], list):
                 formatted_attachments = []
-                
-                # Process each attachment
                 for item in data['existing_attachments']:
                     if isinstance(item, dict) and 'upload_token' in item:
-                        # Already in correct format
                         formatted_attachments.append(item)
                     elif isinstance(item, str):
-                        # Convert string to object with upload_token
                         formatted_attachments.append({'upload_token': item})
                     else:
                         logger.warning(f"Skipping invalid attachment: {item}")
-                
                 request_data['existing_attachments'] = formatted_attachments
-                logger.info(f"Using formatted attachments: {formatted_attachments}")
             else:
-                # Not a list, try to use as a single item
-                logger.warning(f"existing_attachments not a list, converting: {data['existing_attachments']}")
                 request_data['existing_attachments'] = [{'upload_token': str(data['existing_attachments'])}]
-            
-            logger.info(f"Processed existing_attachments: {request_data['existing_attachments']}")
-
-        # Process platform-specific options
-        if 'platform' in data and data['platform']:
-            platform = data['platform'].lower()
-            logger.info(f"Using platform-specific options for platform: {platform}")
-            
-            # Add platform to request data
-            request_data['platform'] = platform
-            
-            # Initialize options
-            options = {}
-            
-            if 'options' in data and data['options']:
-                if platform == 'facebook':
-                    # Facebook only needs these options
-                    options = {
-                        k: v for k, v in data['options'].items() 
-                        if k in ['comment', 'post_as_story']
-                    }
-                    
-                elif platform == 'instagram':
-                    # Instagram options
-                    options = {
-                        k: v for k, v in data['options'].items() 
-                        if k in ['post_as_reel', 'post_as_story', 'share_reel_to_feed', 'comment', 'thumbnail']
-                    }
-                    
-                elif platform in ['twitter', 'x']:
-                    # Twitter/X options
-                    options = {
-                        k: v for k, v in data['options'].items() 
-                        if k in ['media_alt_text', 'threaded_replies']
-                    }
-                    
-                elif platform == 'linkedin':
-                    # LinkedIn options
-                    options = {
-                        k: v for k, v in data['options'].items() 
-                        if k in [
-                            'link', 'trim_link_from_content', 'customize_link', 'link_description',
-                            'link_title', 'thumbnail', 'comment', 'document_title'
-                        ]
-                    }
-                    
-                elif platform == 'youtube':
-                    # YouTube options
-                    options = {
-                        k: v for k, v in data['options'].items() 
-                        if k in [
-                            'video_title', 'video_tags', 'category_id', 'privacy_status',
-                            'post_as_short', 'made_for_kids'
-                        ]
-                    }
-                    
-                elif platform == 'tiktok':
-                    # TikTok options
-                    options = {
-                        k: v for k, v in data['options'].items() 
-                        if k in [
-                            'title', 'privacy_status', 'allow_stitch', 'allow_duet',
-                            'allow_comment', 'disclose_content', 'branded_content', 'own_brand'
-                        ]
-                    }
-                
-                # Only add options if there are any
-                if options:
-                    request_data['options'] = options
-                    logger.info(f"Processed platform-specific options for {platform}: {options}")
-            
-        logger.info(f"Sending post creation request to {endpoint}")
         
         try:
             # Make the API call with the validated data
@@ -582,7 +506,6 @@ class SocialBuService:
             return result
         except SocialBuAPIError as e:
             logger.error(f"Post creation failed: {e.message}")
-            # Check if the error is related to authentication/session
             if 'non-JSON response' in e.message and 'DOCTYPE html' in e.message:
                 logger.error("Received HTML response instead of JSON. Authentication might have expired.")
                 raise SocialBuAPIError("SocialBu authentication has expired or is invalid. Please re-authenticate.", 401)
@@ -598,47 +521,6 @@ class SocialBuService:
     def delete_post(self, post_id):
         """Delete a post in SocialBu API"""
         return self.make_request(f'posts/{post_id}', 'DELETE')
-    
-    # Media
-    def upload_media(self, file):
-        """Upload media to SocialBu API using two-step process"""
-        # Step 1: Create media slot with metadata
-        metadata = {
-            'name': file.name,
-            'mime_type': file.content_type
-        }
-        
-        # Make initial request to get upload URL
-        response = self.make_request('upload_media', 'POST', metadata)
-        
-        if not response.get('signed_url'):
-            raise SocialBuAPIError("No signed URL received from SocialBu API")
-            
-        # Step 2: Upload file to presigned URL
-        try:
-            # Read the file content
-            file_content = file.read()
-            
-            # Upload to the presigned URL
-            upload_response = requests.put(
-                response['signed_url'],
-                data=file_content,
-                headers={
-                    'Content-Type': file.content_type,
-                    'x-amz-acl': 'private'  # Add this header for S3 upload
-                }
-            )
-            upload_response.raise_for_status()
-            
-            # Return the media info from the first response
-            return {
-                'id': response.get('key', '').split('/')[-1].split('.')[0],  # Extract ID from key
-                'url': response.get('url'),
-                'type': file.content_type,
-                'created_at': datetime.now().isoformat()
-            }
-        except requests.exceptions.RequestException as e:
-            raise SocialBuAPIError(f"Failed to upload file: {str(e)}")
     
     def get_media(self):
         """Get media from SocialBu API"""
@@ -692,28 +574,15 @@ class SocialBuService:
         """Remove a team member from SocialBu API"""
         return self.make_request(f'teams/{team_id}/members/{user_id}', 'DELETE')
 
-
-class SocialBuAPIError(Exception):
-    """Exception raised for SocialBu API errors"""
-    
-    def __init__(self, message, status_code=None):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(self.message)
+# Standalone utility function
 
 def get_socialbu_token_for_user(user):
+    """
+    Get the SocialBu token for a given user.
+    Returns None if no token exists.
+    """
     try:
         token_obj = SocialBuToken.objects.get(user=user)
-        # Optionally: check if token is expired and refresh if needed
         return token_obj.access_token
     except SocialBuToken.DoesNotExist:
-        # If you store SocialBu credentials on the user model
-        if hasattr(user, 'socialbu_email') and hasattr(user, 'socialbu_password') and user.socialbu_email and user.socialbu_password:
-            service = SocialBuService()
-            result = service.authenticate(user.socialbu_email, user.socialbu_password)
-            token = result['token']
-            SocialBuToken.objects.create(user=user, access_token=token)
-            return token
-        else:
-            raise Exception("No SocialBu token or credentials found for user")
- 
+        return None
