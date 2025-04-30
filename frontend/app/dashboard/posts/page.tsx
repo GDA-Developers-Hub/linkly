@@ -16,6 +16,8 @@ import {
   Search,
   Twitter,
   RefreshCw,
+  Image as ImageIcon,
+  Video,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -156,10 +158,12 @@ export default function PostsPage() {
   }, [status, platformFilter, sortBy])
 
   // Get account names for a post
-  const getPostAccounts = (post: Post) => {
-    return post.accounts
-      .map((id) => accounts.find((account) => account.id === id))
-      .filter((account): account is Account => account !== undefined)
+  const getPostStatus = (post: Post): string => {
+    if (post.error) return 'failed'
+    if (post.published) return 'published'
+    if (post.draft) return 'draft'
+    if (post.publish_at) return 'scheduled'
+    return 'unknown'
   }
 
   // Format date for display
@@ -179,6 +183,16 @@ export default function PostsPage() {
     } else {
       return date.toLocaleDateString()
     }
+  }
+
+  // Get post type icon
+  const getPostTypeIcon = (post: Post) => {
+    if (post.attachments && post.attachments.length > 0) {
+      const type = post.attachments[0].type.toLowerCase()
+      if (type.includes('image')) return <ImageIcon className="h-4 w-4" />
+      if (type.includes('video')) return <Video className="h-4 w-4" />
+    }
+    return <MessageSquare className="h-4 w-4" />
   }
 
   return (
@@ -281,10 +295,14 @@ export default function PostsPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {posts.map((post) => {
-                    const postAccounts = getPostAccounts(post)
-                    const firstAccount = postAccounts[0] || { platform: "unknown" }
-                    const platform = platformConfig[firstAccount.platform] || { icon: MessageSquare, color: "#666" }
-                    const PlatformIcon = platform.icon
+                    const postStatus = getPostStatus(post)
+                    const statusColors: Record<string, string> = {
+                      published: "bg-green-100 text-green-700",
+                      scheduled: "bg-blue-100 text-blue-700",
+                      draft: "bg-yellow-100 text-yellow-700",
+                      failed: "bg-red-100 text-red-700",
+                      unknown: "bg-gray-100 text-gray-700"
+                    }
 
                     return (
                       <Card key={post.id} className="overflow-hidden">
@@ -292,36 +310,14 @@ export default function PostsPage() {
                           <div className="p-4">
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center space-x-2">
-                                {postAccounts.map((account, i) => {
-                                  const accountPlatform = platformConfig[account.platform] || {
-                                    icon: MessageSquare,
-                                    color: "#666",
-                                  }
-                                  const AccountIcon = accountPlatform.icon
-                                  return (
-                                    <div
-                                      key={i}
-                                      className="p-1 rounded-full"
-                                      style={{ backgroundColor: `${accountPlatform.color}20` }}
-                                    >
-                                      <AccountIcon className="h-4 w-4" style={{ color: accountPlatform.color }} />
-                                    </div>
-                                  )
-                                })}
+                                <div className="p-1 rounded-full bg-gray-100">
+                                  {getPostTypeIcon(post)}
+                                </div>
+                                <span className="text-sm font-medium">{post.account_type || "Unknown Platform"}</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <span
-                                  className={`text-xs px-2 py-1 rounded-full ${
-                                    post.status === "published"
-                                      ? "bg-green-100 text-green-700"
-                                      : post.status === "scheduled"
-                                        ? "bg-blue-100 text-blue-700"
-                                        : post.status === "draft"
-                                          ? "bg-yellow-100 text-yellow-700"
-                                          : "bg-red-100 text-red-700"
-                                  }`}
-                                >
-                                  {post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+                                <span className={`text-xs px-2 py-1 rounded-full ${statusColors[postStatus]}`}>
+                                  {postStatus.charAt(0).toUpperCase() + postStatus.slice(1)}
                                 </span>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
@@ -330,11 +326,13 @@ export default function PostsPage() {
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => router.push(`/dashboard/posts/edit/${post.id}`)}>
-                                      Edit
-                                    </DropdownMenuItem>
+                                    {post.can_edit && (
+                                      <DropdownMenuItem onClick={() => router.push(`/dashboard/posts/edit/${post.id}`)}>
+                                        Edit
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem>Duplicate</DropdownMenuItem>
-                                    <DropdownMenuItem>View Analytics</DropdownMenuItem>
+                                    {post.insights && <DropdownMenuItem>View Analytics</DropdownMenuItem>}
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="text-destructive" onClick={() => deletePost(post.id)}>
                                       Delete
@@ -346,21 +344,37 @@ export default function PostsPage() {
 
                             <div className="mb-3">
                               <p className="text-sm">{post.content}</p>
+                              {post.attachments && post.attachments.length > 0 && (
+                                <div className="mt-2 rounded-md overflow-hidden">
+                                  <img 
+                                    src={post.attachments[0].url} 
+                                    alt="Post attachment" 
+                                    className="w-full h-32 object-cover"
+                                  />
+                                </div>
+                              )}
                             </div>
 
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
                               <div className="flex items-center">
                                 <Calendar className="mr-1 h-3 w-3" />
                                 <span>
-                                  {post.status === "published"
+                                  {postStatus === "published"
                                     ? `Posted ${formatDate(post.published_at || '')}`
-                                    : post.status === "scheduled"
+                                    : postStatus === "scheduled"
                                       ? `Scheduled for ${formatDate(post.publish_at || '')}`
-                                      : post.status === "draft"
-                                        ? "Draft"
-                                        : "Failed"}
+                                      : postStatus === "draft"
+                                        ? `Draft • ${formatDate(post.updated_at)}`
+                                        : postStatus === "failed"
+                                          ? `Failed • ${post.error}`
+                                          : formatDate(post.created_at)}
                                 </span>
                               </div>
+                              {post.user_name && (
+                                <div className="flex items-center">
+                                  <span>By {post.user_name}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </CardContent>

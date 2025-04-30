@@ -24,89 +24,43 @@ export interface Account {
 export interface Post {
   id: number
   content: string
-  accounts: number[]
-  media?: {
-    id: number
-    url: string
+  post_hash?: string
+  external_id?: string | null
+  account_id: number
+  account_type?: string
+  type?: string
+  attachments?: Array<{
+    ext: string
+    mime: string
+    name: string
+    path: string
+    size: number
     type: string
-  }[]
-  status: string
-  publish_at?: string | null
-  published_at?: string | null
-  created_at: string
-  draft?: boolean
-  team_id?: number
-  platform?: string
-  options?: {
-    // Common options
-    comment?: string
+    url: string
+  }>
+  post_options?: {
     post_as_story?: boolean
-    
-    // Instagram specific
-    post_as_reel?: boolean
-    share_reel_to_feed?: boolean
-    thumbnail?: {
-      name?: string
-      mimeType?: string
-      extension?: string
-      key?: string
-      url?: string
-      secureKey?: string
-      temporary?: boolean
-      _metaData?: {
-        width?: number
-        height?: number
-      }
-    }
-    
-    // Twitter specific
-    media_alt_text?: string[]
-    threaded_replies?: Array<{
-      tweet?: string
-      media?: Array<{
-        name?: string
-        size?: number
-        mimeType?: string
-        extension?: string
-        key?: string
-        url?: string
-        secureKey?: string
-        temporary?: boolean
-        _metaData?: {
-          width?: number
-          height?: number
-        }
-        type?: string
-        ext?: string
-        mime?: string
-      }>
-    }>
-    
-    // LinkedIn specific
-    link?: string
-    trim_link_from_content?: boolean
-    customize_link?: boolean
-    link_description?: string
-    link_title?: string
-    document_title?: string
-    
-    // YouTube specific
-    video_title?: string
-    video_tags?: string
-    category_id?: number
-    privacy_status?: string
-    post_as_short?: boolean
-    made_for_kids?: boolean
-    
-    // TikTok specific
-    title?: string
-    allow_stitch?: boolean
-    allow_duet?: boolean
-    allow_comment?: boolean
-    disclose_content?: boolean
-    branded_content?: boolean
-    own_brand?: boolean
+    postback_url?: string
+    [key: string]: any
   }
+  shortened_links?: any[]
+  error?: string | null
+  source?: string | null
+  user_id?: number
+  user_name?: string
+  publish_at?: string | null
+  created_at: string
+  updated_at: string
+  published_at: string | null
+  published: boolean
+  permalink?: string | null
+  draft: boolean
+  approved: boolean
+  reject_reason?: string | null
+  insights?: any | null
+  can_edit?: boolean
+  can_approve?: boolean
+  status?: string
 }
 
 export interface Media {
