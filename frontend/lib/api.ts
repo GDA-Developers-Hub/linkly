@@ -94,17 +94,26 @@ export interface Caption {
 export interface HashtagGroup {
   id?: number
   name: string
-  hashtags: string[]
+  hashtags?: string[] | Hashtag[]
+  hashtag_names?: string[]
   platform?: string
 }
 
 export interface Hashtag {
-  hashtag: string
-  posts: number
-  growth: number
-  engagement: number
-  difficulty: number
-  platforms: string[]
+  id?: number;
+  name: string;
+  hashtag?: string; // Keep for backward compatibility
+  post_count?: number;
+  growth_rate?: number;
+  engagement_rate?: number;
+  is_trending?: boolean;
+  last_updated?: string;
+  // Keep these for backward compatibility
+  posts?: number;
+  growth?: number;
+  engagement?: number;
+  difficulty?: number;
+  platforms?: string[];
 }
 
 export interface PaginatedResponse<T> {
@@ -446,14 +455,16 @@ class API {
     tone: string,
     length: number,
     includeHashtags: boolean,
-  ): Promise<Caption> {
-    return this.request<Caption>("/content/generate-caption/", "POST", {
+    mediaId?: number,
+  ): Promise<{ caption: Caption; tokens_used: number }> {
+    return this.request<{ caption: Caption; tokens_used: number }>("/content/generate-caption/", "POST", {
       prompt,
       platform,
       tone,
       length,
       include_hashtags: includeHashtags,
-    })
+      media_id: mediaId,
+    });
   }
 
   async getSavedCaptions(): Promise<Caption[]> {
@@ -479,14 +490,14 @@ class API {
     contentType: string,
     count: number,
     popularityMix: string,
-  ): Promise<string[]> {
-    return this.request<string[]>("/content/generate-hashtags/", "POST", {
-      keywords,
+  ): Promise<Hashtag[]> {
+    return this.request<{ hashtags: Hashtag[] }>("/content/generate-hashtags/", "POST", {
+      query: Array.isArray(keywords) ? keywords.join(", ") : keywords,
       platform,
       content_type: contentType,
       count,
       popularity_mix: popularityMix,
-    })
+    }).then(response => response.hashtags);
   }
 
   async getSavedHashtagGroups(): Promise<HashtagGroup[]> {
@@ -494,13 +505,39 @@ class API {
   }
 
   async saveHashtagGroup(group: Omit<HashtagGroup, "id">): Promise<HashtagGroup> {
-    return this.request<HashtagGroup>("/content/hashtag-groups/", "POST", group)
+    // Convert hashtags array to hashtag_names if it exists and is an array of strings
+    const payload: any = { ...group };
+    
+    if (Array.isArray(payload.hashtags)) {
+      // If hashtags contains objects, extract names
+      if (typeof payload.hashtags[0] !== 'string') {
+        payload.hashtag_names = payload.hashtags.map((tag: any) => 
+          typeof tag === 'string' ? tag : (tag.name || tag.hashtag)
+        );
+      } else {
+        payload.hashtag_names = payload.hashtags;
+      }
+      delete payload.hashtags;
+    }
+    
+    return this.request<HashtagGroup>("/content/hashtag-groups/", "POST", payload);
   }
 
   // Media upload
   async uploadMedia(file: File): Promise<{ url: string; id: number }> {
     const formData = new FormData()
     formData.append("file", file)
+    
+    // Determine media type from the file's content type
+    let mediaType = 'image'
+    if (file.type.startsWith('video/')) {
+      mediaType = 'video'
+    } else if (file.type.startsWith('image/gif')) {
+      mediaType = 'gif'
+    }
+    
+    // Add the media_type field to the form data
+    formData.append("media_type", mediaType)
 
     const response = await fetch(buildUrl("content/media/"), {
       method: "POST",

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Sparkles, Save, Copy, ThumbsUp, ThumbsDown, RefreshCw, ImageIcon } from "lucide-react"
+import { Sparkles, Save, Copy, ThumbsUp, ThumbsDown, RefreshCw, ImageIcon, X, Loader2 } from "lucide-react"
 import { getAPI, type Caption } from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -24,6 +24,9 @@ export default function CaptionGeneratorPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedCaption, setGeneratedCaption] = useState<Caption | null>(null)
   const [savedCaptions, setSavedCaptions] = useState<Caption[]>([])
+  const [uploadedImage, setUploadedImage] = useState<{ id: number; url: string } | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const api = getAPI()
 
@@ -42,10 +45,10 @@ export default function CaptionGeneratorPage() {
   }, [])
 
   const handleGenerate = async () => {
-    if (!prompt) {
+    if (!prompt && !uploadedImage) {
       toast({
         title: "Input required",
-        description: "Please enter a prompt to generate a caption.",
+        description: "Please enter a prompt or upload an image to generate a caption.",
         variant: "destructive",
       })
       return
@@ -54,8 +57,19 @@ export default function CaptionGeneratorPage() {
     setIsGenerating(true)
 
     try {
-      const caption = await api.generateCaption(prompt, platform, tone, length, includeHashtags)
-      setGeneratedCaption(caption)
+      const response = await api.generateCaption(
+        prompt, 
+        platform, 
+        tone, 
+        length, 
+        includeHashtags,
+        uploadedImage?.id
+      )
+      
+      // Extract the caption from the response
+      const captionData = response.caption || response;
+      setGeneratedCaption(captionData);
+      
       toast({
         title: "Caption generated",
         description: "Your caption has been successfully generated.",
@@ -109,15 +123,44 @@ export default function CaptionGeneratorPage() {
     })
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Handle image upload logic here
-    toast({
-      title: "Image uploaded",
-      description: "Your image has been uploaded and will be analyzed for caption suggestions.",
-    })
+    setIsUploading(true)
+    try {
+      // Upload the image
+      const media = await api.uploadMedia(file)
+      setUploadedImage({ id: media.id, url: media.url })
+      toast({
+        title: "Image uploaded",
+        description: "Your image has been uploaded and can be used for caption suggestions.",
+      })
+    } catch (error) {
+      console.error("Error uploading image:", error)
+      
+      // Create a more descriptive error message
+      let errorMessage = "Failed to upload image. Please try again."
+      if (error instanceof Error) {
+        errorMessage = error.message || errorMessage
+      }
+      
+      toast({
+        title: "Upload failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploading(false)
+      if (e.target) e.target.value = ''
+    }
+  }
+
+  const removeUploadedImage = () => {
+    setUploadedImage(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   return (
@@ -149,22 +192,48 @@ export default function CaptionGeneratorPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Upload Image (Optional)</Label>
-                <div className="flex items-center justify-center border border-dashed rounded-md p-4">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    id="image-upload"
-                    onChange={handleImageUpload}
-                  />
-                  <label htmlFor="image-upload" className="cursor-pointer">
-                    <div className="flex flex-col items-center space-y-2">
-                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                      <div className="text-sm text-muted-foreground">Drag & drop or click to upload</div>
-                    </div>
-                  </label>
-                </div>
+                <Label>Upload Image</Label>
+                {uploadedImage ? (
+                  <div className="relative">
+                    <img 
+                      src={uploadedImage.url} 
+                      alt="Uploaded" 
+                      className="max-h-[200px] rounded-md object-contain w-full" 
+                    />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2 h-6 w-6"
+                      onClick={removeUploadedImage}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center border border-dashed rounded-md p-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      id="image-upload"
+                      ref={fileInputRef}
+                      onChange={handleImageUpload}
+                      disabled={isUploading}
+                    />
+                    <label htmlFor="image-upload" className="cursor-pointer">
+                      <div className="flex flex-col items-center space-y-2">
+                        {isUploading ? (
+                          <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+                        ) : (
+                          <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                        )}
+                        <div className="text-sm text-muted-foreground">
+                          {isUploading ? "Uploading..." : "Drag & drop or click to upload"}
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -219,7 +288,7 @@ export default function CaptionGeneratorPage() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" onClick={handleGenerate} disabled={isGenerating}>
+              <Button className="w-full" onClick={handleGenerate} disabled={isGenerating || isUploading}>
                 {isGenerating ? (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -313,36 +382,28 @@ export default function CaptionGeneratorPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Caption Tips</CardTitle>
-              <CardDescription>Best practices for engaging captions</CardDescription>
+              <CardTitle>Tips for Great Captions</CardTitle>
+              <CardDescription>Boost engagement with your posts</CardDescription>
             </CardHeader>
-            <CardContent>
-              <ul className="space-y-2 text-sm">
-                <li className="flex items-start">
-                  <span className="mr-2 text-primary">•</span>
-                  <span>Start with a hook to grab attention in the first line</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="mr-2 text-primary">•</span>
-                  <span>Include a call-to-action to boost engagement</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="mr-2 text-primary">•</span>
-                  <span>Use emojis strategically to add personality</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="mr-2 text-primary">•</span>
-                  <span>Keep hashtags relevant and limit to 5-10 for Instagram</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="mr-2 text-primary">•</span>
-                  <span>Ask questions to encourage comments</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="mr-2 text-primary">•</span>
-                  <span>Tell a story that resonates with your audience</span>
-                </li>
-              </ul>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <h3 className="font-medium">Tell a Story</h3>
+                <p className="text-sm text-muted-foreground">
+                  Connect with your audience by sharing personal experiences and stories
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-medium">Ask Questions</h3>
+                <p className="text-sm text-muted-foreground">
+                  Boost comments by asking your followers questions about their experiences
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-medium">Call to Action</h3>
+                <p className="text-sm text-muted-foreground">
+                  Include a clear CTA telling your audience what to do next
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>

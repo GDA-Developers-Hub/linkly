@@ -32,6 +32,7 @@ class GenerateCaptionView(APIView):
             tone = serializer.validated_data['tone']
             include_hashtags = serializer.validated_data['include_hashtags']
             hashtag_count = serializer.validated_data.get('hashtag_count', 5)
+            media_id = serializer.validated_data.get('media_id')
 
             try:
                 # Create system message based on parameters
@@ -39,14 +40,51 @@ class GenerateCaptionView(APIView):
                 if include_hashtags:
                     system_content += f" Include {hashtag_count} relevant hashtags at the end."
 
+                # If media_id is provided, fetch the image details
+                media_url = None
+                if media_id:
+                    try:
+                        media = Media.objects.get(id=media_id, user=request.user)
+                        media_url = request.build_absolute_uri(media.file.url)
+                        # Add instruction to analyze the image
+                        if prompt:
+                            user_content = f"Write a caption about: {prompt}\n\nThis caption will accompany the image at: {media_url}"
+                        else:
+                            user_content = f"Write a caption for this image: {media_url}"
+                    except Media.DoesNotExist:
+                        return Response(
+                            {"error": "Media not found or does not belong to this user."},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                else:
+                    user_content = f"Write a caption about: {prompt}"
+
                 response = client.chat.completions.create(model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system_content},
-                    {"role": "user", "content": f"Write a caption about: {prompt}"}
+                    {"role": "user", "content": user_content}
                 ],
                 max_tokens=500)
 
                 caption_text = response.choices[0].message.content
+
+                # Extract hashtags from the caption if they were included
+                hashtags = []
+                if include_hashtags:
+                    # Simple regex to extract hashtags
+                    import re
+                    hashtags = re.findall(r'#(\w+)', caption_text)
+                    
+                    # If no hashtags were found with #, try looking for a list of hashtags
+                    if not hashtags and "hashtag" in caption_text.lower():
+                        # Try to find a list of hashtags that might not have the # symbol
+                        potential_tags = re.findall(r'(?:hashtags?:?\s*|tags?:?\s*)([\w\s,]+)(?:\n|$)', caption_text.lower())
+                        if potential_tags:
+                            # Split the found text by commas or spaces and clean up
+                            for tag_text in potential_tags:
+                                for tag in re.findall(r'\b(\w+)\b', tag_text):
+                                    if tag and tag not in ['hashtags', 'tags', 'and', 'or', 'the', 'for']:
+                                        hashtags.append(tag)
 
                 # Create a caption object but don't save it yet
                 caption = Caption(
@@ -56,9 +94,13 @@ class GenerateCaptionView(APIView):
                     is_saved=False
                 )
 
-                # Return the caption
+                # Prepare the response data
+                caption_data = CaptionSerializer(caption).data
+                caption_data['hashtags'] = hashtags
+
+                # Return the caption with hashtags
                 return Response({
-                    "caption": CaptionSerializer(caption).data,
+                    "caption": caption_data,
                     "tokens_used": response.usage.total_tokens
                 })
 

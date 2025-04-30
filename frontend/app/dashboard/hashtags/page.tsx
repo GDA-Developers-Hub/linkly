@@ -34,7 +34,7 @@ export default function HashtagsPage() {
   const [trendingHashtags, setTrendingHashtags] = useState<Hashtag[]>([])
   const [relatedHashtags, setRelatedHashtags] = useState<Hashtag[]>([])
   const [savedGroups, setSavedGroups] = useState<HashtagGroup[]>([])
-  const [generatedHashtags, setGeneratedHashtags] = useState<string[]>([])
+  const [generatedHashtags, setGeneratedHashtags] = useState<Hashtag[]>([])
   const [contentType, setContentType] = useState("general")
   const [hashtagCount, setHashtagCount] = useState("20")
   const [popularityMix, setPopularityMix] = useState("balanced")
@@ -151,7 +151,7 @@ export default function HashtagsPage() {
 
       const savedGroup = await api.saveHashtagGroup({
         name: groupName,
-        hashtags: generatedHashtags,
+        hashtags: generatedHashtags.map(tag => tag.name || tag.hashtag),
         platform: selectedPlatform,
       })
 
@@ -170,8 +170,8 @@ export default function HashtagsPage() {
     }
   }
 
-  const handleCopyHashtags = (hashtags: string[]) => {
-    const hashtagText = hashtags.map((tag) => `#${tag}`).join(" ")
+  const handleCopyHashtags = (hashtags: Hashtag[]) => {
+    const hashtagText = hashtags.map((tag) => `#${tag.name || tag.hashtag}`).join(" ")
     navigator.clipboard.writeText(hashtagText)
     toast({
       title: "Copied to clipboard",
@@ -271,40 +271,29 @@ export default function HashtagsPage() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <Hash className="h-5 w-5 text-primary" />
-                              <span className="text-lg font-medium">{hashtag.hashtag}</span>
+                              <span className="text-lg font-medium">#{hashtag.name || hashtag.hashtag}</span>
                             </div>
                             <Button variant="ghost" size="icon" title="Save hashtag">
                               <Save className="h-4 w-4" />
                             </Button>
                           </div>
-                          <div className="mt-4 grid grid-cols-2 gap-2">
+                          <div className="mt-2 grid grid-cols-2 gap-2">
                             <div>
-                              <div className="text-sm text-muted-foreground">Posts</div>
-                              <div className="font-medium">{hashtag.posts.toLocaleString()}</div>
+                              <p className="text-xs text-muted-foreground">Posts</p>
+                              <p className="font-medium">{(hashtag.post_count || hashtag.posts || 0).toLocaleString()}</p>
                             </div>
                             <div>
-                              <div className="text-sm text-muted-foreground">Growth</div>
-                              <div className="flex items-center font-medium text-green-500">
-                                +{hashtag.growth}%
-                                <TrendingUp className="ml-1 h-3 w-3" />
-                              </div>
+                              <p className="text-xs text-muted-foreground">Growth</p>
+                              <p className="font-medium">+{hashtag.growth_rate || hashtag.growth || 0}%</p>
                             </div>
                             <div>
-                              <div className="text-sm text-muted-foreground">Engagement</div>
-                              <div className="font-medium">{hashtag.engagement}%</div>
+                              <p className="text-xs text-muted-foreground">Engagement</p>
+                              <p className="font-medium">{hashtag.engagement_rate || hashtag.engagement || 0}%</p>
                             </div>
                             <div>
-                              <div className="text-sm text-muted-foreground">Difficulty</div>
-                              <div className="flex items-center gap-2">
-                                <Progress value={hashtag.difficulty} className="h-2 w-16" />
-                                <span className="text-sm">{hashtag.difficulty}/100</span>
-                              </div>
+                              <p className="text-xs text-muted-foreground">Trending</p>
+                              <p className="font-medium">{hashtag.is_trending ? "Yes" : "No"}</p>
                             </div>
-                          </div>
-                          <div className="mt-4 flex items-center gap-1">
-                            {hashtag.platforms.map((platform) => (
-                              <span key={platform}>{getPlatformIcon(platform)}</span>
-                            ))}
                           </div>
                         </div>
                       ))
@@ -316,56 +305,55 @@ export default function HashtagsPage() {
                   </div>
                 </TabsContent>
                 <TabsContent value="related" className="pt-4">
-                  {relatedHashtags.length > 0 ? (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {relatedHashtags.map((hashtag, index) => (
-                        <div key={index} className="rounded-lg border p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Hash className="h-5 w-5 text-primary" />
-                              <span className="text-lg font-medium">{hashtag.hashtag}</span>
-                            </div>
-                            <Button variant="ghost" size="icon" title="Save hashtag">
-                              <Save className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="mt-4 grid grid-cols-2 gap-2">
-                            <div>
-                              <div className="text-sm text-muted-foreground">Posts</div>
-                              <div className="font-medium">{hashtag.posts.toLocaleString()}</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-muted-foreground">Growth</div>
-                              <div className="flex items-center font-medium text-green-500">
-                                +{hashtag.growth}%
-                                <TrendingUp className="ml-1 h-3 w-3" />
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-muted-foreground">Engagement</div>
-                              <div className="font-medium">{hashtag.engagement}%</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-muted-foreground">Difficulty</div>
-                              <div className="flex items-center gap-2">
-                                <Progress value={hashtag.difficulty} className="h-2 w-16" />
-                                <span className="text-sm">{hashtag.difficulty}/100</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-4 flex items-center gap-1">
-                            {hashtag.platforms.map((platform) => (
-                              <span key={platform}>{getPlatformIcon(platform)}</span>
-                            ))}
-                          </div>
+                  {searchQuery ? (
+                    <>
+                      {isRefreshing ? (
+                        <div className="flex justify-center p-8">
+                          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
                         </div>
-                      ))}
-                    </div>
+                      ) : relatedHashtags.length > 0 ? (
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                          {relatedHashtags.map((hashtag, index) => (
+                            <div key={index} className="rounded-lg border p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Hash className="h-5 w-5 text-primary" />
+                                  <span className="text-lg font-medium">#{hashtag.name || hashtag.hashtag}</span>
+                                </div>
+                                <Button variant="ghost" size="icon" title="Save hashtag">
+                                  <Save className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              <div className="mt-2 grid grid-cols-2 gap-2">
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Posts</p>
+                                  <p className="font-medium">{(hashtag.post_count || hashtag.posts || 0).toLocaleString()}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Growth</p>
+                                  <p className="font-medium">+{hashtag.growth_rate || hashtag.growth || 0}%</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Engagement</p>
+                                  <p className="font-medium">{hashtag.engagement_rate || hashtag.engagement || 0}%</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Trending</p>
+                                  <p className="font-medium">{hashtag.is_trending ? "Yes" : "No"}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border p-8 text-center">
+                          <p className="text-muted-foreground">No related hashtags found for "{searchQuery}"</p>
+                        </div>
+                      )}
+                    </>
                   ) : (
-                    <div className="rounded-lg border p-4">
-                      <div className="text-center text-muted-foreground">
-                        Search for a hashtag to see related suggestions
-                      </div>
+                    <div className="rounded-lg border p-8 text-center">
+                      <p className="text-muted-foreground">Search for a hashtag to see related tags</p>
                     </div>
                   )}
                 </TabsContent>
@@ -381,7 +369,7 @@ export default function HashtagsPage() {
                           <div className="mt-2 flex flex-wrap gap-1">
                             {group.hashtags.slice(0, 5).map((tag, i) => (
                               <Badge key={i} variant="secondary" className="text-xs">
-                                #{tag}
+                                #{typeof tag === 'string' ? tag : (tag.name || tag.hashtag)}
                               </Badge>
                             ))}
                             {group.hashtags.length > 5 && (
@@ -395,7 +383,14 @@ export default function HashtagsPage() {
                               variant="ghost"
                               size="sm"
                               className="h-8 px-2"
-                              onClick={() => handleCopyHashtags(group.hashtags)}
+                              onClick={() => {
+                                const formattedTags = Array.isArray(group.hashtags) 
+                                  ? group.hashtags.map(tag => 
+                                      typeof tag === 'string' ? tag : (tag.name || tag.hashtag)
+                                    )
+                                  : [];
+                                handleCopyHashtags(formattedTags.map(tag => ({ name: tag })));
+                              }}
                             >
                               <Copy className="h-3.5 w-3.5" />
                               <span className="ml-1">Copy</span>
@@ -436,7 +431,7 @@ export default function HashtagsPage() {
                     <div className="mt-2 flex flex-wrap gap-1">
                       {group.hashtags.slice(0, 5).map((tag, i) => (
                         <Badge key={i} variant="secondary" className="text-xs">
-                          #{tag}
+                          #{typeof tag === 'string' ? tag : (tag.name || tag.hashtag)}
                         </Badge>
                       ))}
                       {group.hashtags.length > 5 && (
@@ -450,7 +445,14 @@ export default function HashtagsPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 px-2"
-                        onClick={() => handleCopyHashtags(group.hashtags)}
+                        onClick={() => {
+                          const formattedTags = Array.isArray(group.hashtags) 
+                            ? group.hashtags.map(tag => 
+                                typeof tag === 'string' ? tag : (tag.name || tag.hashtag)
+                              )
+                            : [];
+                          handleCopyHashtags(formattedTags.map(tag => ({ name: tag })));
+                        }}
                       >
                         <Copy className="h-3.5 w-3.5" />
                         <span className="ml-1">Copy</span>
@@ -596,8 +598,13 @@ export default function HashtagsPage() {
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {generatedHashtags.map((tag, index) => (
-                  <Badge key={index} variant="outline" className="text-sm">
-                    #{tag}
+                  <Badge key={index} variant="outline" className="text-sm px-3 py-1">
+                    #{tag.name || tag.hashtag}
+                    {tag.post_count && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {tag.post_count.toLocaleString()} posts
+                      </span>
+                    )}
                   </Badge>
                 ))}
               </div>
@@ -608,7 +615,7 @@ export default function HashtagsPage() {
                   </span>
                   {generatedHashtags
                     .slice(0, Math.floor(generatedHashtags.length * 0.25))
-                    .map((t) => `#${t}`)
+                    .map((t) => `#${t.name || t.hashtag}`)
                     .join(", ")
                     .substring(0, 20)}
                   ...
@@ -617,7 +624,7 @@ export default function HashtagsPage() {
                   <span className="text-muted-foreground">Medium ({Math.floor(generatedHashtags.length * 0.5)}):</span>
                   {generatedHashtags
                     .slice(Math.floor(generatedHashtags.length * 0.25), Math.floor(generatedHashtags.length * 0.75))
-                    .map((t) => `#${t}`)
+                    .map((t) => `#${t.name || t.hashtag}`)
                     .join(", ")
                     .substring(0, 20)}
                   ...
@@ -626,7 +633,7 @@ export default function HashtagsPage() {
                   <span className="text-muted-foreground">Niche ({Math.floor(generatedHashtags.length * 0.25)}):</span>
                   {generatedHashtags
                     .slice(Math.floor(generatedHashtags.length * 0.75))
-                    .map((t) => `#${t}`)
+                    .map((t) => `#${t.name || t.hashtag}`)
                     .join(", ")
                     .substring(0, 20)}
                   ...

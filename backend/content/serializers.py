@@ -3,12 +3,19 @@ from .models import Caption, Hashtag, HashtagGroup, Media
 
 
 class CaptionSerializer(serializers.ModelSerializer):
+    hashtags = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list
+    )
+    
     class Meta:
         model = Caption
-        fields = ['id', 'text', 'platform', 'is_saved', 'created_at']
+        fields = ['id', 'text', 'platform', 'is_saved', 'created_at', 'hashtags']
         read_only_fields = ['id', 'created_at']
     
     def create(self, validated_data):
+        hashtags = validated_data.pop('hashtags', [])
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
 
@@ -92,6 +99,7 @@ class CaptionGenerateSerializer(serializers.Serializer):
     tone = serializers.CharField(required=False, default='professional')
     include_hashtags = serializers.BooleanField(required=False, default=False)
     hashtag_count = serializers.IntegerField(required=False, default=5, min_value=1, max_value=30)
+    media_id = serializers.IntegerField(required=False, allow_null=True)
 
 
 class HashtagGenerateSerializer(serializers.Serializer):
