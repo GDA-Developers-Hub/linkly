@@ -195,6 +195,137 @@ export default function PostsPage() {
     return <MessageSquare className="h-4 w-4" />
   }
 
+  // Helper function to render posts list
+  const renderPostsList = (filteredPosts: Post[]) => {
+    if (isLoading) {
+      return (
+        <div className="flex justify-center p-8">
+          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
+    if (filteredPosts.length === 0) {
+      return (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center p-8 text-center">
+            <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">No Posts Found</h3>
+            <p className="text-muted-foreground mt-2">
+              {status === "draft" 
+                ? "You don't have any draft posts. Create a new post and save it as draft."
+                : status === "scheduled"
+                ? "You don't have any scheduled posts. Create a post and schedule it for later."
+                : status === "published"
+                ? "You don't have any published posts yet."
+                : status === "failed"
+                ? "You don't have any failed posts."
+                : "You don't have any posts yet. Create your first post to get started."}
+            </p>
+            <Button className="mt-4" asChild>
+              <Link href="/dashboard/posts/create">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Post
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredPosts.map((post) => {
+          const postStatus = getPostStatus(post);
+          const statusColors: Record<string, string> = {
+            published: "bg-green-100 text-green-700",
+            scheduled: "bg-blue-100 text-blue-700",
+            draft: "bg-yellow-100 text-yellow-700",
+            failed: "bg-red-100 text-red-700",
+            unknown: "bg-gray-100 text-gray-700"
+          };
+
+          return (
+            <Card key={post.id} className="overflow-hidden">
+              <CardContent className="p-0">
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="p-1 rounded-full bg-gray-100">
+                        {getPostTypeIcon(post)}
+                      </div>
+                      <span className="text-sm font-medium">{post.account_type || "Unknown Platform"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs px-2 py-1 rounded-full ${statusColors[postStatus]}`}>
+                        {postStatus.charAt(0).toUpperCase() + postStatus.slice(1)}
+                      </span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {post.can_edit && (
+                            <DropdownMenuItem onClick={() => router.push(`/dashboard/posts/edit/${post.id}`)}>
+                              Edit
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem>Duplicate</DropdownMenuItem>
+                          {post.insights && <DropdownMenuItem>View Analytics</DropdownMenuItem>}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive" onClick={() => deletePost(post.id)}>
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <p className="text-sm">{post.content}</p>
+                    {post.attachments && post.attachments.length > 0 && (
+                      <div className="mt-2 rounded-md overflow-hidden">
+                        <img 
+                          src={post.attachments[0].url} 
+                          alt="Post attachment" 
+                          className="w-full h-32 object-cover"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center">
+                      <Calendar className="mr-1 h-3 w-3" />
+                      <span>
+                        {postStatus === "published"
+                          ? `Posted ${formatDate(post.published_at || '')}`
+                          : postStatus === "scheduled"
+                            ? `Scheduled for ${formatDate(post.publish_at || '')}`
+                            : postStatus === "draft"
+                              ? `Draft • ${formatDate(post.updated_at)}`
+                              : postStatus === "failed"
+                                ? `Failed • ${post.error}`
+                                : formatDate(post.created_at)}
+                      </span>
+                    </div>
+                    {post.user_name && (
+                      <div className="flex items-center">
+                        <span>By {post.user_name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full">
       <header className="border-b">
@@ -272,169 +403,23 @@ export default function PostsPage() {
             </div>
 
             <TabsContent value="all" className="mt-0">
-              {isLoading ? (
-                <div className="flex justify-center p-8">
-                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : posts.length === 0 ? (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center p-8 text-center">
-                    <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium">No Posts Found</h3>
-                    <p className="text-muted-foreground mt-2">
-                      You don't have any posts yet. Create your first post to get started.
-                    </p>
-                    <Button className="mt-4" asChild>
-                      <Link href="/dashboard/posts/create">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Post
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {posts.map((post) => {
-                    const postStatus = getPostStatus(post)
-                    const statusColors: Record<string, string> = {
-                      published: "bg-green-100 text-green-700",
-                      scheduled: "bg-blue-100 text-blue-700",
-                      draft: "bg-yellow-100 text-yellow-700",
-                      failed: "bg-red-100 text-red-700",
-                      unknown: "bg-gray-100 text-gray-700"
-                    }
-
-                    return (
-                      <Card key={post.id} className="overflow-hidden">
-                        <CardContent className="p-0">
-                          <div className="p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center space-x-2">
-                                <div className="p-1 rounded-full bg-gray-100">
-                                  {getPostTypeIcon(post)}
-                                </div>
-                                <span className="text-sm font-medium">{post.account_type || "Unknown Platform"}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-xs px-2 py-1 rounded-full ${statusColors[postStatus]}`}>
-                                  {postStatus.charAt(0).toUpperCase() + postStatus.slice(1)}
-                                </span>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    {post.can_edit && (
-                                      <DropdownMenuItem onClick={() => router.push(`/dashboard/posts/edit/${post.id}`)}>
-                                        Edit
-                                      </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem>Duplicate</DropdownMenuItem>
-                                    {post.insights && <DropdownMenuItem>View Analytics</DropdownMenuItem>}
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-destructive" onClick={() => deletePost(post.id)}>
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </div>
-
-                            <div className="mb-3">
-                              <p className="text-sm">{post.content}</p>
-                              {post.attachments && post.attachments.length > 0 && (
-                                <div className="mt-2 rounded-md overflow-hidden">
-                                  <img 
-                                    src={post.attachments[0].url} 
-                                    alt="Post attachment" 
-                                    className="w-full h-32 object-cover"
-                                  />
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <div className="flex items-center">
-                                <Calendar className="mr-1 h-3 w-3" />
-                                <span>
-                                  {postStatus === "published"
-                                    ? `Posted ${formatDate(post.published_at || '')}`
-                                    : postStatus === "scheduled"
-                                      ? `Scheduled for ${formatDate(post.publish_at || '')}`
-                                      : postStatus === "draft"
-                                        ? `Draft • ${formatDate(post.updated_at)}`
-                                        : postStatus === "failed"
-                                          ? `Failed • ${post.error}`
-                                          : formatDate(post.created_at)}
-                                </span>
-                              </div>
-                              {post.user_name && (
-                                <div className="flex items-center">
-                                  <span>By {post.user_name}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
-              )}
-              
-              {/* Pagination Controls */}
-              {!isLoading && posts.length > 0 && (
-                <div className="flex justify-center mt-6">
-                  <div className="flex items-center space-x-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => changePage(pagination.currentPage - 1)}
-                      disabled={pagination.currentPage <= 1}
-                    >
-                      Previous
-                    </Button>
-                    
-                    <div className="text-sm">
-                      Page {pagination.currentPage} of {pagination.lastPage || 1}
-                      <span className="text-muted-foreground ml-2">
-                        ({pagination.total} total posts)
-                      </span>
-                    </div>
-                    
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => changePage(pagination.currentPage + 1)}
-                      disabled={pagination.currentPage >= pagination.lastPage}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              )}
+              {renderPostsList(posts)}
             </TabsContent>
 
             <TabsContent value="published" className="mt-0">
-              {/* Similar structure as "all" tab but filtered for published posts */}
-              {/* This is handled by the API call when status changes */}
+              {renderPostsList(posts.filter(post => post.published))}
             </TabsContent>
 
             <TabsContent value="scheduled" className="mt-0">
-              {/* Similar structure as "all" tab but filtered for scheduled posts */}
-              {/* This is handled by the API call when status changes */}
+              {renderPostsList(posts.filter(post => !post.published && !post.draft && post.publish_at))}
             </TabsContent>
 
             <TabsContent value="draft" className="mt-0">
-              {/* Similar structure as "all" tab but filtered for draft posts */}
-              {/* This is handled by the API call when status changes */}
+              {renderPostsList(posts.filter(post => post.draft))}
             </TabsContent>
 
             <TabsContent value="failed" className="mt-0">
-              {/* Similar structure as "all" tab but filtered for failed posts */}
-              {/* This is handled by the API call when status changes */}
+              {renderPostsList(posts.filter(post => post.error))}
             </TabsContent>
           </Tabs>
         </div>
