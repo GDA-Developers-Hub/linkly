@@ -399,111 +399,112 @@ class SocialBuService:
     
     def create_post(self, data):
         """Create a post in SocialBu API"""
-        # Log the data with proper datetime handling
         try:
-            # Create a copy of the data for logging
-            log_data = data.copy() if hasattr(data, 'copy') else dict(data)
+            # Get the list of available accounts first
+            accounts_response = self.get_accounts()
+            if not isinstance(accounts_response, list):
+                logger.error("Invalid response from get_accounts()")
+                raise SocialBuAPIError("Could not fetch available accounts")
+
+            # Log available accounts for debugging
+            logger.info(f"Available accounts: {json.dumps(accounts_response, indent=2)}")
+
+            # Find the correct account ID based on platform
+            platform = data.get('platform', '').lower()
             
-            # Convert datetime objects to ISO format strings
-            if 'publish_at' in log_data and log_data['publish_at']:
-                log_data['publish_at'] = log_data['publish_at'].isoformat()
-                
-            logger.info(f"Creating post with data: {json.dumps(log_data, indent=2)}")
-        except Exception as e:
-            # Don't let logging errors block the API call
-            logger.warning(f"Error logging post data: {str(e)}")
-        
-        # Make sure we're using the correct endpoint as per the requirements
-        endpoint = 'posts'
-        
-        # Validate request according to SocialBu API documentation
-        if 'accounts' not in data:
-            logger.error("'accounts' field is missing in post data")
-            raise SocialBuAPIError("'accounts' field is required")
-        
-        if not data.get('accounts') or not isinstance(data['accounts'], list) or len(data['accounts']) == 0:
-            logger.error("'accounts' field must be a non-empty array")
-            raise SocialBuAPIError("'accounts' field must be a non-empty array")
-        
-        if 'content' not in data and not data.get('existing_attachments'):
-            logger.error("Either 'content' or media attachments are required")
-            raise SocialBuAPIError("Either 'content' or media attachments are required")
-        
-        # Format request data according to platform requirements
-        request_data = {
-            'team_id': data.get('team_id', 0),
-            'content': data.get('content', ''),
-            'draft': data.get('draft', False),
-            'accounts': data['accounts']
-        }
+            # Select the appropriate account based on platform
+            selected_account = None
+            if platform == 'facebook':
+                selected_account = next(
+                    (acc for acc in accounts_response 
+                     if acc['type'] == 'facebook.page' and acc['active']), 
+                    None
+                )
+            elif platform == 'twitter':
+                selected_account = next(
+                    (acc for acc in accounts_response 
+                     if acc['type'] == 'twitter.profile' and acc['active']), 
+                    None
+                )
+            else:
+                logger.error(f"Unsupported platform: {platform}")
+                raise SocialBuAPIError(f"Unsupported platform: {platform}")
 
-        # Handle platform-specific options
-        platform = data.get('platform', '').lower()
-        options = data.get('options', {})
+            if not selected_account:
+                logger.error(f"No active {platform} account found")
+                raise SocialBuAPIError(f"No active {platform} account found")
 
-        if platform == 'facebook':
-            # Facebook-specific options
-            request_data['options'] = {
-                'comment': options.get('comment', ''),
-                'post_as_story': options.get('post_as_story', False)
+            # Use the correct account ID
+            account_id = selected_account['id']
+            logger.info(f"Using account ID {account_id} for {platform} post")
+
+            # Create request data with the correct account ID
+            request_data = {
+                'team_id': data.get('team_id', 0),
+                'content': data.get('content', ''),
+                'draft': data.get('draft', False),
+                'accounts': [account_id]  # Use the correct account ID
             }
-        elif platform == 'twitter':
-            # Twitter-specific options
-            twitter_options = {}
-            
-            # Handle media alt text
-            if 'media_alt_text' in options:
-                twitter_options['media_alt_text'] = options['media_alt_text']
-            
-            # Handle threaded replies
-            if 'threaded_replies' in options:
-                twitter_options['threaded_replies'] = options['threaded_replies']
-            
-            if twitter_options:
-                request_data['options'] = twitter_options
 
-        # Add postback_url if provided
-        if data.get('postback_url'):
-            request_data['postback_url'] = data['postback_url']
+            # Handle platform-specific options
+            options = data.get('options', {})
+            if platform == 'facebook':
+                request_data['options'] = {
+                    'comment': options.get('comment', ''),
+                    'post_as_story': options.get('post_as_story', False)
+                }
+            elif platform == 'twitter':
+                twitter_options = {}
+                if 'media_alt_text' in options:
+                    twitter_options['media_alt_text'] = options['media_alt_text']
+                if 'threaded_replies' in options:
+                    twitter_options['threaded_replies'] = options['threaded_replies']
+                if twitter_options:
+                    request_data['options'] = twitter_options
 
-        # Handle publish_at datetime
-        if 'publish_at' in data and data['publish_at']:
-            if isinstance(data['publish_at'], str):
-                # Verify it matches the required format (YYYY-MM-DD HH:MM:SS)
-                import re
-                if re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', data['publish_at']):
-                    request_data['publish_at'] = data['publish_at']
-                else:
-                    try:
-                        dt = datetime.fromisoformat(data['publish_at'].replace('Z', '+00:00'))
-                        request_data['publish_at'] = dt.strftime('%Y-%m-%d %H:%M:%S')
-                    except Exception as e:
-                        raise SocialBuAPIError(f"Invalid publish_at format. Must be 'Y-m-d H:i:s' (e.g. '2025-04-30 17:25:00')")
-            elif hasattr(data['publish_at'], 'strftime'):
-                request_data['publish_at'] = data['publish_at'].strftime('%Y-%m-%d %H:%M:%S')
-            else:
-                raise SocialBuAPIError(f"Invalid publish_at format. Must be 'Y-m-d H:i:s' (e.g. '2025-04-30 17:25:00')")
+            # Add postback_url if provided
+            if data.get('postback_url'):
+                request_data['postback_url'] = data['postback_url']
 
-        # Handle media attachments
-        if data.get('existing_attachments'):
-            if isinstance(data['existing_attachments'], list):
-                formatted_attachments = []
-                for item in data['existing_attachments']:
-                    if isinstance(item, dict) and 'upload_token' in item:
-                        formatted_attachments.append(item)
-                    elif isinstance(item, str):
-                        formatted_attachments.append({'upload_token': item})
+            # Handle publish_at datetime
+            if 'publish_at' in data and data['publish_at']:
+                if isinstance(data['publish_at'], str):
+                    # Verify it matches the required format (YYYY-MM-DD HH:MM:SS)
+                    import re
+                    if re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', data['publish_at']):
+                        request_data['publish_at'] = data['publish_at']
                     else:
-                        logger.warning(f"Skipping invalid attachment: {item}")
-                request_data['existing_attachments'] = formatted_attachments
-            else:
-                request_data['existing_attachments'] = [{'upload_token': str(data['existing_attachments'])}]
-        
-        try:
+                        try:
+                            dt = datetime.fromisoformat(data['publish_at'].replace('Z', '+00:00'))
+                            request_data['publish_at'] = dt.strftime('%Y-%m-%d %H:%M:%S')
+                        except Exception as e:
+                            raise SocialBuAPIError(f"Invalid publish_at format. Must be 'Y-m-d H:i:s' (e.g. '2025-04-30 17:25:00')")
+                elif hasattr(data['publish_at'], 'strftime'):
+                    request_data['publish_at'] = data['publish_at'].strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    raise SocialBuAPIError(f"Invalid publish_at format. Must be 'Y-m-d H:i:s' (e.g. '2025-04-30 17:25:00')")
+
+            # Handle media attachments
+            if data.get('existing_attachments'):
+                if isinstance(data['existing_attachments'], list):
+                    formatted_attachments = []
+                    for item in data['existing_attachments']:
+                        if isinstance(item, dict) and 'upload_token' in item:
+                            formatted_attachments.append(item)
+                        elif isinstance(item, str):
+                            formatted_attachments.append({'upload_token': item})
+                        else:
+                            logger.warning(f"Skipping invalid attachment: {item}")
+                    request_data['existing_attachments'] = formatted_attachments
+                else:
+                    request_data['existing_attachments'] = [{'upload_token': str(data['existing_attachments'])}]
+
             # Make the API call with the validated data
-            result = self.make_request(endpoint, 'POST', request_data)
+            logger.info(f"Making post request with data: {json.dumps(request_data, indent=2)}")
+            result = self.make_request('posts', 'POST', request_data)
             logger.info(f"Post creation successful. Response: {json.dumps(result, indent=2)}")
             return result
+
         except SocialBuAPIError as e:
             logger.error(f"Post creation failed: {e.message}")
             if 'non-JSON response' in e.message and 'DOCTYPE html' in e.message:
