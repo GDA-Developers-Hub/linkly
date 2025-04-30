@@ -36,10 +36,16 @@ class SocialBuService:
     def get_headers(self):
         headers = {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',  # Explicitly request JSON response
         }
         
         if self.token:
-            headers['Authorization'] = f'Bearer {self.token}'
+            # Ensure the token is properly formatted
+            token = self.token.strip()
+            headers['Authorization'] = f'Bearer {token}'
+            logger.info(f"Using authorization token: {token[:10]}...")
+        else:
+            logger.warning("No authorization token available!")
             
         return headers
     
@@ -351,12 +357,45 @@ class SocialBuService:
             raise SocialBuAPIError("'content' field is required")
         
         # Format request data according to platform requirements
+        # Create a copy of the data to avoid modifying the original
         request_data = {
-            'accounts': data['accounts'],
             'team_id': data.get('team_id', 0),
             'content': data['content'],
             'draft': data.get('draft', False),
         }
+        
+        # CRITICAL FIX: Always check the database for the correct SocialBu account ID
+        # This approach is platform-agnostic and handles all account types
+        try:
+            # Import here to avoid circular imports
+            from django.apps import apps
+            SocialBuToken = apps.get_model('socialbu_proxy', 'SocialBuToken')
+            
+            # Look up the authenticated user associated with this token
+            # This requires that the token was originally obtained by a logged-in user
+            if self.token:
+                # Find the token in the database
+                token_obj = SocialBuToken.objects.filter(access_token=self.token).first()
+                
+                if token_obj and token_obj.socialbu_user_id:
+                    logger.info(f"Found SocialBu user ID in database: {token_obj.socialbu_user_id}")
+                    logger.info(f"Original accounts from request: {data.get('accounts')}")
+                    
+                    # Use the correct SocialBu account ID from the database
+                    request_data['accounts'] = [int(token_obj.socialbu_user_id)]
+                    logger.info(f"Using SocialBu account ID from database: {request_data['accounts']}")
+                else:
+                    logger.warning("No token object or socialbu_user_id found in database")
+                    # Fall back to original account IDs
+                    request_data['accounts'] = data['accounts']
+            else:
+                logger.warning("No token available to look up SocialBu user")
+                # Fall back to original account IDs
+                request_data['accounts'] = data['accounts']
+        except Exception as e:
+            logger.error(f"Error while looking up SocialBu user ID: {str(e)}")
+            # Fall back to original account IDs if there was an error
+            request_data['accounts'] = data['accounts']
 
         # Add postback_url if provided
         if 'postback_url' in data and data['postback_url']:

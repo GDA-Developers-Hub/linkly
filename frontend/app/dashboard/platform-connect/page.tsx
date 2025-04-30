@@ -582,7 +582,7 @@ export default function PlatformConnectPage() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {connectedAccounts.map((account) => {
+              {Array.isArray(connectedAccounts) && connectedAccounts.length > 0 ? connectedAccounts.map((account) => {
                 const platform = platformConfig[account.platform] || { icon: Link2, color: "#666" }
                 const PlatformIcon = platform.icon
 
@@ -772,7 +772,17 @@ export default function PlatformConnectPage() {
                     </CardFooter>
                   </Card>
                 )
-              })}
+              }) : (
+                <div className="text-center py-8">
+                  <div className="bg-muted rounded-full p-3 mb-3 mx-auto w-fit">
+                    <AlertCircle className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <h4 className="font-medium mb-1">No Accounts Connected</h4>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    You haven't connected any social media accounts yet.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

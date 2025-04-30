@@ -243,7 +243,7 @@ export default function CreatePostPage() {
                     <div>
                       <Label className="text-base font-medium mb-2 block">Select Platforms</Label>
                       <div className="flex flex-wrap gap-3">
-                        {accounts.map((account) => {
+                        {Array.isArray(accounts) && accounts.length > 0 ? accounts.map((account) => {
                           const platform = platformConfig[account.platform] || { icon: ImageIcon, color: "#666" }
                           const PlatformIcon = platform.icon
                           const isSelected = selectedPlatforms.includes(account.id)
@@ -252,21 +252,14 @@ export default function CreatePostPage() {
                             <Button
                               key={account.id}
                               variant={isSelected ? "default" : "outline"}
-                              className={isSelected ? "" : ""}
-                              style={
-                                isSelected
-                                  ? { backgroundColor: platform.color }
-                                  : { borderColor: platform.color, color: platform.color }
-                              }
+                              className={`flex items-center ${isSelected ? "bg-[#FF8C2A] hover:bg-[#e67e25]" : ""}`}
                               onClick={() => togglePlatform(account.id)}
                             >
                               <PlatformIcon className="mr-2 h-4 w-4" />
                               {account.name}
                             </Button>
                           )
-                        })}
-
-                        {accounts.length === 0 && (
+                        }) : (
                           <div className="text-muted-foreground text-sm">
                             No connected platforms. Please connect a platform first.
                           </div>
@@ -417,7 +410,7 @@ export default function CreatePostPage() {
                 <CardContent className="p-6">
                   <h3 className="text-lg font-medium mb-4">Preview</h3>
                   <div className="space-y-6">
-                    {selectedPlatforms.length > 0 ? (
+                    {selectedPlatforms.length > 0 && Array.isArray(accounts) && accounts.length > 0 ? (
                       accounts
                         .filter((account) => selectedPlatforms.includes(account.id))
                         .map((account) => {
