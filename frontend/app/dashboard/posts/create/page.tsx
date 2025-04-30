@@ -137,10 +137,37 @@ export default function CreatePostPage() {
       return
     }
 
-    if (!content.trim()) {
+    // Get the platform type if only one platform is selected
+    const selectedPlatform = selectedPlatforms.length === 1 
+      ? accounts.find(acc => acc.id === selectedPlatforms[0])?.platform 
+      : undefined;
+    
+    // Platform-specific validations according to SocialBu API docs
+    if (selectedPlatform) {
+      if (selectedPlatform === 'instagram' && uploadedMedia.length === 0) {
+        toast({
+          title: "Media required",
+          description: "Instagram posts require at least one image or video.",
+          variant: "destructive",
+        })
+        return
+      }
+      
+      if (selectedPlatform === 'twitter' && content.trim().length > 280) {
+        toast({
+          title: "Content too long",
+          description: `Twitter posts are limited to 280 characters. Your post has ${content.trim().length} characters.`,
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    // Content validation - either content or media is required
+    if (!content.trim() && uploadedMedia.length === 0) {
       toast({
         title: "No content",
-        description: "Please enter some content for your post.",
+        description: "Please enter some content or upload media for your post.",
         variant: "destructive",
       })
       return
@@ -185,9 +212,10 @@ export default function CreatePostPage() {
           accounts: correctAccountIds, // Use the correct SocialBu account IDs
           content,
           draft: isDraft,
-          // Format the date as "YYYY-MM-DD HH:MM:SS" string instead of ISO format
+          // Format the date exactly in the "Y-m-d H:i:s" format required by SocialBu API
           publish_at: isDraft ? undefined : format(scheduledDate, "yyyy-MM-dd HH:mm:ss"),
           // Convert uploaded media to the format expected by SocialBu
+          // The backend expects an array of objects with 'upload_token' field
           existing_attachments: uploadedMedia.length > 0 
             ? uploadedMedia.map(media => ({ 
                 upload_token: media.id.toString() 
@@ -197,10 +225,32 @@ export default function CreatePostPage() {
           team_id: 0, // Default to 0 if no specific team ID is available
           postback_url: "https://186b-41-139-175-41.ngrok-free.app/dashboard/posts",
           // Include the platform for better backend handling
-          platform: selectedPlatforms.length === 1 ? 
-            accounts.find(acc => acc.id === selectedPlatforms[0])?.platform : undefined,
+          platform: selectedPlatform,
+          
+          // Platform-specific options based on SocialBu API docs
           options: {
-            post_as_story: false // Set to true for story-type posts
+            // Common options
+            post_as_story: false,
+            
+            // Platform-specific options
+            ...(selectedPlatform === 'facebook' && {
+              comment: "", // Optional comment for the post
+            }),
+            
+            ...(selectedPlatform === 'instagram' && {
+              post_as_reel: false, // Post as a reel instead of regular post
+              share_reel_to_feed: false, // Share reel to feed option
+            }),
+            
+            ...(selectedPlatform === 'twitter' && {
+              media_alt_text: "", // Alt text for media
+              threaded_replies: false, // Enable threaded replies
+            }),
+            
+            ...(selectedPlatform === 'linkedin' && {
+              trim_link_from_content: true, // Remove link from content and use as separate field
+              customize_link: false, // Customize link preview
+            })
           }
         }
 

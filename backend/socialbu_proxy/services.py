@@ -347,14 +347,41 @@ class SocialBuService:
         # Make sure we're using the correct endpoint as per the requirements
         endpoint = 'posts'
         
+        # Validate request according to SocialBu API documentation
+        # See: https://socialbu.com/developers/docs#tag/posts
+        
         # Ensure all required fields are present according to SocialBu API
         if 'accounts' not in data:
             logger.error("'accounts' field is missing in post data")
             raise SocialBuAPIError("'accounts' field is required")
         
-        if 'content' not in data:
-            logger.error("'content' field is missing in post data")
-            raise SocialBuAPIError("'content' field is required")
+        if not data.get('accounts') or not isinstance(data['accounts'], list) or len(data['accounts']) == 0:
+            logger.error("'accounts' field must be a non-empty array")
+            raise SocialBuAPIError("'accounts' field must be a non-empty array")
+        
+        if 'content' not in data and not data.get('existing_attachments'):
+            logger.error("Either 'content' or media attachments are required")
+            raise SocialBuAPIError("Either 'content' or media attachments are required")
+        
+        # Validate platform-specific requirements
+        platform = data.get('platform', '').lower()
+        if platform and platform in ['instagram', 'facebook', 'twitter', 'linkedin']:
+            logger.info(f"Validating platform-specific requirements for {platform}")
+            
+            # Instagram requires at least one image or video
+            if platform == 'instagram' and not data.get('existing_attachments'):
+                logger.warning(f"Instagram posts typically require media attachments")
+                
+            # Twitter has character limits
+            if platform == 'twitter' and data.get('content') and len(data.get('content', '')) > 280:
+                logger.warning(f"Twitter content exceeds 280 character limit: {len(data.get('content', ''))} characters")
+                
+            # LinkedIn may need special handling for articles
+            if platform == 'linkedin' and data.get('options', {}).get('article_mode'):
+                logger.info("LinkedIn article mode enabled")
+        
+        # Log validation success
+        logger.info("Post data validation successful")
         
         # Format request data according to platform requirements
         # Create a copy of the data to avoid modifying the original
@@ -374,17 +401,41 @@ class SocialBuService:
             # Look up the authenticated user associated with this token
             # This requires that the token was originally obtained by a logged-in user
             if self.token:
-                # Find the token in the database
+                # CRITICAL FIX: Always check the database for the correct SocialBu account ID
+                # AND verify we have access to the account
                 token_obj = SocialBuToken.objects.filter(access_token=self.token).first()
-                
                 if token_obj and token_obj.socialbu_user_id:
-                    logger.info(f"Found SocialBu user ID in database: {token_obj.socialbu_user_id}")
-                    logger.info(f"Original accounts from request: {data.get('accounts')}")
+                    # Use the account ID from the database
+                    account_id = int(token_obj.socialbu_user_id)
+                    request_data['accounts'] = [account_id]
+                    logger.info(f"Using SocialBu account ID from database: {account_id}")
                     
-                    # Use the correct SocialBu account ID from the database
-                    request_data['accounts'] = [int(token_obj.socialbu_user_id)]
-                    logger.info(f"Using SocialBu account ID from database: {request_data['accounts']}")
+                    # Additional verification step: Check if we can access this account
+                    try:
+                        # Verify account access by fetching the list of accounts
+                        accounts_response = self.make_request('GET', 'accounts', {})
+                        
+                        # Extract account IDs from the response
+                        accessible_account_ids = []
+                        if accounts_response and 'data' in accounts_response:
+                            for account in accounts_response['data']:
+                                if 'id' in account:
+                                    accessible_account_ids.append(int(account['id']))
+                        
+                        logger.info(f"Accessible account IDs: {accessible_account_ids}")
+                        
+                        # Check if our account ID is in the list of accessible accounts
+                        if account_id not in accessible_account_ids:
+                            logger.warning(f"Account ID {account_id} is not in the list of accessible accounts: {accessible_account_ids}")
+                            # If not accessible but we have other accounts, use the first accessible one
+                            if accessible_account_ids:
+                                request_data['accounts'] = [accessible_account_ids[0]]
+                                logger.warning(f"Using alternative account ID: {accessible_account_ids[0]}")
+                    except Exception as e:
+                        logger.error(f"Error verifying account access: {str(e)}")
+                        # Continue with the account ID we have
                 else:
+                    logger.warning("No SocialBu user ID found in token object, using provided account IDs")
                     logger.warning("No token object or socialbu_user_id found in database")
                     # Fall back to original account IDs
                     request_data['accounts'] = data['accounts']
@@ -401,28 +452,56 @@ class SocialBuService:
         if 'postback_url' in data and data['postback_url']:
             request_data['postback_url'] = data['postback_url']
 
-        # Add publish_at if provided
+        # Add publish_at if provided - ensure it's in the exact format required by SocialBu API: Y-m-d H:i:s
         if 'publish_at' in data and data['publish_at']:
-            request_data['publish_at'] = data['publish_at'].isoformat()
+            # Check if it's already a properly formatted string
+            if isinstance(data['publish_at'], str):
+                # Verify it matches the required format (YYYY-MM-DD HH:MM:SS)
+                import re
+                if re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', data['publish_at']):
+                    request_data['publish_at'] = data['publish_at']
+                    logger.info(f"Using publish_at as provided: {data['publish_at']}")
+                else:
+                    # Try to parse and reformat
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(data['publish_at'].replace('Z', '+00:00'))
+                        request_data['publish_at'] = dt.strftime('%Y-%m-%d %H:%M:%S')
+                        logger.info(f"Reformatted publish_at to: {request_data['publish_at']}")
+                    except Exception as e:
+                        logger.error(f"Failed to parse publish_at date: {str(e)}")
+                        raise SocialBuAPIError(f"Invalid publish_at format. Must be 'Y-m-d H:i:s' (e.g. '2025-04-30 17:25:00')")
+            # If it's a datetime object, format it correctly
+            elif hasattr(data['publish_at'], 'strftime'):
+                request_data['publish_at'] = data['publish_at'].strftime('%Y-%m-%d %H:%M:%S')
+                logger.info(f"Formatted datetime object to: {request_data['publish_at']}")
+            else:
+                logger.error(f"Invalid publish_at type: {type(data['publish_at'])}")
+                raise SocialBuAPIError(f"Invalid publish_at format. Must be 'Y-m-d H:i:s' (e.g. '2025-04-30 17:25:00')")
 
         # Add existing_attachments if provided - fix the format for SocialBu API
         if 'existing_attachments' in data and data['existing_attachments']:
-            # SocialBu expects a flat array of upload tokens for existing_attachments
+            # SocialBu expects an array of objects with 'upload_token' field
             if isinstance(data['existing_attachments'], list):
-                # Check if it's an array of objects
-                if data['existing_attachments'] and isinstance(data['existing_attachments'][0], dict):
-                    # Extract just the upload_token values
-                    tokens = []
-                    for attachment in data['existing_attachments']:
-                        if 'upload_token' in attachment:
-                            tokens.append(attachment['upload_token'])
-                    request_data['existing_attachments'] = tokens
-                else:
-                    # Already in correct format (array of tokens)
-                    request_data['existing_attachments'] = data['existing_attachments']
+                formatted_attachments = []
+                
+                # Process each attachment
+                for item in data['existing_attachments']:
+                    if isinstance(item, dict) and 'upload_token' in item:
+                        # Already in correct format
+                        formatted_attachments.append(item)
+                    elif isinstance(item, str):
+                        # Convert string to object with upload_token
+                        formatted_attachments.append({'upload_token': item})
+                    else:
+                        logger.warning(f"Skipping invalid attachment: {item}")
+                
+                request_data['existing_attachments'] = formatted_attachments
+                logger.info(f"Using formatted attachments: {formatted_attachments}")
             else:
-                # Not a list, use as is (though this is likely incorrect)
-                request_data['existing_attachments'] = data['existing_attachments']
+                # Not a list, try to use as a single item
+                logger.warning(f"existing_attachments not a list, converting: {data['existing_attachments']}")
+                request_data['existing_attachments'] = [{'upload_token': str(data['existing_attachments'])}]
             
             logger.info(f"Processed existing_attachments: {request_data['existing_attachments']}")
 

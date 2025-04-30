@@ -294,6 +294,38 @@ class SocialBuProxyViewSet(viewsets.ViewSet):
             # Get the service with the freshly updated token
             service = self.get_socialbu_service()
             
+            # CRITICAL FIX: Get ACTUAL accessible accounts before creating post
+            try:
+                logger.info("Fetching accessible accounts from SocialBu")
+                accounts_response = service.make_request('GET', 'accounts', {})
+                
+                # Extract the accessible account IDs
+                accessible_account_ids = []
+                if accounts_response and 'data' in accounts_response:
+                    for account in accounts_response['data']:
+                        if 'id' in account:
+                            account_id = int(account['id'])
+                            accessible_account_ids.append(account_id)
+                            logger.info(f"Found accessible account: {account_id} ({account.get('name', 'Unknown')})")
+                
+                logger.info(f"User has access to these SocialBu accounts: {accessible_account_ids}")
+                
+                # Check if we have any accessible accounts
+                if not accessible_account_ids:
+                    logger.error("No accessible SocialBu accounts found!")
+                    return Response(
+                        {"detail": "You don't have any accessible accounts on SocialBu. Please connect an account first."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Modify the request data to use ONLY accessible accounts
+                # This ensures we never try to post to inaccessible accounts
+                serializer.validated_data['accounts'] = [accessible_account_ids[0]]  # Use the first accessible account
+                logger.info(f"Using accessible account ID: {accessible_account_ids[0]}")
+            except Exception as e:
+                logger.error(f"Error fetching accessible accounts: {str(e)}")
+                # Continue with original account IDs, backend validation will catch issues
+            
             # If platform is not specified but accounts are provided, try to determine platform
             validated_data = serializer.validated_data.copy()
             
