@@ -32,6 +32,8 @@ export default function CreatePostPage() {
   const [date, setDate] = useState<Date>(new Date())
   const [time, setTime] = useState<string>(format(new Date(), "HH:mm"))
   const [selectedPlatforms, setSelectedPlatforms] = useState<number[]>([])
+  // Store the mapping between local account IDs and SocialBu account IDs
+  const [accountIdMapping, setAccountIdMapping] = useState<Record<number, number>>({})
   const [uploadedMedia, setUploadedMedia] = useState<Media[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -46,6 +48,29 @@ export default function CreatePostPage() {
         const api = getSocialBuAPI()
         const accountsData = await api.getAccounts()
         setAccounts(accountsData)
+
+        // Get user info to obtain the correct SocialBu user ID
+        try {
+          const userInfo = await api.getUserInfo()
+          console.log("Fetched user info:", userInfo)
+          
+          if (userInfo && userInfo.user_id) {
+            const socialBuUserId = parseInt(userInfo.user_id, 10)
+            
+            // Create a mapping from local account IDs to the SocialBu user ID
+            // This ensures we always use the correct ID when creating posts
+            const mapping: Record<number, number> = {}
+            accountsData.forEach(account => {
+              mapping[account.id] = socialBuUserId
+              console.log(`Mapped local account ${account.id} to SocialBu user ID ${socialBuUserId}`)
+            })
+            
+            setAccountIdMapping(mapping)
+            console.log("Account ID mapping created:", mapping)
+          }
+        } catch (userInfoError) {
+          console.error("Error fetching user info:", userInfoError)
+        }
 
         // Select first account by default if available
         if (accountsData.length > 0) {
@@ -131,9 +156,33 @@ export default function CreatePostPage() {
         const [hours, minutes] = time.split(":").map(Number)
         scheduledDate.setHours(hours, minutes)
 
+        // Map selected platform IDs to the correct SocialBu account IDs
+        let correctAccountIds: number[] = [];
+        
+        if (Object.keys(accountIdMapping).length > 0) {
+          // If we have mappings, use them to get the correct SocialBu account IDs
+          correctAccountIds = selectedPlatforms.map(localId => {
+            const socialBuId = accountIdMapping[localId];
+            if (socialBuId) {
+              console.log(`Using mapped SocialBu ID ${socialBuId} for local account ${localId}`);
+              return socialBuId;
+            }
+            console.warn(`No mapping found for local account ${localId}, using as is`);
+            return localId;
+          });
+        } else {
+          // If no mappings are available, use the selected platforms as-is
+          // (backend will still correct these IDs)
+          correctAccountIds = selectedPlatforms;
+          console.warn("No account ID mappings available, using original IDs:", selectedPlatforms);
+        }
+        
+        console.log("Original selected platforms:", selectedPlatforms);
+        console.log("Mapped to SocialBu account IDs:", correctAccountIds);
+        
         // Create post data in the new format required by SocialBu API
         const postData = {
-          accounts: selectedPlatforms,
+          accounts: correctAccountIds, // Use the correct SocialBu account IDs
           content,
           draft: isDraft,
           // Format the date as "YYYY-MM-DD HH:MM:SS" string instead of ISO format
@@ -147,6 +196,9 @@ export default function CreatePostPage() {
           // Optional fields
           team_id: 0, // Default to 0 if no specific team ID is available
           postback_url: "https://186b-41-139-175-41.ngrok-free.app/dashboard/posts",
+          // Include the platform for better backend handling
+          platform: selectedPlatforms.length === 1 ? 
+            accounts.find(acc => acc.id === selectedPlatforms[0])?.platform : undefined,
           options: {
             post_as_story: false // Set to true for story-type posts
           }
