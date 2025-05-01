@@ -469,24 +469,51 @@ class SocialBuAPI {
   }
 
   // Posts
-  async getPosts(limit?: number, status?: string, page?: number): Promise<PaginatedPosts> {
+  async getPosts(params?: {
+    limit?: number;
+    status?: string;
+    page?: number;
+    account_id?: number;
+  }): Promise<PaginatedPosts> {
     // Do not use leading slash
     let endpoint = "socialbu/posts"
-    const params = [`base_url=${this.baseUrl}`]
+    const queryParams = [`base_url=${this.baseUrl}`]
 
-    if (limit) {
-      params.push(`limit=${limit}`)
+    // Handle both legacy format (separate parameters) and object format
+    if (params) {
+      if (params.limit) {
+        queryParams.push(`limit=${params.limit}`)
+      }
+
+      if (params.status) {
+        queryParams.push(`status=${params.status}`)
+      }
+
+      if (params.page) {
+        queryParams.push(`page=${params.page}`)
+      }
+
+      if (params.account_id) {
+        queryParams.push(`account_id=${params.account_id}`)
+      }
+    } else if (arguments.length > 0) {
+      // Legacy support for separate arguments
+      const [limit, status, page] = arguments;
+      
+      if (limit) {
+        queryParams.push(`limit=${limit}`)
+      }
+
+      if (status) {
+        queryParams.push(`status=${status}`)
+      }
+
+      if (page) {
+        queryParams.push(`page=${page}`)
+      }
     }
 
-    if (status) {
-      params.push(`status=${status}`)
-    }
-
-    if (page) {
-      params.push(`page=${page}`)
-    }
-
-    endpoint += `?${params.join("&")}`
+    endpoint += `?${queryParams.join("&")}`
     
     console.log(`Fetching posts with endpoint: ${endpoint}`)
     

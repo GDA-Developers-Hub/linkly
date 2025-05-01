@@ -100,8 +100,18 @@ export default function CalendarPage() {
           account_id: accountParam,
         })
 
+        // Check if postsData is the expected type with items
+        if (!postsData || typeof postsData !== 'object') {
+          console.error('Invalid posts data received:', postsData);
+          return;
+        }
+
+        // Extract the items from PaginatedPosts response
+        const posts = Array.isArray(postsData) ? postsData : (postsData.items || []);
+        console.log(`Processing ${posts.length} posts`);
+
         // Convert posts to calendar events
-        const calendarEvents: CalendarEvent[] = postsData
+        const calendarEvents: CalendarEvent[] = posts
           .filter((post) => post.scheduled_at || post.published_at) // Only include posts with dates
           .map((post) => {
             // Get accounts for this post

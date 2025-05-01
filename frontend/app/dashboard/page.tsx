@@ -301,13 +301,13 @@ export default function DashboardPage() {
               <CardContent className="space-y-4">
                 {isLoading ? (
                   Array(3).fill(0).map((_, i) => (
-                    <div key={i} className="flex items-center space-x-4">
+                      <div key={i} className="flex items-center space-x-4">
                       <div className="h-10 w-10 animate-pulse rounded-full bg-muted"></div>
-                      <div className="space-y-2">
+                        <div className="space-y-2">
                         <div className="h-4 w-24 animate-pulse rounded bg-muted"></div>
                         <div className="h-3 w-16 animate-pulse rounded bg-muted"></div>
                       </div>
-                    </div>
+                  </div>
                   ))
                 ) : insights?.connectedAccounts.length ? (
                   insights.connectedAccounts.map((account) => (
@@ -332,7 +332,7 @@ export default function DashboardPage() {
                         <p className="text-xs text-muted-foreground capitalize">{account.type || account._type}</p>
                       </div>
                       <div className={`h-2 w-2 rounded-full ${account.active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                    </div>
+                  </div>
                   ))
                 ) : (
                   <div className="text-center py-4">
@@ -344,7 +344,7 @@ export default function DashboardPage() {
                 )}
               </CardContent>
             </Card>
-
+            
             {/* Recent Posts */}
             <Card className="shadow-sm hover:shadow-md transition-shadow lg:col-span-5">
               <CardHeader>
@@ -360,7 +360,7 @@ export default function DashboardPage() {
                         <div className="h-5 w-16 animate-pulse rounded bg-muted"></div>
                       </div>
                       <div className="h-16 w-full animate-pulse rounded bg-muted"></div>
-                    </div>
+                  </div>
                   ))
                 ) : recentPosts.length ? (
                   <div className="space-y-4">
@@ -401,8 +401,8 @@ export default function DashboardPage() {
                             <span>👍 {post.engagement.likes}</span>
                             <span>💬 {post.engagement.comments}</span>
                             <span>🔄 {post.engagement.shares}</span>
-                          </div>
-                        )}
+                            </div>
+                          )}
                       </div>
                     ))}
                   </div>
