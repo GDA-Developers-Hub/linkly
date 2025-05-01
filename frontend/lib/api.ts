@@ -191,6 +191,19 @@ class API {
 
     if (this.accessToken) {
       headers["Authorization"] = `Bearer ${this.accessToken}`
+      console.log(`Adding Authorization header: Bearer ${this.accessToken.substring(0, 10)}...`);
+    } else {
+      console.warn("No access token available for request!");
+      
+      // Try to retrieve token again from localStorage as a fallback
+      if (typeof window !== "undefined") {
+        const storedToken = localStorage.getItem("linkly_access_token");
+        if (storedToken) {
+          console.log("Found token in localStorage, using it for this request");
+          this.accessToken = storedToken;
+          headers["Authorization"] = `Bearer ${storedToken}`;
+        }
+      }
     }
 
     return headers
@@ -276,20 +289,62 @@ class API {
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
+      // Try to parse response body as JSON
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        // If response is not JSON, use text or status
+        try {
+          const text = await response.text();
+          errorData = { detail: text || `Request failed with status ${response.status}` };
+        } catch (textError) {
+          errorData = { detail: `Request failed with status ${response.status}` };
+        }
+      }
+      
       console.error(`API Error for ${url}:`, errorData);
-      const error: any = new Error(errorData.detail || errorData.message || `Request failed with status ${response.status}`)
+      
+      // Create a more descriptive error message
+      let errorMessage = "An error occurred while processing your request.";
+      
+      if (errorData.detail) {
+        errorMessage = errorData.detail;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else if (errorData.error) {
+        errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
+      }
+      
+      // Check for specific OpenAI related errors
+      if (endpoint.includes('generate-caption') || endpoint.includes('generate-hashtags')) {
+        if (response.status === 500) {
+          errorMessage = "AI generation service is currently unavailable. This may be due to missing API keys or service disruption.";
+        }
+      }
+      
+      const error: any = new Error(errorMessage);
       
       // Attach the response data to the error for better error handling
       error.response = { 
         status: response.status,
         data: errorData 
-      }
+      };
       
-      throw error
+      throw error;
     }
 
-    return await response.json()
+    // Try to parse response as JSON
+    try {
+      return await response.json();
+    } catch (e) {
+      // Handle empty or non-JSON responses
+      console.error(`Failed to parse JSON from ${url}:`, e);
+      if (response.status === 204) { // No content
+        return {} as T;
+      }
+      throw new Error("Invalid response format from server");
+    }
   }
 
   // Authentication

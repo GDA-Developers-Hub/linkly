@@ -35,6 +35,18 @@ class GenerateCaptionView(APIView):
             media_id = serializer.validated_data.get('media_id')
 
             try:
+                # Check if OpenAI API key is configured
+                api_key = os.environ.get('OPENAI_API_KEY') or getattr(settings, 'OPENAI_API_KEY', None)
+                if not api_key:
+                    logger.error("OpenAI API key is not configured")
+                    return Response(
+                        {"error": "OpenAI API key is not configured. Please set the OPENAI_API_KEY in settings or environment variables."},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+                
+                # Initialize OpenAI client with the API key to ensure we're using the latest config
+                openai_client = OpenAI(api_key=api_key)
+                
                 # Create system message based on parameters
                 system_content = f"You are a professional social media copywriter. Create a compelling {platform} caption with a {tone} tone."
                 if include_hashtags:
@@ -57,14 +69,43 @@ class GenerateCaptionView(APIView):
                             status=status.HTTP_404_NOT_FOUND
                         )
                 else:
+                    if not prompt:
+                        return Response(
+                            {"error": "Either a prompt or an image is required for caption generation."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
                     user_content = f"Write a caption about: {prompt}"
 
-                response = client.chat.completions.create(model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": system_content},
-                    {"role": "user", "content": user_content}
-                ],
-                max_tokens=500)
+                try:
+                    response = openai_client.chat.completions.create(model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": user_content}
+                    ],
+                    max_tokens=500)
+                except Exception as openai_error:
+                    logger.error(f"OpenAI API error: {str(openai_error)}")
+                    error_message = str(openai_error)
+                    
+                    # Provide more user-friendly error messages for common issues
+                    if "api_key" in error_message.lower():
+                        error_message = "Invalid OpenAI API key. Please check your API configuration."
+                    elif "rate limit" in error_message.lower():
+                        error_message = "OpenAI API rate limit exceeded. Please try again later."
+                    elif "insufficient_quota" in error_message.lower():
+                        error_message = "OpenAI API quota exceeded. Please check your usage limits."
+                    
+                    return Response(
+                        {"error": error_message},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE
+                    )
+
+                if not response or not hasattr(response, 'choices') or not response.choices:
+                    logger.error("OpenAI API returned an empty or invalid response")
+                    return Response(
+                        {"error": "Failed to generate caption due to an invalid API response."},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
 
                 caption_text = response.choices[0].message.content
 
@@ -106,8 +147,10 @@ class GenerateCaptionView(APIView):
 
             except Exception as e:
                 logger.error(f"Error generating caption: {str(e)}")
+                # Return a more descriptive error message
+                error_message = str(e)
                 return Response(
-                    {"error": "Error generating caption. Please try again."},
+                    {"error": f"Error generating caption: {error_message}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 

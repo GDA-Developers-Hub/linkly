@@ -25,6 +25,7 @@ import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getAPI, type Hashtag, type HashtagGroup } from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
+import { useRouter } from "next/navigation"
 
 export default function HashtagsPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -42,12 +43,26 @@ export default function HashtagsPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const { toast } = useToast()
   const api = getAPI()
+  const router = useRouter()
 
   // Fetch trending hashtags and saved groups on component mount
   useEffect(() => {
+    // Check authentication first
+    if (!api.isAuthenticated()) {
+      console.error("User is not authenticated. Redirecting to login page.");
+      toast({
+        title: "Authentication required",
+        description: "Please log in to access this page.",
+        variant: "destructive",
+      });
+      router.push("/login");
+      return;
+    }
+
+    console.log("Auth token:", api.getAccessToken()?.substring(0, 10) + "...");
     fetchTrendingHashtags()
     fetchSavedGroups()
-  }, [])
+  }, [router])
 
   const fetchTrendingHashtags = async () => {
     setIsRefreshing(true)

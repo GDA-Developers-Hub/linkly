@@ -4,10 +4,12 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { ArrowUpRight, BarChart3, Calendar, Clock, RefreshCw, Users } from "lucide-react"
+import { ArrowUpRight, BarChart3, Calendar, Clock, RefreshCw, Users, TrendingUp, Activity, Eye } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { getSocialBuAPI, withErrorHandling } from "@/lib/socialbu-api"
 import { useToast } from "@/components/ui/use-toast"
+import { Avatar } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 
 interface InsightsData {
   followers: number
@@ -149,29 +151,61 @@ export default function DashboardPage() {
     fetchDashboardData()
   }, [])
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'scheduled':
+        return 'bg-yellow-500';
+      case 'published':
+        return 'bg-green-500';
+      case 'draft':
+        return 'bg-gray-500';
+      default:
+        return 'bg-blue-500';
+    }
+  };
+
+  const getPlatformIcon = (platform: string) => {
+    switch (platform.toLowerCase()) {
+      case 'facebook':
+        return '/facebook-logo-display.png';
+      case 'instagram':
+        return '/instagram-logo-on-phone.png';
+      case 'twitter':
+        return '/blue-bird-icon.png';
+      case 'linkedin':
+        return '/linkedin-logo-on-white.png';
+      default:
+        return '/placeholder-logo.png';
+    }
+  };
+
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <Button variant="outline" size="sm" onClick={refreshData} disabled={isRefreshing}>
+    <div className="flex-1 space-y-6 p-6 md:p-8 pt-6">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">Dashboard</h2>
+          <p className="text-muted-foreground mt-1">Welcome back! Here's what's happening with your social accounts.</p>
+        </div>
+        <Button onClick={refreshData} disabled={isRefreshing} size="sm" className="shrink-0">
           <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-          Refresh
+          Refresh Data
         </Button>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="w-full md:w-auto justify-start">
+          <TabsTrigger value="overview" className="flex-1 md:flex-initial">Overview</TabsTrigger>
+          <TabsTrigger value="analytics" className="flex-1 md:flex-initial">Analytics</TabsTrigger>
+          <TabsTrigger value="reports" className="flex-1 md:flex-initial">Reports</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
+        <TabsContent value="overview" className="space-y-6">
+          {/* Insights Cards */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Followers</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+                <Users className="h-5 w-5 text-primary" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -181,14 +215,19 @@ export default function DashboardPage() {
                     insights?.followers.toLocaleString() || "0"
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">+2.5% from last month</p>
+                <div className="flex items-center mt-1">
+                  <span className="text-xs text-green-500 flex items-center font-medium">
+                    <TrendingUp className="h-3 w-3 mr-1" /> +2.5%
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-1">from last month</span>
+                </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Engagement Rate</CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                <Activity className="h-5 w-5 text-primary" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -198,31 +237,19 @@ export default function DashboardPage() {
                     `${insights?.engagement || 0}%`
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">+1.2% from last month</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Scheduled Posts</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {isLoading ? (
-                    <div className="h-8 w-12 animate-pulse rounded bg-muted"></div>
-                  ) : (
-                    insights?.posts.scheduled || "0"
-                  )}
+                <div className="flex items-center mt-1">
+                  <span className="text-xs text-green-500 flex items-center font-medium">
+                    <TrendingUp className="h-3 w-3 mr-1" /> +0.8%
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-1">from last week</span>
                 </div>
-                <p className="text-xs text-muted-foreground">For the next 7 days</p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Reach</CardTitle>
-                <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+                <Eye className="h-5 w-5 text-primary" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -232,140 +259,158 @@ export default function DashboardPage() {
                     insights?.reach.toLocaleString() || "0"
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">+19% from last month</p>
+                <div className="flex items-center mt-1">
+                  <span className="text-xs text-green-500 flex items-center font-medium">
+                    <TrendingUp className="h-3 w-3 mr-1" /> +12.3%
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-1">from last month</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Scheduled Posts</CardTitle>
+                <Calendar className="h-5 w-5 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {isLoading ? (
+                    <div className="h-8 w-16 animate-pulse rounded bg-muted"></div>
+                  ) : (
+                    insights?.posts.scheduled || "0"
+                  )}
+                </div>
+                <div className="mt-1">
+                  <span className="text-xs text-muted-foreground">
+                    {insights?.posts.published || "0"} published this week
+                  </span>
+                </div>
               </CardContent>
             </Card>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="col-span-4">
+          {/* Connected Accounts & Recent Posts Section */}
+          <div className="grid gap-6 lg:grid-cols-7">
+            {/* Connected Accounts */}
+            <Card className="shadow-sm hover:shadow-md transition-shadow lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Connected Accounts</CardTitle>
+                <CardDescription>Your active social media accounts</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {isLoading ? (
+                  Array(3).fill(0).map((_, i) => (
+                    <div key={i} className="flex items-center space-x-4">
+                      <div className="h-10 w-10 animate-pulse rounded-full bg-muted"></div>
+                      <div className="space-y-2">
+                        <div className="h-4 w-24 animate-pulse rounded bg-muted"></div>
+                        <div className="h-3 w-16 animate-pulse rounded bg-muted"></div>
+                      </div>
+                    </div>
+                  ))
+                ) : insights?.connectedAccounts.length ? (
+                  insights.connectedAccounts.map((account) => (
+                    <div key={account.id} className="flex items-center space-x-4 rounded-lg p-2 hover:bg-muted transition-colors">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                        {account.image ? (
+                          <img 
+                            src={account.image} 
+                            alt={account.name} 
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <img 
+                            src={getPlatformIcon(account.type || '')} 
+                            alt={account.type || 'platform'} 
+                            className="h-6 w-6 object-contain"
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{account.name}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{account.type || account._type}</p>
+                      </div>
+                      <div className={`h-2 w-2 rounded-full ${account.active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-muted-foreground">No accounts connected</p>
+                    <Button variant="outline" size="sm" className="mt-2">
+                      Connect Account
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Recent Posts */}
+            <Card className="shadow-sm hover:shadow-md transition-shadow lg:col-span-5">
               <CardHeader>
                 <CardTitle>Recent Posts</CardTitle>
                 <CardDescription>Your latest content across platforms</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="flex items-center space-x-4">
-                        <div className="h-12 w-12 animate-pulse rounded bg-muted"></div>
-                        <div className="space-y-2">
-                          <div className="h-4 w-48 animate-pulse rounded bg-muted"></div>
-                          <div className="h-3 w-24 animate-pulse rounded bg-muted"></div>
-                        </div>
+                  Array(3).fill(0).map((_, i) => (
+                    <div key={i} className="mb-4 space-y-2">
+                      <div className="flex justify-between">
+                        <div className="h-5 w-24 animate-pulse rounded bg-muted"></div>
+                        <div className="h-5 w-16 animate-pulse rounded bg-muted"></div>
                       </div>
-                    ))}
-                  </div>
-                ) : recentPosts.length > 0 ? (
+                      <div className="h-16 w-full animate-pulse rounded bg-muted"></div>
+                    </div>
+                  ))
+                ) : recentPosts.length ? (
                   <div className="space-y-4">
                     {recentPosts.map((post) => (
-                      <div key={post.id} className="flex items-start space-x-4">
-                        <div className="rounded-full bg-primary/10 p-2">
-                          {post.status === "scheduled" ? (
-                            <Clock className="h-4 w-4 text-primary" />
-                          ) : (
-                            <BarChart3 className="h-4 w-4 text-primary" />
-                          )}
+                      <div key={post.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="h-8 w-8 rounded-full overflow-hidden">
+                              <img 
+                                src={getPlatformIcon(post.platform)} 
+                                alt={post.platform}
+                                className="h-full w-full object-contain"
+                              />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium capitalize">{post.platform}</p>
+                              <div className="flex items-center">
+                                <div className={`h-1.5 w-1.5 rounded-full ${getStatusColor(post.status)} mr-1.5`}></div>
+                                <p className="text-xs text-muted-foreground capitalize">{post.status}</p>
+                                {post.scheduled_at && (
+                                  <span className="text-xs text-muted-foreground ml-2 flex items-center">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    {new Date(post.scheduled_at).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="ml-auto">
+                            {post.status === 'published' ? 'Published' : post.status === 'scheduled' ? 'Scheduled' : post.status}
+                          </Badge>
                         </div>
-                        <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium leading-none">
-                            {post.content.length > 60 ? `${post.content.substring(0, 60)}...` : post.content}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {post.status === "scheduled"
-                              ? `Scheduled for ${new Date(post.scheduled_at || "").toLocaleDateString()}`
-                              : `Published on ${post.platform}`}
-                          </p>
-                        </div>
+                        
+                        <p className="text-sm line-clamp-2 mb-2">{post.content}</p>
+                        
                         {post.engagement && (
-                          <div className="text-xs text-muted-foreground">
-                            <div className="flex items-center">
-                              <span className="mr-1">👍</span> {post.engagement.likes}
-                            </div>
-                            <div className="flex items-center">
-                              <span className="mr-1">💬</span> {post.engagement.comments}
-                            </div>
+                          <div className="flex space-x-4 text-xs text-muted-foreground">
+                            <span>👍 {post.engagement.likes}</span>
+                            <span>💬 {post.engagement.comments}</span>
+                            <span>🔄 {post.engagement.shares}</span>
                           </div>
                         )}
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="flex h-[200px] items-center justify-center">
-                    <p className="text-sm text-muted-foreground">No recent posts found</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="col-span-3">
-              <CardHeader>
-                <CardTitle>Connected Accounts</CardTitle>
-                <CardDescription>Your connected social media platforms</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="space-y-4">
-                    {[1, 2].map((i) => (
-                      <div key={i} className="flex items-center space-x-4">
-                        <div className="h-10 w-10 animate-pulse rounded-full bg-muted"></div>
-                        <div className="space-y-2">
-                          <div className="h-4 w-32 animate-pulse rounded bg-muted"></div>
-                          <div className="h-3 w-20 animate-pulse rounded bg-muted"></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : insights && insights.connectedAccounts && insights.connectedAccounts.length > 0 ? (
-                  <div className="space-y-3">
-                    {insights.connectedAccounts.map((account) => (
-                      <div key={account.id} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          {account.image ? (
-                            <img 
-                              src={account.image} 
-                              alt={account.name} 
-                              className="h-10 w-10 rounded-full object-cover" 
-                            />
-                          ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                              <Users className="h-5 w-5 text-primary" />
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-sm font-medium">{account.name}</p>
-                            <p className="text-xs text-muted-foreground">{account._type || account.type}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          {account.active ? (
-                            <div className="flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800 dark:bg-green-800/30 dark:text-green-500">
-                              <div className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500"></div>
-                              Active
-                            </div>
-                          ) : (
-                            <div className="flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-800/30 dark:text-amber-500">
-                              <div className="mr-1 h-1.5 w-1.5 rounded-full bg-amber-500"></div>
-                              Inactive
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    
-                    <Button variant="outline" className="mt-2 w-full text-xs" asChild>
-                      <a href="/dashboard/platform-connect">Manage Accounts</a>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center space-y-3 py-6">
-                    <Users className="h-8 w-8 text-muted-foreground" />
-                    <div className="text-center">
-                      <p className="text-sm font-medium">No connected accounts</p>
-                      <p className="text-xs text-muted-foreground">Connect your social media accounts to get started</p>
-                    </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <a href="/dashboard/platform-connect">Connect Accounts</a>
+                  <div className="text-center py-6">
+                    <p className="text-muted-foreground">No recent posts found</p>
+                    <Button variant="outline" size="sm" className="mt-2">
+                      Create a Post
                     </Button>
                   </div>
                 )}
@@ -378,10 +423,16 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>Analytics</CardTitle>
-              <CardDescription>Detailed metrics and performance data</CardDescription>
+              <CardDescription>Detailed metrics and analytics coming soon</CardDescription>
             </CardHeader>
             <CardContent className="h-[400px] flex items-center justify-center">
-              <p className="text-muted-foreground">Analytics dashboard coming soon</p>
+              <div className="text-center space-y-4">
+                <BarChart3 className="h-16 w-16 mx-auto text-muted-foreground/50" />
+                <p className="text-muted-foreground">
+                  Analytics dashboard is in development and will be available soon.
+                </p>
+                <Button variant="outline">Get notified when ready</Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -390,10 +441,16 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>Reports</CardTitle>
-              <CardDescription>Generate and view custom reports</CardDescription>
+              <CardDescription>Custom reports and exports coming soon</CardDescription>
             </CardHeader>
             <CardContent className="h-[400px] flex items-center justify-center">
-              <p className="text-muted-foreground">Reports dashboard coming soon</p>
+              <div className="text-center space-y-4">
+                <ArrowUpRight className="h-16 w-16 mx-auto text-muted-foreground/50" />
+                <p className="text-muted-foreground">
+                  Reports feature is coming soon. Stay tuned for updates!
+                </p>
+                <Button variant="outline">Get notified when ready</Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -12,6 +12,7 @@ import Swal from 'sweetalert2'
 import { useAuth } from "@/contexts/auth-context"
 import { getAPI, type Plan as APIPlan } from "@/lib/api"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { AppSidebar } from "@/components/app-sidebar"
 
 // Adapt the Plan interface to match what's used in this component
 interface Plan {
@@ -251,76 +252,33 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
-  // Regular dashboard layout when authenticated and subscribed
+  // Main dashboard layout with modern sidebar
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-        <Link className="flex items-center gap-2 font-semibold" href="/">
-          <span className="h-6 w-6 text-primary">🔗</span>
-          <span>Linkly</span>
-        </Link>
-        <div className="ml-auto flex items-center gap-4">
+    <div className="flex min-h-screen w-full bg-muted/10">
+      <div className="md:w-16 lg:w-64 flex-shrink-0">
+        <AppSidebar />
+      </div>
+      
+      <main className="flex-1 w-full">
+        <div className="flex h-16 items-center justify-end gap-4 border-b bg-background px-4">
           {user && (
-            <div className="flex items-center gap-2">
-              <Avatar>
-                <AvatarFallback>{user.first_name?.[0]}{user.last_name?.[0]}</AvatarFallback>
+            <div className="flex items-center gap-4">
+              <div className="text-right text-sm mr-2">
+                <p className="font-medium">{user.full_name || user.email}</p>
+                <p className="text-xs text-muted-foreground">{user.email}</p>
+              </div>
+              <Avatar className="h-9 w-9">
+                <AvatarImage src="/placeholder-user.jpg" alt={user.full_name || user.email} />
+                <AvatarFallback>{user.full_name?.[0] || user.email?.[0] || 'U'}</AvatarFallback>
               </Avatar>
-              <span>{user.first_name} {user.last_name}</span>
             </div>
           )}
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            <span className="mr-2">��</span>
-            Logout
-          </Button>
         </div>
-      </header>
-      <div className="grid flex-1 md:grid-cols-[220px_1fr]">
-        <nav className="border-r p-4 hidden md:block">
-          <div className="space-y-2">
-            <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <LuLayoutDashboard size={16} />
-              Dashboard
-            </Link>
-            <Link href="/dashboard/analytics" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <span>📊</span>
-              Analytics
-            </Link>
-            <Link href="/dashboard/calendar" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <span>📅</span>
-              Calendar
-            </Link>
-            <Link href="/dashboard/posts" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <span>📝</span>
-              Posts
-            </Link>
-            <Link href="/dashboard/caption-generator" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <span>✨</span>
-              Caption Generator
-            </Link>
-            <Link href="/dashboard/hashtags" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <span>#️⃣</span>
-              Hashtags
-            </Link>
-            <Link href="/dashboard/messages" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <span>💬</span>
-              Messages
-            </Link>
-            <Link href="/dashboard/platform-connect" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <span>🔗</span>
-              Platform Connect
-            </Link>
-            <Link href="/dashboard/team" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <span>👥</span>
-              Team
-            </Link>
-            <Link href="/dashboard/settings" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent">
-              <LuSettings size={16} />
-              Settings
-            </Link>
-          </div>
-        </nav>
-        <main className="flex flex-col p-4 md:p-8">{children}</main>
-      </div>
+        
+        <div className="p-4 md:p-6">
+          {children}
+        </div>
+      </main>
     </div>
   )
 }

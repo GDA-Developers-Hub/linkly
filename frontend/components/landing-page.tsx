@@ -8,7 +8,8 @@ import { motion } from "framer-motion"
 import { useInView } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { ModeToggle } from "@/components/mode-toggle"
-import { Logo } from "@/components/logo"
+import Image from "next/image"
+import logo from "@/public/logo-no-bg.png"
 import { ChevronRight, CheckCircle2, ArrowRight, Menu, X } from "lucide-react"
 import { PlatformIcons } from "@/components/platform-icons"
 import { SocialIntegrationIllustrationV2 } from "@/components/illustrations/social-integration-illustration-v2"
@@ -114,17 +115,17 @@ export function LandingPage() {
     {
       id: 1,
       name: "Starter",
-      price: 29,
+      price: 9,
       description: "Perfect for individuals and small businesses just getting started.",
-      features: ["5 social accounts", "30 scheduled posts per month", "Basic analytics", "24/7 support"],
+      features: ["2 social accounts", "30 scheduled posts per month", "Basic analytics", "24/7 support"],
     },
     {
       id: 2,
       name: "Professional",
-      price: 79,
+      price: 19,
       description: "Ideal for growing businesses with active social presence.",
       features: [
-        "15 social accounts",
+        "5 social accounts",
         "Unlimited scheduled posts",
         "Advanced analytics",
         "Content calendar",
@@ -134,7 +135,7 @@ export function LandingPage() {
     {
       id: 3,
       name: "Enterprise",
-      price: 199,
+      price: 49,
       description: "For large organizations with complex social media needs.",
       features: [
         "Unlimited social accounts",
@@ -209,10 +210,9 @@ export function LandingPage() {
           scrolled ? "bg-background/80 backdrop-blur-md" : "bg-background"
         }`}
       >
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <Logo size={32} />
-            <span className="text-xl font-bold">Linkly</span>
+        <div className="container mx-auto flex h-20 items-center justify-between px-5">
+          <div className="flex items-center gap-2 w-40 h-30">
+            <Image src={logo} alt="Linkly Logo" className="w-25 h-30" />
           </div>
 
           <div className="hidden md:flex items-center gap-6">
@@ -397,7 +397,7 @@ export function LandingPage() {
               <div className="inline-block px-3 py-1 mb-4 text-xs font-semibold text-primary bg-primary/10 rounded-full">
                 Features
               </div>
-              <h2 className="text-3xl font-bold tracking-tight md:text-4xl">All-in-one Social Media Solution</h2>
+              <h2 className="text-3xl font-bold tracking-tight md:text-4xl">All-in-one Performance Marketing Solution</h2>
               <p className="mt-4 text-lg text-muted-foreground">
                 Maximize your social media presence with minimal effort using our comprehensive platform.
               </p>
@@ -665,8 +665,7 @@ export function LandingPage() {
           >
             <div>
               <div className="flex items-center gap-2">
-                <Logo size={24} />
-                <span className="text-lg font-bold">Linkly</span>
+                 <Image src={logo} alt="Linkly Logo" className="w-35 h-25" />
               </div>
               <p className="mt-4 text-sm text-muted-foreground">Connect Your Digital World, Seamlessly.</p>
             </div>

@@ -19,7 +19,22 @@ import {
   Calendar,
   RefreshCw,
 } from "lucide-react"
-import { Chart } from "@/components/ui/chart"
+import { 
+  Chart, 
+  ChartContainer,
+  LineChart, 
+  Line,
+  BarChart,
+  Bar, 
+  PieChart, 
+  Pie,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from "@/components/ui/chart"
 
 // Mock data for development
 const MOCK_OVERVIEW = {
@@ -165,6 +180,11 @@ const MOCK_PLATFORM_GROWTH = {
     },
   ],
 }
+
+// Ensure we have a default empty config for the Chart
+const defaultChartConfig = {
+  default: { color: "#0ea5e9" }
+};
 
 export default function AnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -518,26 +538,29 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
-                  <Chart
-                    type="pie"
-                    data={{
-                      labels: engagement.map((item) => item.name),
-                      datasets: [
-                        {
-                          data: engagement.map((item) => item.value),
-                          backgroundColor: engagement.map((item) => item.color),
-                        },
-                      ],
-                    }}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: "right",
-                        },
-                      },
-                      maintainAspectRatio: false,
-                    }}
-                  />
+                  <ChartContainer config={defaultChartConfig}>
+                    <PieChart>
+                      <Pie
+                        data={{
+                          labels: engagement.map((item) => item.name),
+                          datasets: [
+                            {
+                              data: engagement.map((item) => item.value),
+                              backgroundColor: engagement.map((item) => item.color),
+                            },
+                          ],
+                        }}
+                        options={{
+                          plugins: {
+                            legend: {
+                              position: "right",
+                            },
+                          },
+                          maintainAspectRatio: false,
+                        }}
+                      />
+                    </PieChart>
+                  </ChartContainer>
                 </div>
               </CardContent>
             </Card>
@@ -552,23 +575,16 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="h-[400px]">
-                <Chart
-                  type="line"
-                  data={growthData}
-                  options={{
-                    scales: {
-                      y: {
-                        beginAtZero: false,
-                      },
-                    },
-                    plugins: {
-                      legend: {
-                        position: "top",
-                      },
-                    },
-                    maintainAspectRatio: false,
-                  }}
-                />
+                <ChartContainer config={defaultChartConfig}>
+                  <LineChart data={growthData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="pv" stroke="#8884d8" />
+                  </LineChart>
+                </ChartContainer>
               </div>
             </CardContent>
           </Card>
@@ -580,23 +596,16 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="h-[400px]">
-                <Chart
-                  type="line"
-                  data={platformGrowth}
-                  options={{
-                    scales: {
-                      y: {
-                        beginAtZero: false,
-                      },
-                    },
-                    plugins: {
-                      legend: {
-                        position: "top",
-                      },
-                    },
-                    maintainAspectRatio: false,
-                  }}
-                />
+                <ChartContainer config={defaultChartConfig}>
+                  <LineChart data={platformGrowth}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="pv" stroke="#8884d8" />
+                  </LineChart>
+                </ChartContainer>
               </div>
             </CardContent>
           </Card>
@@ -610,23 +619,16 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="h-[400px]">
-                <Chart
-                  type="line"
-                  data={engagementData}
-                  options={{
-                    scales: {
-                      y: {
-                        beginAtZero: false,
-                      },
-                    },
-                    plugins: {
-                      legend: {
-                        position: "top",
-                      },
-                    },
-                    maintainAspectRatio: false,
-                  }}
-                />
+                <ChartContainer config={defaultChartConfig}>
+                  <LineChart data={engagementData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="pv" stroke="#8884d8" />
+                  </LineChart>
+                </ChartContainer>
               </div>
             </CardContent>
           </Card>
@@ -764,9 +766,8 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
-                  <Chart
-                    type="bar"
-                    data={{
+                  <ChartContainer config={defaultChartConfig}>
+                    <BarChart data={{
                       labels: audience.age.map((item) => item.name),
                       datasets: [
                         {
@@ -775,17 +776,13 @@ export default function AnalyticsPage() {
                           backgroundColor: "rgba(99, 102, 241, 0.8)",
                         },
                       ],
-                    }}
-                    options={{
-                      scales: {
-                        y: {
-                          beginAtZero: true,
-                          max: 50,
-                        },
-                      },
-                      maintainAspectRatio: false,
-                    }}
-                  />
+                    }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                    </BarChart>
+                  </ChartContainer>
                 </div>
               </CardContent>
             </Card>
@@ -796,30 +793,33 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
-                  <Chart
-                    type="doughnut"
-                    data={{
-                      labels: audience.gender.map((item) => item.name),
-                      datasets: [
-                        {
-                          data: audience.gender.map((item) => item.value),
-                          backgroundColor: [
-                            "rgba(236, 72, 153, 0.8)",
-                            "rgba(59, 130, 246, 0.8)",
-                            "rgba(16, 185, 129, 0.8)",
+                  <ChartContainer config={defaultChartConfig}>
+                    <PieChart>
+                      <Pie
+                        data={{
+                          labels: audience.gender.map((item) => item.name),
+                          datasets: [
+                            {
+                              data: audience.gender.map((item) => item.value),
+                              backgroundColor: [
+                                "rgba(236, 72, 153, 0.8)",
+                                "rgba(59, 130, 246, 0.8)",
+                                "rgba(16, 185, 129, 0.8)",
+                              ],
+                            },
                           ],
-                        },
-                      ],
-                    }}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: "bottom",
-                        },
-                      },
-                      maintainAspectRatio: false,
-                    }}
-                  />
+                        }}
+                        options={{
+                          plugins: {
+                            legend: {
+                              position: "bottom",
+                            },
+                          },
+                          maintainAspectRatio: false,
+                        }}
+                      />
+                    </PieChart>
+                  </ChartContainer>
                 </div>
               </CardContent>
             </Card>
@@ -830,9 +830,8 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
-                  <Chart
-                    type="bar"
-                    data={{
+                  <ChartContainer config={defaultChartConfig}>
+                    <BarChart data={{
                       labels: audience.location.map((item) => item.name),
                       datasets: [
                         {
@@ -841,18 +840,13 @@ export default function AnalyticsPage() {
                           backgroundColor: "rgba(16, 185, 129, 0.8)",
                         },
                       ],
-                    }}
-                    options={{
-                      indexAxis: "y",
-                      scales: {
-                        x: {
-                          beginAtZero: true,
-                          max: 50,
-                        },
-                      },
-                      maintainAspectRatio: false,
-                    }}
-                  />
+                    }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                    </BarChart>
+                  </ChartContainer>
                 </div>
               </CardContent>
             </Card>

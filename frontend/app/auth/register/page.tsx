@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useAuth } from "@/contexts/auth-context"
+import Image from "next/image"
+import logo from "@/public/logo-no-bg.png"
 
 export default function RegisterPage() {
   const { register, isLoading } = useAuth()
@@ -128,10 +130,7 @@ export default function RegisterPage() {
       <Card className="mx-auto max-w-md w-full">
         <CardHeader className="space-y-2 text-center">
           <div className="flex justify-center mb-4">
-            <div className="relative h-12 w-12 overflow-hidden rounded-full bg-[#FF8C2A]">
-              <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-3xl">L</div>
-            </div>
-            <span className="text-[#1E5AA8] font-bold text-3xl ml-2 self-center">inkly</span>
+            <Image src={logo} alt="Logo" width={120} height={120} />
           </div>
           <CardTitle className="text-2xl">Create an account</CardTitle>
           <CardDescription>Sign up for Linkly to manage your social media</CardDescription>

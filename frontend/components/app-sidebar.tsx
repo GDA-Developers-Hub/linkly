@@ -1,17 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   LayoutDashboard,
-  MessageSquare,
   Calendar,
   BarChart3,
   Settings,
-  Users,
   FileText,
   Menu,
   X,
@@ -88,22 +87,10 @@ export function AppSidebar({ className }: SidebarProps) {
       active: pathname === "/dashboard/calendar",
     },
     {
-      label: "Messages",
-      icon: MessageSquare,
-      href: "/dashboard/messages",
-      active: pathname === "/dashboard/messages",
-    },
-    {
       label: "Analytics",
       icon: BarChart3,
       href: "/dashboard/analytics",
       active: pathname === "/dashboard/analytics",
-    },
-    {
-      label: "Team",
-      icon: Users,
-      href: "/dashboard/team",
-      active: pathname === "/dashboard/team",
     },
     {
       label: "Settings",
@@ -131,35 +118,51 @@ export function AppSidebar({ className }: SidebarProps) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col border-r bg-background transition-all duration-300",
+          "fixed inset-y-0 left-0 z-40 flex flex-col border-r bg-background shadow-md transition-all duration-300",
           isMobile
             ? isSidebarOpen
               ? "w-64 translate-x-0"
               : "w-64 -translate-x-full"
             : isCollapsed
-              ? "w-0 -translate-x-full md:w-16 md:translate-x-0"
-              : "w-64",
+              ? "w-16 translate-x-0"
+              : "w-64 translate-x-0",
           className,
         )}
       >
         <div
           className={cn(
-            "flex h-14 items-center border-b px-4",
+            "flex h-16 items-center border-b px-4",
             isCollapsed && !isMobile ? "justify-center" : "justify-between",
           )}
         >
           {(!isCollapsed || isMobile) && (
             <Link href="/dashboard" className="flex items-center gap-2">
-              <span className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">L</span>
-              </span>
-              <span className="font-bold">Linkly</span>
+              <Image 
+                src="/logo-no-bg.png" 
+                alt="Linkly" 
+                width={32} 
+                height={32} 
+                className="h-8 w-auto"
+              />
+              <span className="font-bold text-lg">Linkly</span>
+            </Link>
+          )}
+          {/* Show just the logo when collapsed */}
+          {isCollapsed && !isMobile && (
+            <Link href="/dashboard" className="flex items-center justify-center">
+              <Image 
+                src="/logo-no-bg.png" 
+                alt="Linkly" 
+                width={24} 
+                height={24} 
+                className="h-8 w-auto"
+              />
             </Link>
           )}
 
           {/* Toggle button inside sidebar - only visible on desktop and when sidebar is expanded */}
           {!isMobile && !isCollapsed && (
-            <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+            <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8">
               <X className="h-4 w-4" />
             </Button>
           )}
@@ -173,12 +176,14 @@ export function AppSidebar({ className }: SidebarProps) {
                 href={route.href}
                 onClick={() => isMobile && setIsSidebarOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                  route.active ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  route.active 
+                    ? "bg-primary text-primary-foreground" 
+                    : "hover:bg-muted",
                   isCollapsed && !isMobile ? "justify-center" : "",
                 )}
               >
-                <route.icon className="h-5 w-5" />
+                <route.icon className={cn("h-5 w-5", route.active ? "text-primary-foreground" : "text-muted-foreground")} />
                 {(!isCollapsed || isMobile) && <span>{route.label}</span>}
               </Link>
             ))}
