@@ -36,4 +36,4 @@ COPY . .
 RUN python manage.py collectstatic --noinput
 
 # Set the default command to run when the container starts
-CMD gunicorn socialbu.wsgi:application --bind 0.0.0.0:8000 
+CMD gunicorn wsgi:application --bind 0.0.0.0:8000 
