@@ -14,8 +14,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
-# Set the Django settings module
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "socialbu.settings")
+# Set the Django settings module to use our standalone settings
+os.environ["DJANGO_SETTINGS_MODULE"] = "standalone_settings"
 
 # Import and run the Django WSGI application
 from django.core.wsgi import get_wsgi_application
