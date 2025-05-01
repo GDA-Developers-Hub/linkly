@@ -6,6 +6,7 @@ from datetime import timedelta
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+import dj_database_url
 
 # Load environment variables
 load_dotenv()
@@ -14,13 +15,13 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-change-this-key-in-production')
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-key-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,186b-41-139-175-41.ngrok-free.app,socialbu.com,127.0.0.1,localhost').split(',')
+# Parse allowed hosts from environment variable
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,railway.app').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -79,25 +80,18 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'socialbu.wsgi.application'
 
-# Database
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.getenv('DB_NAME', 'socialbu'),
-#         'USER': os.getenv('DB_USER', 'postgres'),
-#         'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
-#         'HOST': os.getenv('DB_HOST', 'localhost'),
-#         'PORT': os.getenv('DB_PORT', '5432'),
-#     }
-# }
+# Database configuration
+# Use DATABASE_URL environment variable if available (Railway provides this)
+# Otherwise use the hardcoded Railway PostgreSQL connection
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:mmejgrkDAGJFBxRmDJkszJkkbhtGUPVv@shuttle.proxy.rlwy.net:21529/railway')
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=DATABASE_URL,
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
-
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -125,12 +119,12 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+STATIC_URL = os.getenv('STATIC_URL', '/static/')
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files
-MEDIA_URL = '/media/'
+MEDIA_URL = os.getenv('MEDIA_URL', '/media/')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
@@ -167,9 +161,9 @@ SIMPLE_JWT = {
     'TOKEN_TYPE_CLAIM': 'token_type',
 }
 
-# CORS settings
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-CORS_ALLOWED_ORIGINS = [origin for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://cd7b-41-139-175-41.ngrok-free.app,https://socialbu.com').split(',') if origin]
+# CORS settings - in production, we should be more specific, but for demo we can allow all
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
+CORS_ALLOWED_ORIGINS = [origin for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://linkly-frontend.up.railway.app').split(',') if origin]
 
 # Celery settings
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
@@ -198,7 +192,6 @@ LINKEDIN_CLIENT_ID = os.getenv('LINKEDIN_CLIENT_ID', '')
 LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET', '')
 
 # SocialBu API URL
-# Use a generic base URL without API version - this will be provided by frontend
 SOCIALBU_API_URL = os.getenv('SOCIALBU_API_URL', 'https://socialbu.com')
 
 # Logging configuration

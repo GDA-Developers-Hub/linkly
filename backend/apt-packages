@@ -1,0 +1,10 @@
+build-essential
+python3-dev
+libpq-dev
+zlib1g-dev
+libjpeg-dev
+libpng-dev
+libfreetype6-dev
+libtiff-dev
+libwebp-dev
+libopenjp2-7-dev 
