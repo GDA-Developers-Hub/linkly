@@ -21,4 +21,8 @@ cmds = [
 ]
 
 [start]
-cmd = ". /opt/venv/bin/activate && python manage.py migrate && gunicorn socialbu.wsgi:application --bind 0.0.0.0:$PORT" 
+cmd = ". /opt/venv/bin/activate && python manage.py migrate && gunicorn socialbu.wsgi:application --bind 0.0.0.0:$PORT"
+
+[variables]
+DJANGO_SETTINGS_MODULE = "socialbu.settings"
+PYTHONPATH = "/app" 

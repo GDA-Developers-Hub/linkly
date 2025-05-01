@@ -1,1 +1,1 @@
-web: gunicorn socialbu.wsgi:application
+web: DJANGO_SETTINGS_MODULE=socialbu.settings PYTHONPATH=/app gunicorn socialbu.wsgi:application

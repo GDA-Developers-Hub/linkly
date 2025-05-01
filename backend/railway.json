@@ -5,7 +5,7 @@
     "buildCommand": ""
   },
   "deploy": {
-    "startCommand": "python manage.py migrate && gunicorn socialbu.wsgi:application --bind 0.0.0.0:$PORT",
+    "startCommand": "DJANGO_SETTINGS_MODULE=socialbu.settings PYTHONPATH=/app python manage.py migrate && gunicorn socialbu.wsgi:application --bind 0.0.0.0:$PORT",
     "healthcheckPath": "/",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
