@@ -80,10 +80,10 @@ const fadeInRight = {
 
 // Custom hook for scroll animations
 function useScrollAnimation(threshold = 0.2) {
-  const ref = React.useRef(null)
+  const ref = React.useRef<HTMLElement>(null)
   const isInView = useInView(ref, { once: true, amount: threshold })
 
-  return [ref, isInView]
+  return [ref, isInView] as const
 }
 
 export function LandingPage() {
@@ -231,13 +231,9 @@ export function LandingPage() {
               >
                 How It Works
               </a>
-              <a
-                href="#pricing"
-                onClick={(e) => scrollToSection(e, "pricing")}
-                className="text-sm font-medium hover:text-primary transition-colors"
-              >
+              <Link href="/pricing" className="text-sm font-medium hover:text-primary transition-colors">
                 Pricing
-              </a>
+              </Link>
               <a
                 href="#testimonials"
                 onClick={(e) => scrollToSection(e, "testimonials")}
@@ -286,13 +282,9 @@ export function LandingPage() {
             >
               How It Works
             </a>
-            <a
-              href="#pricing"
-              onClick={(e) => scrollToSection(e, "pricing")}
-              className="text-sm font-medium hover:text-primary"
-            >
+            <Link href="/pricing" className="text-sm font-medium hover:text-primary">
               Pricing
-            </a>
+            </Link>
             <a
               href="#testimonials"
               onClick={(e) => scrollToSection(e, "testimonials")}
@@ -643,9 +635,9 @@ export function LandingPage() {
                   className="bg-transparent border-white text-white hover:bg-white/10"
                   asChild
                 >
-                  <a href="#pricing" onClick={(e) => scrollToSection(e, "pricing")}>
+                  <Link href="/pricing">
                     View pricing
-                  </a>
+                  </Link>
                 </Button>
               </div>
             </motion.div>
@@ -673,13 +665,31 @@ export function LandingPage() {
             <div>
               <h3 className="text-sm font-medium">Product</h3>
               <ul className="mt-4 space-y-2">
-                {["Features", "Pricing", "Testimonials", "Integrations", "API"].map((item, index) => (
-                  <li key={index}>
-                    <Link href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                      {item}
-                    </Link>
-                  </li>
-                ))}
+                <li>
+                  <Link href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    Features
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    Pricing
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#testimonials" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    Testimonials
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    Integrations
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    API
+                  </Link>
+                </li>
               </ul>
             </div>
 
