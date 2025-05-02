@@ -171,6 +171,8 @@ CSRF_TRUSTED_ORIGINS = [
     "https://linkly-gd.firebaseapp.com"
 ]
 
+# If you're making API calls using cookies (session auth)
+CORS_ALLOW_CREDENTIALS = True
 
 # Additional CORS settings
 CORS_ALLOW_CREDENTIALS = True
