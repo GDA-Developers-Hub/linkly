@@ -2,7 +2,7 @@
 import { toast } from "@/components/ui/use-toast"
 
 // API Base URL with trailing slash for consistency
-const API_BASE_URL = "http://localhost:8000/api/"
+const API_BASE_URL = "https://linkly-production.up.railway.app/api/"
 
 // API request helper function to ensure URLs are properly formed with trailing slashes
 const buildUrl = (endpoint: string): string => {
@@ -121,6 +121,43 @@ export interface PaginatedResponse<T> {
   next: string | null
   previous: string | null
   results: T[]
+}
+
+export interface SocialMediaAccount {
+  id: string
+  platform: string
+  username: string
+  profile_picture?: string
+  access_token?: string
+  account_type?: string
+  connected_at?: string
+  last_used?: string
+  status?: string
+}
+
+export interface InsightsParams {
+  account_id: number
+  date_from: string
+  date_to: string
+}
+
+export interface InsightMetric {
+  value: number
+  change?: number
+  trend?: 'up' | 'down' | 'stable'
+}
+
+export interface AccountInsights {
+  followers: InsightMetric
+  engagement_rate: InsightMetric
+  reach: InsightMetric
+  impressions: InsightMetric
+  profile_views: InsightMetric
+  post_count: InsightMetric
+  period: {
+    start: string
+    end: string
+  }
 }
 
 // Error handling wrapper
@@ -610,6 +647,21 @@ class API {
 
     return await response.json()
   }
+
+  // SocialBu API methods
+  async getAccounts(): Promise<SocialMediaAccount[]> {
+    return this.request<SocialMediaAccount[]>("socialbu/accounts/")
+  }
+
+  async getInsights(params: InsightsParams): Promise<AccountInsights> {
+    const queryParams = new URLSearchParams({
+      account_id: params.account_id.toString(),
+      date_from: params.date_from,
+      date_to: params.date_to,
+    }).toString()
+    
+    return this.request<AccountInsights>(`socialbu/insights/?${queryParams}`)
+  }
 }
 
 // Singleton instance
@@ -621,4 +673,10 @@ export function getAPI(): API {
     apiInstance = new API()
   }
   return apiInstance
+}
+
+export function getSocialBuAPI(token: string): API {
+  const api = new API()
+  api.setTokens({ access: token, refresh: "" })
+  return api
 }

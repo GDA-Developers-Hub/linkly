@@ -19,7 +19,7 @@ import {
   Link2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useMobile } from "@/hooks/use-mobile"
+import { useIsMobile } from "@/components/ui/use-mobile"
 
 interface SidebarProps {
   className?: string
@@ -27,7 +27,7 @@ interface SidebarProps {
 
 export function AppSidebar({ className }: SidebarProps) {
   const pathname = usePathname()
-  const isMobile = useMobile()
+  const isMobile = useIsMobile()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 

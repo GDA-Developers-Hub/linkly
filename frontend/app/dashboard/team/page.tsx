@@ -30,18 +30,36 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/use-toast"
 import type { Team, TeamMember } from "@/lib/socialbu-api"
 import { MoreHorizontal, Plus, UserPlus, Mail, Shield, Crown, Users, UserX } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Mock data for development
 const MOCK_TEAMS: Team[] = [
-  { id: 1, name: "Marketing Team" },
-  { id: 2, name: "Content Creation" },
+  { id: 1, name: "Marketing Team", created_at: new Date().toISOString() },
+  { id: 2, name: "Content Creation", created_at: new Date().toISOString() },
 ]
 
-const MOCK_MEMBERS: (TeamMember & { email: string; role: string; status: string })[] = [
-  { user_id: 1, name: "John Doe", email: "john@example.com", role: "Admin", status: "active" },
-  { user_id: 2, name: "Jane Smith", email: "jane@example.com", role: "Editor", status: "active" },
-  { user_id: 3, name: "Mike Johnson", email: "mike@example.com", role: "Viewer", status: "invited" },
-  { user_id: 4, name: "Sarah Williams", email: "sarah@example.com", role: "Editor", status: "active" },
+const MOCK_MEMBERS: TeamMember[] = [
+  {
+    id: 1,
+    name: "John Doe",
+    email: "john@example.com",
+    role: "Admin",
+    joined_at: new Date().toISOString(),
+  },
+  {
+    id: 2,
+    name: "Jane Smith",
+    email: "jane@example.com",
+    role: "Editor",
+    joined_at: new Date().toISOString(),
+  },
+  {
+    id: 3,
+    name: "Mike Johnson",
+    email: "mike@example.com",
+    role: "Viewer",
+    joined_at: new Date().toISOString(),
+  },
 ]
 
 const MOCK_INVITES = [
@@ -52,14 +70,16 @@ const MOCK_INVITES = [
 export default function TeamPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [teams, setTeams] = useState<Team[]>([])
-  const [members, setMembers] = useState<(TeamMember & { email: string; role: string; status: string })[]>([])
+  const [members, setMembers] = useState<TeamMember[]>([])
   const [invites, setInvites] = useState<any[]>([])
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [newTeamName, setNewTeamName] = useState("")
+  const [newMemberName, setNewMemberName] = useState("")
   const [newMemberEmail, setNewMemberEmail] = useState("")
   const [newMemberRole, setNewMemberRole] = useState("Editor")
   const [isAddingTeam, setIsAddingTeam] = useState(false)
   const [isInvitingMember, setIsInvitingMember] = useState(false)
+  const [selectedPlatform, setSelectedPlatform] = useState("all")
 
   // Load data
   useEffect(() => {
@@ -110,6 +130,7 @@ export default function TeamPage() {
       const newTeam: Team = {
         id: Math.floor(Math.random() * 1000) + 10,
         name: newTeamName,
+        created_at: new Date().toISOString(),
       }
 
       setTeams([...teams, newTeam])
@@ -128,6 +149,22 @@ export default function TeamPage() {
         variant: "destructive",
       })
     }
+  }
+
+  const handleAddMember = () => {
+    const newMember: TeamMember = {
+      id: Math.floor(Math.random() * 1000) + 10,
+      name: newMemberName,
+      email: newMemberEmail,
+      role: newMemberRole,
+      joined_at: new Date().toISOString(),
+    }
+    // In a real app, you would make an API call here
+    setMembers([...members, newMember])
+    setNewMemberName("")
+    setNewMemberEmail("")
+    setNewMemberRole("Viewer")
+    setIsInvitingMember(false)
   }
 
   const handleInviteMember = async () => {
@@ -171,21 +208,17 @@ export default function TeamPage() {
     }
   }
 
-  const handleRemoveMember = async (userId: number) => {
+  const handleRemoveMember = async (memberId: number) => {
     try {
-      // In a real app, we would call the API
-      // const api = getSocialBuAPI()
-      // await api.removeTeamMember(selectedTeam?.id || 1, userId)
-
-      // Using mock data for now
-      setMembers(members.filter((member) => member.user_id !== userId))
+      // In a real app, you would make an API call here
+      setMembers(members.filter((member) => member.id !== memberId))
 
       toast({
-        title: "Success",
-        description: "Team member has been removed",
+        title: "Member removed",
+        description: "Team member has been removed successfully.",
       })
     } catch (error) {
-      console.error("Failed to remove member", error)
+      console.error("Failed to remove member:", error)
       toast({
         title: "Error",
         description: "Failed to remove team member. Please try again.",
@@ -217,24 +250,20 @@ export default function TeamPage() {
     }
   }
 
-  const handleChangeRole = async (userId: number, newRole: string) => {
+  const handleChangeRole = async (memberId: number, newRole: string) => {
     try {
-      // In a real app, we would call the API
-      // const api = getSocialBuAPI()
-      // await api.updateTeamMemberRole(selectedTeam?.id || 1, userId, newRole)
-
-      // Using mock data for now
-      setMembers(members.map((member) => (member.user_id === userId ? { ...member, role: newRole } : member)))
+      // In a real app, you would make an API call here
+      setMembers(members.map((member) => (member.id === memberId ? { ...member, role: newRole } : member)))
 
       toast({
-        title: "Success",
-        description: "Member role has been updated",
+        title: "Role updated",
+        description: "Team member's role has been updated successfully.",
       })
     } catch (error) {
-      console.error("Failed to update role", error)
+      console.error("Failed to change role:", error)
       toast({
         title: "Error",
-        description: "Failed to update member role. Please try again.",
+        description: "Failed to update team member's role. Please try again.",
         variant: "destructive",
       })
     }
@@ -361,16 +390,20 @@ export default function TeamPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="role">Role</Label>
-                  <select
-                    id="role"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  <Select
                     value={newMemberRole}
-                    onChange={(e) => setNewMemberRole(e.target.value)}
+                    onValueChange={setNewMemberRole}
+                    aria-label="Select role"
                   >
-                    <option value="Admin">Admin</option>
-                    <option value="Editor">Editor</option>
-                    <option value="Viewer">Viewer</option>
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Admin">Admin</SelectItem>
+                      <SelectItem value="Editor">Editor</SelectItem>
+                      <SelectItem value="Viewer">Viewer</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <DialogFooter>
@@ -427,11 +460,11 @@ export default function TeamPage() {
               </TableHeader>
               <TableBody>
                 {members.map((member) => (
-                  <TableRow key={member.user_id}>
+                  <TableRow key={member.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={`https://avatar.vercel.sh/${member.user_id}`} alt={member.name} />
+                          <AvatarImage src={`https://avatar.vercel.sh/${member.id}`} alt={member.name} />
                           <AvatarFallback>{getInitials(member.name)}</AvatarFallback>
                         </Avatar>
                         {member.name}
@@ -445,8 +478,8 @@ export default function TeamPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={member.status === "active" ? "default" : "outline"}>
-                        {member.status === "active" ? "Active" : "Invited"}
+                      <Badge variant={member.role === "Admin" ? "default" : "outline"}>
+                        {member.role === "Admin" ? "Admin" : "Member"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -464,20 +497,20 @@ export default function TeamPage() {
                             Email
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleChangeRole(member.user_id, "Admin")}>
+                          <DropdownMenuItem onClick={() => handleChangeRole(member.id, "Admin")}>
                             <Crown className="h-4 w-4 mr-2" />
                             Make Admin
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleChangeRole(member.user_id, "Editor")}>
+                          <DropdownMenuItem onClick={() => handleChangeRole(member.id, "Editor")}>
                             <Shield className="h-4 w-4 mr-2" />
                             Make Editor
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleChangeRole(member.user_id, "Viewer")}>
+                          <DropdownMenuItem onClick={() => handleChangeRole(member.id, "Viewer")}>
                             <Users className="h-4 w-4 mr-2" />
                             Make Viewer
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-red-600" onClick={() => handleRemoveMember(member.user_id)}>
+                          <DropdownMenuItem className="text-red-600" onClick={() => handleRemoveMember(member.id)}>
                             <UserX className="h-4 w-4 mr-2" />
                             Remove
                           </DropdownMenuItem>

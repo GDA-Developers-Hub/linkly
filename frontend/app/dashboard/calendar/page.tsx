@@ -63,7 +63,7 @@ interface CalendarEvent {
   start: Date
   end: Date
   post: Post
-  accounts: Account[]
+  account?: Account
 }
 
 export default function CalendarPage() {
@@ -111,25 +111,23 @@ export default function CalendarPage() {
         console.log(`Processing ${posts.length} posts`);
 
         // Convert posts to calendar events
-        const calendarEvents: CalendarEvent[] = posts
-          .filter((post) => post.scheduled_at || post.published_at) // Only include posts with dates
+        const events: CalendarEvent[] = posts
+          .filter((post) => post.publish_at || post.created_at)
           .map((post) => {
-            // Get accounts for this post
-            const postAccounts = post.account_ids
-              .map((id) => accountsData.find((account) => account.id === id))
-              .filter((account) => account !== undefined) as Account[]
+            // Get account for this post
+            const postAccount = accountsData.find((account: Account) => account.id === post.account_id)
 
             return {
               id: post.id,
-              title: post.content.substring(0, 30) + (post.content.length > 30 ? "..." : ""),
-              start: new Date(post.scheduled_at || post.published_at || new Date()),
-              end: new Date(post.scheduled_at || post.published_at || new Date()),
-              post: post,
-              accounts: postAccounts,
+              title: post.content.substring(0, 50) + (post.content.length > 50 ? "..." : ""),
+              start: new Date(post.publish_at || post.created_at),
+              end: new Date(post.publish_at || post.created_at),
+              post,
+              account: postAccount,
             }
           })
 
-        setEvents(calendarEvents)
+        setEvents(events)
       }, "Failed to fetch calendar data")
     } catch (error) {
       console.error("Error fetching data:", error)
@@ -192,7 +190,7 @@ export default function CalendarPage() {
   // Custom event component for the calendar
   const EventComponent = ({ event }: { event: CalendarEvent }) => {
     // Get the first account for color
-    const firstAccount = event.accounts[0] || { platform: "unknown" }
+    const firstAccount = event.account || { platform: "unknown" }
     const platform = platformConfig[firstAccount.platform] || { icon: Plus, color: "#666" }
 
     return (
@@ -205,11 +203,15 @@ export default function CalendarPage() {
       >
         <div className="font-medium truncate">{event.title}</div>
         <div className="flex items-center gap-1 mt-0.5">
-          {event.accounts.map((account, index) => {
-            const accountPlatform = platformConfig[account.platform] || { icon: Plus, color: "#666" }
-            const AccountIcon = accountPlatform.icon
-            return <AccountIcon key={index} className="h-3 w-3" style={{ color: accountPlatform.color }} />
-          })}
+          {event.account && (
+            <div className="flex items-center gap-1">
+              {(() => {
+                const platform = platformConfig[event.account.platform] || { icon: Plus, color: "#666" }
+                const PlatformIcon = platform.icon
+                return <PlatformIcon className="h-3 w-3" style={{ color: platform.color }} />
+              })()}
+            </div>
+          )}
           <span className="text-[10px] ml-auto">{format(event.start, "h:mm a")}</span>
         </div>
       </div>
@@ -342,29 +344,33 @@ export default function CalendarPage() {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="flex items-center gap-2">
-                  {selectedEvent.accounts.map((account, index) => {
-                    const platform = platformConfig[account.platform] || { icon: Plus, color: "#666" }
-                    const PlatformIcon = platform.icon
-
-                    return (
-                      <Badge
-                        key={index}
-                        style={{
-                          backgroundColor: platform.color + "20",
-                          color: platform.color,
-                          borderColor: platform.color,
-                        }}
-                        variant="outline"
-                        className="flex items-center gap-1"
-                      >
-                        <PlatformIcon className="h-3 w-3" />
-                        {account.name}
-                      </Badge>
+                  {selectedEvent.account && (
+                    <Badge
+                      style={{
+                        backgroundColor: (platformConfig[selectedEvent.account.platform] || { color: "#666" }).color + "20",
+                        color: (platformConfig[selectedEvent.account.platform] || { color: "#666" }).color,
+                        borderColor: (platformConfig[selectedEvent.account.platform] || { color: "#666" }).color,
+                      }}
+                      variant="outline"
+                      className="flex items-center gap-1"
+                    >
+                      {(() => {
+                        const platform = platformConfig[selectedEvent.account.platform] || { icon: Plus, color: "#666" }
+                        const PlatformIcon = platform.icon
+                        return <PlatformIcon className="h-3 w-3" />
+                      })()}
+                      {selectedEvent.account.name}
+                    </Badge>
+                  )}
+                  {selectedEvent?.post?.status ? (
+                    selectedEvent.post.status === "draft" ? (
+                      <Badge variant="secondary">Draft</Badge>
+                    ) : selectedEvent.post.status === "scheduled" ? (
+                      <Badge>Scheduled</Badge>
+                    ) : (
+                      <Badge variant="secondary">Published</Badge>
                     )
-                  })}
-                  <Badge variant="outline" className="ml-auto">
-                    {selectedEvent.post.status.charAt(0).toUpperCase() + selectedEvent.post.status.slice(1)}
-                  </Badge>
+                  ) : null}
                 </div>
                 <div className="rounded-md border p-4">
                   <p className="whitespace-pre-wrap">{selectedEvent.post.content}</p>
@@ -421,7 +427,7 @@ export default function CalendarPage() {
                     {accounts.map((account) => {
                       const platform = platformConfig[account.platform] || { icon: Plus, color: "#666" }
                       const PlatformIcon = platform.icon
-                      const isSelected = selectedEvent.post.account_ids.includes(account.id)
+                      const isSelected = selectedEvent.post.account_id === account.id
 
                       return (
                         <Button

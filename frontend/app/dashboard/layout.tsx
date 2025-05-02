@@ -264,12 +264,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {user && (
             <div className="flex items-center gap-4">
               <div className="text-right text-sm mr-2">
-                <p className="font-medium">{user.full_name || user.email}</p>
+                <p className="font-medium">{(user.first_name && user.last_name) ? `${user.first_name} ${user.last_name}` : user.email}</p>
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
               <Avatar className="h-9 w-9">
-                <AvatarImage src="/placeholder-user.jpg" alt={user.full_name || user.email} />
-                <AvatarFallback>{user.full_name?.[0] || user.email?.[0] || 'U'}</AvatarFallback>
+                <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${(user.first_name && user.last_name) ? `${user.first_name} ${user.last_name}` : user.email}`} />
+                <AvatarFallback>{(user.first_name && user.last_name) ? `${user.first_name[0]}${user.last_name[0]}` : user.email[0].toUpperCase()}</AvatarFallback>
               </Avatar>
             </div>
           )}

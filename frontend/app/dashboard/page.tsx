@@ -34,9 +34,9 @@ interface RecentPost {
   id: number
   content: string
   status: string
-  scheduled_at?: string | null
+  scheduled_at: string | null
   platform: string
-  engagement?: {
+  engagement: {
     likes: number
     comments: number
     shares: number
@@ -68,7 +68,7 @@ export default function DashboardPage() {
 
         // Fetch recent posts - limit to 5 posts
         console.log('[Dashboard] Fetching recent posts');
-        const postsResponse = await api.getPosts(5)
+        const postsResponse = await api.getPosts({ limit: 5 })
         console.log('[Dashboard] Received posts:', 
           postsResponse.items?.length, 
           'of', 
@@ -113,21 +113,24 @@ export default function DashboardPage() {
         }
 
         // Transform posts data
-        const transformedPosts: RecentPost[] = postsData.map((post) => ({
-          id: post.id,
-          content: post.content,
-          status: post.status,
-          scheduled_at: post.publish_at,
-          platform: post.accounts?.[0]?.toString() || "unknown",
-          engagement: {
-            likes: Math.floor(Math.random() * 100),
-            comments: Math.floor(Math.random() * 30),
-            shares: Math.floor(Math.random() * 20),
-          },
-        }))
+        const recentPosts: RecentPost[] = postsResponse.items.map(post => {
+          const status = post.status || (post.published ? 'published' : post.draft ? 'draft' : 'scheduled')
+          return {
+            id: post.id,
+            content: post.content,
+            status,
+            scheduled_at: post.publish_at || null,
+            platform: post.account_type || 'unknown',
+            engagement: {
+              likes: 0,
+              comments: 0,
+              shares: 0,
+            },
+          }
+        })
 
         setInsights(transformedInsights)
-        setRecentPosts(transformedPosts)
+        setRecentPosts(recentPosts)
         console.log('[Dashboard] Dashboard data loaded successfully');
       }, "Failed to fetch dashboard data")
     } catch (error) {

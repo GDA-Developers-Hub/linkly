@@ -81,7 +81,11 @@ export default function PostsPage() {
         });
 
         // Fetch posts with pagination
-        const postsResponse = await api.getPosts(limit, statusParam, page);
+        const postsResponse = await api.getPosts({
+          limit,
+          status: statusParam,
+          page,
+        });
         console.log('[Posts] Received posts response:', JSON.stringify({
           currentPage: postsResponse.currentPage,
           lastPage: postsResponse.lastPage,

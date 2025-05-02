@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
+import Image from "next/image"
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -18,23 +19,24 @@ import {
   Download,
   Calendar,
   RefreshCw,
+  Image as ImageIcon
 } from "lucide-react"
-import { 
-  Chart, 
-  ChartContainer,
-  LineChart, 
+import { ChartContainer } from "@/components/ui/chart"
+import {
+  LineChart,
   Line,
   BarChart,
-  Bar, 
-  PieChart, 
+  Bar,
+  PieChart,
   Pie,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
   Legend,
-  ResponsiveContainer
-} from "@/components/ui/chart"
+  ResponsiveContainer,
+  Cell
+} from "recharts"
 
 // Mock data for development
 const MOCK_OVERVIEW = {
@@ -125,11 +127,7 @@ const MOCK_GROWTH_DATA = {
   labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
   datasets: [
     {
-      label: "Followers",
       data: [10200, 11500, 12800, 14200, 15600, 17000, 18500, 19800, 21200, 22500, 23800, 24532],
-      borderColor: "rgb(99, 102, 241)",
-      backgroundColor: "rgba(99, 102, 241, 0.1)",
-      tension: 0.3,
     },
   ],
 }
@@ -138,11 +136,7 @@ const MOCK_ENGAGEMENT_DATA = {
   labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
   datasets: [
     {
-      label: "Engagement Rate (%)",
       data: [2.8, 2.9, 3.0, 2.7, 2.8, 3.1, 3.3, 3.2, 3.4, 3.3, 3.1, 3.2],
-      borderColor: "rgb(236, 72, 153)",
-      backgroundColor: "rgba(236, 72, 153, 0.1)",
-      tension: 0.3,
     },
   ],
 }
@@ -151,32 +145,16 @@ const MOCK_PLATFORM_GROWTH = {
   labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
   datasets: [
     {
-      label: "Instagram",
       data: [5200, 5800, 6500, 7200, 8000, 8800, 9500, 10200, 10800, 11500, 12000, 12500],
-      borderColor: "rgb(236, 72, 153)",
-      backgroundColor: "rgba(236, 72, 153, 0.1)",
-      tension: 0.3,
     },
     {
-      label: "Facebook",
       data: [3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000, 7500, 7800, 8000, 8200],
-      borderColor: "rgb(59, 130, 246)",
-      backgroundColor: "rgba(59, 130, 246, 0.1)",
-      tension: 0.3,
     },
     {
-      label: "Twitter",
       data: [1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3100, 3200],
-      borderColor: "rgb(16, 185, 129)",
-      backgroundColor: "rgba(16, 185, 129, 0.1)",
-      tension: 0.3,
     },
     {
-      label: "LinkedIn",
       data: [300, 320, 350, 380, 410, 450, 480, 510, 550, 580, 610, 632],
-      borderColor: "rgb(139, 92, 246)",
-      backgroundColor: "rgba(139, 92, 246, 0.1)",
-      tension: 0.3,
     },
   ],
 }
@@ -186,15 +164,38 @@ const defaultChartConfig = {
   default: { color: "#0ea5e9" }
 };
 
+interface EngagementItem {
+  name: string;
+  value: number;
+  color: string;
+}
+
+interface ChartData {
+  labels: string[];
+  datasets: {
+    label: string;
+    data: number[];
+    borderColor?: string;
+    backgroundColor?: string;
+    tension?: number;
+  }[];
+}
+
+interface AudienceData {
+  age: { name: string; value: number }[];
+  gender: { name: string; value: number }[];
+  location: { name: string; value: number }[];
+}
+
 export default function AnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [overview, setOverview] = useState<any>(null)
   const [platforms, setPlatforms] = useState<any>(null)
-  const [engagement, setEngagement] = useState<any[]>([])
-  const [audience, setAudience] = useState<any>(null)
-  const [growthData, setGrowthData] = useState<any>(null)
-  const [engagementData, setEngagementData] = useState<any>(null)
-  const [platformGrowth, setPlatformGrowth] = useState<any>(null)
+  const [engagement, setEngagement] = useState<EngagementItem[]>([])
+  const [audience, setAudience] = useState<AudienceData | null>(null)
+  const [growthData, setGrowthData] = useState<any[]>([])
+  const [engagementData, setEngagementData] = useState<any[]>([])
+  const [platformGrowth, setPlatformGrowth] = useState<any[]>([])
   const [dateRange, setDateRange] = useState("30d")
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -213,9 +214,22 @@ export default function AnalyticsPage() {
           setPlatforms(MOCK_PLATFORMS)
           setEngagement(MOCK_ENGAGEMENT)
           setAudience(MOCK_AUDIENCE)
-          setGrowthData(MOCK_GROWTH_DATA)
-          setEngagementData(MOCK_ENGAGEMENT_DATA)
-          setPlatformGrowth(MOCK_PLATFORM_GROWTH)
+          // Transform the data for Recharts
+          setGrowthData(MOCK_GROWTH_DATA.labels.map((label, index) => ({
+            name: label,
+            value: MOCK_GROWTH_DATA.datasets[0].data[index]
+          })))
+          setEngagementData(MOCK_ENGAGEMENT_DATA.labels.map((label, index) => ({
+            name: label,
+            value: MOCK_ENGAGEMENT_DATA.datasets[0].data[index]
+          })))
+          setPlatformGrowth(MOCK_PLATFORM_GROWTH.labels.map((label, index) => ({
+            name: label,
+            instagram: MOCK_PLATFORM_GROWTH.datasets[0].data[index],
+            facebook: MOCK_PLATFORM_GROWTH.datasets[1].data[index],
+            twitter: MOCK_PLATFORM_GROWTH.datasets[2].data[index],
+            linkedin: MOCK_PLATFORM_GROWTH.datasets[3].data[index],
+          })))
           setIsLoading(false)
         }, 1000)
       } catch (error) {
@@ -541,24 +555,20 @@ export default function AnalyticsPage() {
                   <ChartContainer config={defaultChartConfig}>
                     <PieChart>
                       <Pie
-                        data={{
-                          labels: engagement.map((item) => item.name),
-                          datasets: [
-                            {
-                              data: engagement.map((item) => item.value),
-                              backgroundColor: engagement.map((item) => item.color),
-                            },
-                          ],
-                        }}
-                        options={{
-                          plugins: {
-                            legend: {
-                              position: "right",
-                            },
-                          },
-                          maintainAspectRatio: false,
-                        }}
-                      />
+                        data={engagement}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        fill="#8884d8"
+                      >
+                        {engagement.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
                     </PieChart>
                   </ChartContainer>
                 </div>
@@ -582,7 +592,13 @@ export default function AnalyticsPage() {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="pv" stroke="#8884d8" />
+                    <Line 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke="#8884d8"
+                      strokeWidth={2}
+                      dot={false}
+                    />
                   </LineChart>
                 </ChartContainer>
               </div>
@@ -603,7 +619,34 @@ export default function AnalyticsPage() {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="pv" stroke="#8884d8" />
+                    <Line 
+                      type="monotone" 
+                      dataKey="instagram" 
+                      stroke="rgb(236, 72, 153)"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="facebook" 
+                      stroke="rgb(59, 130, 246)"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="twitter" 
+                      stroke="rgb(16, 185, 129)"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="linkedin" 
+                      stroke="rgb(139, 92, 246)"
+                      strokeWidth={2}
+                      dot={false}
+                    />
                   </LineChart>
                 </ChartContainer>
               </div>
@@ -626,7 +669,13 @@ export default function AnalyticsPage() {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="pv" stroke="#8884d8" />
+                    <Line 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke="#ec4899"
+                      strokeWidth={2}
+                      dot={false}
+                    />
                   </LineChart>
                 </ChartContainer>
               </div>
@@ -644,7 +693,7 @@ export default function AnalyticsPage() {
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="flex items-start space-x-4">
                       <div className="h-16 w-16 rounded-md bg-muted flex items-center justify-center">
-                        <Image className="h-8 w-8 text-muted-foreground" />
+                        <ImageIcon className="h-8 w-8 text-muted-foreground" />
                       </div>
                       <div className="space-y-1 flex-1">
                         <p className="text-sm font-medium leading-none">
@@ -767,20 +816,12 @@ export default function AnalyticsPage() {
               <CardContent>
                 <div className="h-[300px]">
                   <ChartContainer config={defaultChartConfig}>
-                    <BarChart data={{
-                      labels: audience.age.map((item) => item.name),
-                      datasets: [
-                        {
-                          label: "Percentage",
-                          data: audience.age.map((item) => item.value),
-                          backgroundColor: "rgba(99, 102, 241, 0.8)",
-                        },
-                      ],
-                    }}>
+                    <BarChart data={audience?.age || []}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis />
                       <Tooltip />
+                      <Bar dataKey="value" fill="rgba(99, 102, 241, 0.8)" />
                     </BarChart>
                   </ChartContainer>
                 </div>
@@ -796,28 +837,23 @@ export default function AnalyticsPage() {
                   <ChartContainer config={defaultChartConfig}>
                     <PieChart>
                       <Pie
-                        data={{
-                          labels: audience.gender.map((item) => item.name),
-                          datasets: [
-                            {
-                              data: audience.gender.map((item) => item.value),
-                              backgroundColor: [
-                                "rgba(236, 72, 153, 0.8)",
-                                "rgba(59, 130, 246, 0.8)",
-                                "rgba(16, 185, 129, 0.8)",
-                              ],
-                            },
-                          ],
-                        }}
-                        options={{
-                          plugins: {
-                            legend: {
-                              position: "bottom",
-                            },
-                          },
-                          maintainAspectRatio: false,
-                        }}
-                      />
+                        data={audience?.gender || []}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        fill="#8884d8"
+                      >
+                        {(audience?.gender || []).map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={["rgba(236, 72, 153, 0.8)", "rgba(59, 130, 246, 0.8)", "rgba(16, 185, 129, 0.8)"][index]} 
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
                     </PieChart>
                   </ChartContainer>
                 </div>
@@ -831,20 +867,12 @@ export default function AnalyticsPage() {
               <CardContent>
                 <div className="h-[300px]">
                   <ChartContainer config={defaultChartConfig}>
-                    <BarChart data={{
-                      labels: audience.location.map((item) => item.name),
-                      datasets: [
-                        {
-                          label: "Percentage",
-                          data: audience.location.map((item) => item.value),
-                          backgroundColor: "rgba(16, 185, 129, 0.8)",
-                        },
-                      ],
-                    }}>
+                    <BarChart data={audience?.location || []}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis />
                       <Tooltip />
+                      <Bar dataKey="value" fill="rgba(16, 185, 129, 0.8)" />
                     </BarChart>
                   </ChartContainer>
                 </div>

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
@@ -31,7 +31,7 @@ export default function CaptionGeneratorPage() {
   const api = getAPI()
 
   // Fetch saved captions on component mount
-  useState(() => {
+  useEffect(() => {
     const fetchSavedCaptions = async () => {
       try {
         const captions = await api.getSavedCaptions()

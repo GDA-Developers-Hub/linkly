@@ -163,7 +163,7 @@ SIMPLE_JWT = {
 
 # CORS settings - in production, we should be more specific, but for demo we can allow all
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
-CORS_ALLOWED_ORIGINS = [origin for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://linkly-frontend.up.railway.app').split(',') if origin]
+CORS_ALLOWED_ORIGINS = [origin for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://linkly-frontend.up.railway.app,https://linkly-production.up.railway.app').split(',') if origin]
 
 # Celery settings
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')

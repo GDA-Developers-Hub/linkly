@@ -2,17 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   trailingSlash: true,
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*/',
-        destination: 'http://localhost:8000/api/:path*/',
-      },
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:8000/api/:path*/',
-      },
-    ]
+  output: 'export',
+  images: {
+    unoptimized: true,
+    domains: ['api.dicebear.com', 'avatar.vercel.sh'],
   },
 }
 

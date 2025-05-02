@@ -166,7 +166,17 @@ export default function HashtagsPage() {
 
       const savedGroup = await api.saveHashtagGroup({
         name: groupName,
-        hashtags: generatedHashtags.map(tag => tag.name || tag.hashtag),
+        hashtags: generatedHashtags.map(tag => {
+          const name = tag.name || tag.hashtag || ''
+          return {
+            name,
+            hashtag: name,
+            post_count: tag.post_count,
+            growth_rate: tag.growth_rate,
+            engagement_rate: tag.engagement_rate,
+            is_trending: tag.is_trending,
+          } as Hashtag
+        }),
         platform: selectedPlatform,
       })
 
@@ -379,15 +389,18 @@ export default function HashtagsPage() {
                         <div key={index} className="rounded-lg border p-4">
                           <div className="flex items-center justify-between">
                             <div className="font-medium">{group.name}</div>
-                            <Badge variant="outline">{group.hashtags.length}</Badge>
+                            <Badge variant="outline">{group.hashtags?.length || 0}</Badge>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1">
-                            {group.hashtags.slice(0, 5).map((tag, i) => (
-                              <Badge key={i} variant="secondary" className="text-xs">
-                                #{typeof tag === 'string' ? tag : (tag.name || tag.hashtag)}
-                              </Badge>
-                            ))}
-                            {group.hashtags.length > 5 && (
+                            {(group.hashtags || []).slice(0, 5).map((hashtag, index) => {
+                              const hashtagStr = typeof hashtag === 'string' ? hashtag : hashtag.name || ''
+                              return (
+                                <Badge key={index} variant="secondary" className="text-sm">
+                                  #{hashtagStr}
+                                </Badge>
+                              )
+                            })}
+                            {group.hashtags && group.hashtags.length > 5 && (
                               <Badge variant="outline" className="text-xs">
                                 +{group.hashtags.length - 5} more
                               </Badge>
@@ -404,7 +417,10 @@ export default function HashtagsPage() {
                                       typeof tag === 'string' ? tag : (tag.name || tag.hashtag)
                                     )
                                   : [];
-                                handleCopyHashtags(formattedTags.map(tag => ({ name: tag })));
+                                handleCopyHashtags(formattedTags.map(tag => ({ 
+                                  name: tag,
+                                  hashtag: tag,
+                                } as Hashtag)));
                               }}
                             >
                               <Copy className="h-3.5 w-3.5" />
@@ -441,15 +457,18 @@ export default function HashtagsPage() {
                   <div key={index} className="rounded-lg border p-3">
                     <div className="flex items-center justify-between">
                       <div className="font-medium">{group.name}</div>
-                      <Badge variant="outline">{group.hashtags.length}</Badge>
+                      <Badge variant="outline">{group.hashtags?.length || 0}</Badge>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {group.hashtags.slice(0, 5).map((tag, i) => (
-                        <Badge key={i} variant="secondary" className="text-xs">
-                          #{typeof tag === 'string' ? tag : (tag.name || tag.hashtag)}
-                        </Badge>
-                      ))}
-                      {group.hashtags.length > 5 && (
+                      {(group.hashtags || []).slice(0, 5).map((hashtag, index) => {
+                        const hashtagStr = typeof hashtag === 'string' ? hashtag : hashtag.name || ''
+                        return (
+                          <Badge key={index} variant="secondary" className="text-sm">
+                            #{hashtagStr}
+                          </Badge>
+                        )
+                      })}
+                      {group.hashtags && group.hashtags.length > 5 && (
                         <Badge variant="outline" className="text-xs">
                           +{group.hashtags.length - 5} more
                         </Badge>
@@ -466,7 +485,10 @@ export default function HashtagsPage() {
                                 typeof tag === 'string' ? tag : (tag.name || tag.hashtag)
                               )
                             : [];
-                          handleCopyHashtags(formattedTags.map(tag => ({ name: tag })));
+                          handleCopyHashtags(formattedTags.map(tag => ({ 
+                            name: tag,
+                            hashtag: tag,
+                          } as Hashtag)));
                         }}
                       >
                         <Copy className="h-3.5 w-3.5" />
