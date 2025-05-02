@@ -165,6 +165,13 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
 CORS_ALLOWED_ORIGINS = [origin for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://linkly-frontend.up.railway.app,https://linkly-production.up.railway.app,https://linkly-gd.web.app,https://linkly-gd.firebaseapp.com').split(',') if origin]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://linkly-production.up.railway.app",
+    "https://linkly-gd.web.app",
+    "https://linkly-gd.firebaseapp.com"
+]
+
+
 # Additional CORS settings
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
