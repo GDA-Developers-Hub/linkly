@@ -49,38 +49,38 @@ body {
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
   .dark {
-    --background: 0 0% 3.9%;
+    --background: 0 0% 7%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+    --card: 0 0% 9%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
+    --popover: 0 0% 9%;
     --popover-foreground: 0 0% 98%;
     --primary: 0 0% 98%;
     --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 14.9%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted: 0 0% 17%;
+    --muted-foreground: 0 0% 80%;
     --accent: 0 0% 14.9%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 62.8% 40.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
     --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --chart-1: 220 70% 60%;
+    --chart-2: 160 60% 55%;
+    --chart-3: 30 80% 65%;
+    --chart-4: 280 65% 70%;
+    --chart-5: 340 75% 65%;
+    --sidebar-background: 240 5.9% 12%;
+    --sidebar-foreground: 240 4.8% 98%;
+    --sidebar-primary: 224.3 76.3% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 240 3.7% 19%;
+    --sidebar-accent-foreground: 240 4.8% 98%;
+    --sidebar-border: 240 3.7% 19%;
+    --sidebar-ring: 217.2 91.2% 69.8%;
   }
 }
 
@@ -91,4 +91,39 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Enhanced dark mode readability */
+.dark .text-muted-foreground {
+  color: hsl(0, 0%, 80%);
+}
+
+.dark .border {
+  border-color: hsl(0, 0%, 20%);
+}
+
+.dark .shadow-lg, 
+.dark .shadow-xl, 
+.dark .shadow-2xl {
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+}
+
+/* Improved headings contrast in dark mode */
+.dark h1, 
+.dark h2, 
+.dark h3, 
+.dark h4, 
+.dark h5, 
+.dark h6 {
+  color: hsl(0, 0%, 98%);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* Better button visibility in dark mode */
+.dark .bg-transparent {
+  background-color: hsla(0, 0%, 100%, 0.05);
+}
+
+.dark .bg-transparent:hover {
+  background-color: hsla(0, 0%, 100%, 0.1);
 }

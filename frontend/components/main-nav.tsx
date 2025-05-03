@@ -9,11 +9,13 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { Menu, X } from "lucide-react"
 import logo from "@/public/logo-no-bg.png"
 import { motion } from "framer-motion"
+import { useTheme } from "next-themes"
 
 export function MainNav() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const pathname = usePathname()
+  const { theme } = useTheme()
 
   // Handle scroll event to change header appearance
   useEffect(() => {
@@ -39,9 +41,16 @@ export function MainNav() {
       }`}
     >
       <div className="container mx-auto flex h-20 items-center justify-between px-5">
-        <div className="flex items-center gap-2 w-40 h-30">
-          <Link href="/">
-            <Image src={logo} alt="Linkly Logo" className="w-25 h-30" />
+        <div className="flex items-center gap-2 w-48 h-36">
+          <Link href="/" className="flex items-center">
+            <Image 
+              src={logo} 
+              alt="Linkly Logo" 
+              className="w-32 h-auto filter brightness-110 contrast-125"
+              style={{ 
+                filter: theme === 'dark' ? 'brightness(1.4) contrast(1.1)' : 'none' 
+              }}
+            />
           </Link>
         </div>
 
@@ -84,8 +93,8 @@ export function MainNav() {
             <Button variant="ghost" asChild>
               <Link href="/auth/login">Log in</Link>
             </Button>
-            <Button asChild>
-              <Link href="/dashboard">Try for free</Link>
+            <Button asChild className="bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
+              <Link href="/auth/register">Try for free</Link>
             </Button>
             <ModeToggle />
           </div>
@@ -138,8 +147,8 @@ export function MainNav() {
             <Button variant="outline" asChild className="w-full">
               <Link href="/auth/login">Log in</Link>
             </Button>
-            <Button asChild className="w-full">
-              <Link href="/dashboard">Try for free</Link>
+            <Button asChild className="w-full bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
+              <Link href="/auth/register">Try for free</Link>
             </Button>
           </div>
         </nav>

@@ -116,16 +116,16 @@ export default function DashboardPage() {
         const recentPosts: RecentPost[] = postsResponse.items.map(post => {
           const status = post.status || (post.published ? 'published' : post.draft ? 'draft' : 'scheduled')
           return {
-            id: post.id,
-            content: post.content,
+          id: post.id,
+          content: post.content,
             status,
             scheduled_at: post.publish_at || null,
             platform: post.account_type || 'unknown',
-            engagement: {
+          engagement: {
               likes: 0,
               comments: 0,
               shares: 0,
-            },
+          },
           }
         })
 

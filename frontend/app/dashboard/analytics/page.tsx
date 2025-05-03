@@ -22,12 +22,12 @@ import {
   Image as ImageIcon
 } from "lucide-react"
 import { ChartContainer } from "@/components/ui/chart"
-import {
-  LineChart,
+import { 
+  LineChart, 
   Line,
   BarChart,
-  Bar,
-  PieChart,
+  Bar, 
+  PieChart, 
   Pie,
   CartesianGrid,
   XAxis,
