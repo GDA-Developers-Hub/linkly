@@ -2,11 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   trailingSlash: true,
-  output: 'export',
   images: {
     unoptimized: true,
     domains: ['api.dicebear.com', 'avatar.vercel.sh'],
   },
+  distDir: '.next',
 }
 
 module.exports = nextConfig 

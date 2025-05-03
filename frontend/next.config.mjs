@@ -8,7 +8,9 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
+    domains: ['api.dicebear.com', 'avatar.vercel.sh'],
   },
+  distDir: '.next',
 }
 
 export default nextConfig

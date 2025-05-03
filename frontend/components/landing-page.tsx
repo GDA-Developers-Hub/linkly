@@ -719,13 +719,13 @@ export function LandingPage() {
                         </span>
                       </div>
                       <h3 className="text-2xl font-semibold mb-3 flex items-center group-hover:text-[#FF8C2A] transition-colors">
-                        Google Ads Integration
+                        Google & YouTube Integration
                         <ArrowUpRight className="ml-2 h-5 w-5 text-[#FF8C2A]" />
                       </h3>
                       <p className="text-muted-foreground text-lg font-medium">
-                        Seamlessly connect your Google Ads campaigns with your social media strategy for maximum ROI.
+                        Seamlessly connect your Google Ads and YouTube campaigns with your social media strategy for maximum ROI.
                       </p>
-                      <div className="mt-3 flex items-center">
+                      <div className="mt-3 flex flex-wrap items-center gap-y-2">
                         <div className="mr-4 flex items-center">
                           <motion.div 
                             className="h-4 w-4 rounded-full bg-green-500 mr-2"
@@ -734,13 +734,21 @@ export function LandingPage() {
                           />
                           <span className="text-sm">Real-time data</span>
                         </div>
-                        <div className="flex items-center">
+                        <div className="mr-4 flex items-center">
                           <motion.div 
                             className="h-4 w-4 rounded-full bg-blue-500 mr-2"
                             animate={{ scale: [1, 1.2, 1] }}
                             transition={{ duration: 2, delay: 0.5, repeat: Infinity }}
                           />
                           <span className="text-sm">Unified metrics</span>
+                        </div>
+                        <div className="flex items-center">
+                          <motion.div 
+                            className="h-4 w-4 rounded-full bg-red-500 mr-2"
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ duration: 2, delay: 1, repeat: Infinity }}
+                          />
+                          <span className="text-sm">YouTube analytics</span>
                         </div>
                       </div>
                     </div>
@@ -795,6 +803,24 @@ export function LandingPage() {
                       <span className="text-green-500 font-bold">l</span>
                       <span className="text-red-500 font-bold">e</span>
                       <span className="text-xs ml-1 text-gray-700">Ads</span>
+                    </div>
+                  </motion.div>
+                  
+                  {/* Animated YouTube logo highlight */}
+                  <motion.div 
+                    className="absolute top-10 right-14 bg-white rounded-full p-2 shadow-xl z-20 flex items-center justify-center"
+                    animate={{ 
+                      y: [0, 10, 0],
+                      boxShadow: [
+                        '0 0 0 rgba(234, 67, 53, 0.4)',
+                        '0 0 20px rgba(234, 67, 53, 0.6)',
+                        '0 0 0 rgba(234, 67, 53, 0.4)'
+                      ]
+                    }}
+                    transition={{ duration: 3.5, delay: 1, repeat: Infinity }}
+                  >
+                    <div className="flex items-center px-3 py-1">
+                      <span className="text-red-600 font-bold text-sm">YouTube</span>
                     </div>
                   </motion.div>
                   

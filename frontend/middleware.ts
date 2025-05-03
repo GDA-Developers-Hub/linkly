@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
+// Middleware disabled for static export compatibility
+export function middleware(request: NextRequest) {
+  // No-op middleware for static export
+  return NextResponse.next()
+}
+
+// Configure middleware to run only on API routes
+export const config = {
+  matcher: [
+    // Empty matcher to disable middleware
+  ],
+}
+
+/*
+// Original middleware (disabled for static export)
 export function middleware(request: NextRequest) {
   const token = request.cookies.get("token")?.value
   const { pathname } = request.nextUrl
@@ -29,3 +44,4 @@ export const config = {
     "/auth/:path*",
   ],
 }
+*/
