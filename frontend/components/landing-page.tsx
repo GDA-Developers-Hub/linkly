@@ -439,16 +439,16 @@ export function LandingPage() {
                 Testimonials
               </a>
               <div className="flex items-center space-x-4">
-                <ModeToggle />
+              <ModeToggle />
                 <Button asChild className="bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
                   <Link href="/auth/register">Try for free</Link>
                 </Button>
-              </div>
+            </div>
             </nav>
 
             {/* Mobile Navigation Button */}
             <div className="flex md:hidden items-center space-x-4">
-              <ModeToggle />
+            <ModeToggle />
               <Button
                 variant="ghost"
                 size="icon"
@@ -460,7 +460,7 @@ export function LandingPage() {
                 ) : (
                   <Menu className="h-6 w-6" />
                 )}
-              </Button>
+            </Button>
             </div>
           </div>
         </div>
@@ -505,7 +505,7 @@ export function LandingPage() {
             >
               Testimonials
                 <ChevronRight className="h-4 w-4" />
-              </a>
+            </a>
               <Button asChild className="w-full bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
                 <Link href="/auth/register">Try for free</Link>
               </Button>
@@ -518,7 +518,7 @@ export function LandingPage() {
         {/* Hero Section */}
         <section
           ref={heroRef as React.RefObject<HTMLDivElement>}
-          className="relative overflow-hidden py-20 md:py-32 bg-gradient-to-br from-[#FF8C2A]/10 via-white to-[#FF8C2A]/5"
+          className="relative overflow-hidden py-20 md:py-32 bg-gradient-to-br from-[#FF8C2A]/10 via-white dark:via-gray-900 to-[#FF8C2A]/5 dark:text-white"
         >
               <motion.div
                 initial="hidden"
@@ -531,7 +531,7 @@ export function LandingPage() {
                 <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 text-gray-900 dark:text-white">
                   Simplify Your Social Media Management
                 </h1>
-                <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto lg:mx-0">
+                <p className="text-lg md:text-xl text-muted-foreground dark:text-gray-200 mb-8 max-w-2xl mx-auto lg:mx-0">
                   Schedule posts, analyze performance, and grow your social media presence with our all-in-one platform.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -543,7 +543,7 @@ export function LandingPage() {
                   </Button>
                   <Button
                     size="lg"
-                    className="w-full sm:w-auto bg-transparent text-foreground border-foreground hover:bg-foreground/10 transition-transform hover:scale-105"
+                    className="w-full sm:w-auto bg-transparent dark:bg-white/10 text-foreground dark:text-white border-foreground dark:border-white hover:bg-foreground/10 transition-transform hover:scale-105"
                     asChild
                   >
                     <a href="#features" onClick={scrollToSection}>
@@ -553,7 +553,7 @@ export function LandingPage() {
                 </div>
               </motion.div>
               <motion.div variants={fadeInRight} className="relative flex justify-center lg:justify-end">
-                <div className="w-full max-w-xl h-[400px] rounded-xl shadow-2xl border-4 border-white dark:border-gray-900 bg-gradient-to-br from-background to-muted/50 flex items-center justify-center">
+                <div className="w-full max-w-xl h-[400px] rounded-xl shadow-2xl border-4 border-white dark:border-gray-800 bg-gradient-to-br from-background to-muted/50 dark:from-gray-900 dark:to-gray-800/50 flex items-center justify-center">
                   <PlatformIcons />
                 </div>
               </motion.div>
@@ -570,7 +570,7 @@ export function LandingPage() {
             <motion.div
               initial="hidden"
               animate={featuresInView ? "visible" : "hidden"}
-            variants={staggerContainer}
+              variants={staggerContainer}
             className="container px-4 mx-auto"
           >
             <motion.div variants={fadeInUp} className="text-center mb-16">
@@ -583,15 +583,15 @@ export function LandingPage() {
               {features.map((feature, index) => (
                 <motion.div
                   key={feature.title}
-                  variants={fadeInUp}
+              variants={fadeInUp}
                   className="bg-background rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-shadow border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center group"
                 >
                   <feature.icon className="h-12 w-12 text-[#FF8C2A] mb-4 group-hover:scale-110 transition-transform" />
                   <h3 className="text-xl font-semibold mb-3 text-gray-900 dark:text-white">{feature.title}</h3>
                   <p className="text-muted-foreground">{feature.description}</p>
-                </motion.div>
+            </motion.div>
               ))}
-            </div>
+          </div>
             </motion.div>
         </section>
 
@@ -605,17 +605,17 @@ export function LandingPage() {
           <div className="absolute inset-0 overflow-hidden opacity-10">
             <div className="absolute h-96 w-96 rounded-full bg-[#FF8C2A]/30 blur-3xl -top-20 -right-20"></div>
             <div className="absolute h-96 w-96 rounded-full bg-blue-500/30 blur-3xl -bottom-20 -left-20"></div>
-            <motion.div 
+            <motion.div
               className="absolute top-1/4 left-1/3 h-64 w-64 rounded-full border-2 border-dashed border-[#FF8C2A]/30"
               animate={{ rotate: 360 }}
               transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
             />
-          </div>
+              </div>
 
-          <motion.div
-            initial="hidden"
-            animate={howItWorksInView ? "visible" : "hidden"}
-            variants={staggerContainer}
+            <motion.div
+              initial="hidden"
+              animate={howItWorksInView ? "visible" : "hidden"}
+              variants={staggerContainer}
             className="container px-4 mx-auto relative z-10"
           >
             <motion.div variants={fadeInUp} className="text-center mb-16">
@@ -623,15 +623,15 @@ export function LandingPage() {
                 <span className="inline-block px-4 py-1 rounded-full bg-[#FF8C2A]/10 text-[#FF8C2A] font-medium text-sm">
                   Simple Four-Step Process
                 </span>
-              </div>
+                </div>
               <h2 className="text-3xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-[#FF8C2A] via-[#FF8C2A]/90 to-blue-500 bg-clip-text text-transparent">
                 How Linkly Works
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
                 Get started in minutes with our intuitive platform designed for businesses of all sizes.
-              </p>
-            </motion.div>
-            
+                </p>
+              </motion.div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <motion.div variants={fadeInLeft} className="order-2 lg:order-1">
                 <div className="space-y-12">
@@ -643,7 +643,7 @@ export function LandingPage() {
                   >
                     <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF8C2A] to-[#FF8C2A]/80 flex items-center justify-center shadow-lg shadow-[#FF8C2A]/20 group-hover:shadow-xl group-hover:shadow-[#FF8C2A]/30 transition-all">
                       <span className="text-white font-bold text-xl">1</span>
-                    </div>
+                </div>
                     <div className="pt-2">
                       <h3 className="text-2xl font-semibold mb-3 flex items-center group-hover:text-[#FF8C2A] transition-colors">
                         Connect Your Accounts
@@ -653,8 +653,8 @@ export function LandingPage() {
                         Link your social media accounts in just a few clicks. We support all major platforms.
                       </p>
                     </div>
-                  </motion.div>
-                  
+              </motion.div>
+
                   <motion.div 
                     className="flex items-start gap-6 group"
                     initial={{ opacity: 0, y: 20 }}
@@ -663,7 +663,7 @@ export function LandingPage() {
                   >
                     <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF8C2A] to-[#FF8C2A]/80 flex items-center justify-center shadow-lg shadow-[#FF8C2A]/20 group-hover:shadow-xl group-hover:shadow-[#FF8C2A]/30 transition-all">
                       <span className="text-white font-bold text-xl">2</span>
-                    </div>
+                </div>
                     <div className="pt-2">
                       <h3 className="text-2xl font-semibold mb-3 flex items-center group-hover:text-[#FF8C2A] transition-colors">
                         Plan Your Content
@@ -672,10 +672,10 @@ export function LandingPage() {
                       <p className="text-muted-foreground text-lg">
                         Use our visual calendar to schedule and organize your content across all platforms.
                       </p>
-                    </div>
+          </div>
                   </motion.div>
-                  
-                  <motion.div 
+
+            <motion.div
                     className="flex items-start gap-6 group"
                     initial={{ opacity: 0, y: 20 }}
                     animate={howItWorksInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
@@ -683,7 +683,7 @@ export function LandingPage() {
                   >
                     <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF8C2A] to-[#FF8C2A]/80 flex items-center justify-center shadow-lg shadow-[#FF8C2A]/20 group-hover:shadow-xl group-hover:shadow-[#FF8C2A]/30 transition-all">
                       <span className="text-white font-bold text-xl">3</span>
-                    </div>
+              </div>
                     <div className="pt-2">
                       <h3 className="text-2xl font-semibold mb-3 flex items-center group-hover:text-[#FF8C2A] transition-colors">
                         Analyze & Optimize
@@ -693,16 +693,16 @@ export function LandingPage() {
                         Track performance and get AI-powered suggestions to improve your content strategy.
                       </p>
                     </div>
-                  </motion.div>
-                  
-                  <motion.div 
+            </motion.div>
+
+            <motion.div
                     className="flex items-start gap-6 relative group"
                     initial={{ opacity: 0, y: 20 }}
                     animate={howItWorksInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                     transition={{ duration: 0.5, delay: 0.7 }}
                   >
                     {/* Highlight for Google Ads section */}
-                    <motion.div 
+                <motion.div
                       className="absolute -inset-6 rounded-xl bg-gradient-to-r from-[#FF8C2A]/5 to-transparent z-0"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -711,7 +711,7 @@ export function LandingPage() {
                     
                     <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF8C2A] to-[#FF8C2A]/80 flex items-center justify-center shadow-lg shadow-[#FF8C2A]/20 group-hover:shadow-xl group-hover:shadow-[#FF8C2A]/30 transition-all z-10">
                       <span className="text-white font-bold text-xl">4</span>
-                    </div>
+                  </div>
                     <div className="pt-2 z-10">
                       <div className="flex items-center mb-1">
                         <span className="px-2 py-0.5 bg-[#FF8C2A]/10 text-[#FF8C2A] text-xs font-semibold rounded-full">
@@ -752,11 +752,11 @@ export function LandingPage() {
                         </div>
                       </div>
                     </div>
-                  </motion.div>
+                </motion.div>
                 </div>
-              </motion.div>
-              
-              <motion.div 
+            </motion.div>
+
+            <motion.div
                 variants={fadeInRight} 
                 className="order-1 lg:order-2"
                 initial={{ opacity: 0, scale: 0.8 }}
@@ -780,7 +780,7 @@ export function LandingPage() {
                   
                   <div className="absolute inset-0 flex items-center justify-center z-0">
                     <SocialIntegrationIllustrationV2 />
-                  </div>
+                </div>
                   
                   {/* Animated Google logo highlight */}
                   <motion.div 
@@ -803,11 +803,11 @@ export function LandingPage() {
                       <span className="text-green-500 font-bold">l</span>
                       <span className="text-red-500 font-bold">e</span>
                       <span className="text-xs ml-1 text-gray-700">Ads</span>
-                    </div>
-                  </motion.div>
-                  
+              </div>
+            </motion.div>
+
                   {/* Animated YouTube logo highlight */}
-                  <motion.div 
+            <motion.div
                     className="absolute top-10 right-14 bg-white rounded-full p-2 shadow-xl z-20 flex items-center justify-center"
                     animate={{ 
                       y: [0, 10, 0],
@@ -821,11 +821,11 @@ export function LandingPage() {
                   >
                     <div className="flex items-center px-3 py-1">
                       <span className="text-red-600 font-bold text-sm">YouTube</span>
-                    </div>
-                  </motion.div>
-                  
+              </div>
+            </motion.div>
+
                   {/* Animated elements */}
-                  <motion.div 
+                <motion.div
                     className="absolute h-20 w-20 bg-blue-500/10 rounded-full z-10"
                     style={{ top: '20%', left: '20%' }}
                     animate={{ 
@@ -855,7 +855,7 @@ export function LandingPage() {
                     }}
                   />
                 </div>
-              </motion.div>
+                </motion.div>
             </div>
           </motion.div>
         </section>
@@ -870,7 +870,7 @@ export function LandingPage() {
           <div className="absolute inset-0 overflow-hidden opacity-10">
             <div className="absolute h-96 w-96 rounded-full bg-[#FF8C2A]/30 blur-3xl -top-20 -right-20"></div>
             <div className="absolute h-96 w-96 rounded-full bg-blue-500/30 blur-3xl -bottom-20 -left-20"></div>
-            <motion.div 
+            <motion.div
               className="absolute top-1/4 left-1/3 h-64 w-64 rounded-full border-2 border-dashed border-[#FF8C2A]/30"
               animate={{ rotate: 360 }}
               transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
@@ -878,8 +878,8 @@ export function LandingPage() {
           </div>
 
           <motion.div
-            initial="hidden"
-            animate={partnersInView ? "visible" : "hidden"}
+              initial="hidden"
+              animate={partnersInView ? "visible" : "hidden"}
             variants={staggerContainer}
             className="container px-4 mx-auto relative z-10"
           >
@@ -888,14 +888,14 @@ export function LandingPage() {
                 <span className="inline-block px-4 py-1 rounded-full bg-[#FF8C2A]/10 text-[#FF8C2A] font-medium text-sm">
                   Trusted Partnerships
                 </span>
-              </div>
+                </div>
               <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900 dark:text-white">Our Technology Partners</h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
                 We work with industry leaders to provide you with the best social media management experience.
               </p>
             </motion.div>
 
-            <motion.div 
+            <motion.div
               variants={fadeInUp}
               className="max-w-6xl mx-auto"
             >
@@ -913,7 +913,7 @@ export function LandingPage() {
             <motion.div
               initial="hidden"
               animate={testimonialsInView ? "visible" : "hidden"}
-            variants={staggerContainer}
+              variants={staggerContainer}
             className="container px-4 mx-auto"
           >
             <motion.div variants={fadeInUp} className="text-center mb-16">
@@ -950,16 +950,16 @@ export function LandingPage() {
                   <p className="text-muted-foreground">{testimonial.quote}</p>
                 </motion.div>
               ))}
-            </div>
+          </div>
             </motion.div>
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 md:py-32 bg-gradient-to-r from-[#FF8C2A]/10 via-white to-[#FF8C2A]/5">
+        <section className="py-20 md:py-32 bg-gradient-to-r from-[#FF8C2A]/10 via-white dark:via-gray-900 to-[#FF8C2A]/5 dark:from-[#FF8C2A]/5 dark:to-gray-900/80">
           <div className="container px-4 mx-auto">
-            <div className="text-center text-gray-900 dark:text-white">
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Transform Your Social Media?</h2>
-              <p className="text-lg mb-8 max-w-2xl mx-auto opacity-90">
+            <div className="text-center">
+              <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900 dark:text-white">Ready to Transform Your Social Media?</h2>
+              <p className="text-lg mb-8 max-w-2xl mx-auto text-gray-800 dark:text-gray-200">
                 Join thousands of businesses already using Linkly to grow their social media presence.
               </p>
               <Button
@@ -984,11 +984,11 @@ export function LandingPage() {
             <div>
               <Link href="/" className="flex items-center mb-6">
                 <Image src={logo} alt="Linkly Logo" className="h-12 w-auto" priority />
-              </Link>
+                </Link>
               <p className="text-sm text-muted-foreground">
                 Simplify your social media management with our powerful platform.
               </p>
-            </div>
+              </div>
             <div>
               <h3 className="font-semibold mb-4">Product</h3>
               <ul className="space-y-3">
@@ -1025,8 +1025,8 @@ export function LandingPage() {
                 <li>
                   <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary">
                     Privacy
-                  </Link>
-                </li>
+                    </Link>
+                  </li>
               </ul>
             </div>
             <div>
@@ -1036,7 +1036,7 @@ export function LandingPage() {
                   <a href="#" className="text-sm text-muted-foreground hover:text-primary">
                     Twitter
                   </a>
-                </li>
+                  </li>
                 <li>
                   <a href="#" className="text-sm text-muted-foreground hover:text-primary">
                     LinkedIn

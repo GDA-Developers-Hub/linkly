@@ -397,7 +397,7 @@ export default function HashtagsPage() {
                               return (
                                 <Badge key={index} variant="secondary" className="text-sm">
                                   #{hashtagStr}
-                                </Badge>
+                              </Badge>
                               )
                             })}
                             {group.hashtags && group.hashtags.length > 5 && (
@@ -465,7 +465,7 @@ export default function HashtagsPage() {
                         return (
                           <Badge key={index} variant="secondary" className="text-sm">
                             #{hashtagStr}
-                          </Badge>
+                        </Badge>
                         )
                       })}
                       {group.hashtags && group.hashtags.length > 5 && (
