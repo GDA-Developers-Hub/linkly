@@ -10,8 +10,35 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Linkly - Social Media Management Platform",
-  description: "Connect and manage all your social media accounts in one place",
-    generator: 'v0.dev'
+  description: "Connect and manage all your social media accounts in one place. Schedule posts, analyze performance, and grow your social media presence.",
+  generator: 'v0.dev',
+  metadataBase: new URL('https://linkly-social.web.app'),
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/logo-no-bg.png", type: "image/png", sizes: "192x192" }
+    ],
+    shortcut: ["/favicon.ico"],
+    apple: [
+      { url: "/logo-no-bg.png", sizes: "180x180", type: "image/png" }
+    ]
+  },
+  manifest: "/manifest.json",
+  openGraph: {
+    title: "Linkly - Social Media Management Platform",
+    description: "Connect and manage all your social media accounts in one place. Schedule posts, analyze performance, and grow your social media presence.",
+    images: [{ url: "/logo-no-bg.png", width: 400, height: 400, alt: "Linkly Logo" }],
+    type: "website",
+    siteName: "Linkly",
+    url: "https://linkly-social.web.app"
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Linkly - Social Media Management Platform",
+    description: "Connect and manage all your social media accounts in one place",
+    images: [{ url: "/logo-no-bg.png", alt: "Linkly Logo" }],
+    site: "@linkly"
+  }
 }
 
 export default function RootLayout({

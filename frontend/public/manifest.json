@@ -1,0 +1,21 @@
+{
+  "name": "Linkly - Social Media Management Platform",
+  "short_name": "Linkly",
+  "description": "Connect and manage all your social media accounts in one place",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#FF8C2A",
+  "icons": [
+    {
+      "src": "/logo-no-bg.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-no-bg.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+} 

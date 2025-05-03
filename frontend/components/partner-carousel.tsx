@@ -125,25 +125,13 @@ export function PartnerCarousel({ partners }: PartnerCarouselProps) {
                   transition={{ duration: 3, repeat: Infinity }}
                 />
                 
-                {!imageLoaded[partner.id] && (
-                  <div className="absolute inset-0 flex items-center justify-center z-5">
-                    <motion.div 
-                      className="h-6 w-6 border-2 border-[#FF8C2A] border-t-transparent rounded-full"
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    />
-                  </div>
-                )}
-                
                 <img
                   src={partner.logo}
                   alt={partner.name + ' logo'}
-                  className={`max-h-16 max-w-[80px] object-contain relative z-10 transition-opacity ${imageLoaded[partner.id] ? 'opacity-100' : 'opacity-0'}`}
-                  onLoad={() => handleImageLoad(partner.id)}
+                  className="max-h-16 max-w-[80px] object-contain relative z-10"
                   onError={(e) => {
                     // Fallback to placeholder if image fails to load
                     e.currentTarget.src = `https://placehold.co/200x80/FF8C2A/FFFFFF?text=${partner.name}`;
-                    handleImageLoad(partner.id);
                   }}
                 />
               </div>
