@@ -23,6 +23,23 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 # Parse allowed hosts from environment variable
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,railway.app').split(',')
 
+GOOGLE_OAUTH2_CLIENT_CONFIG = {
+    'web': {
+        'client_id': 'your_client_id',
+        'client_secret': 'your_client_secret',
+        'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
+        'token_uri': 'https://oauth2.googleapis.com/token',
+    }
+}
+
+FRONTEND_URL = 'http://localhost:3000'  # Adjust based on your frontend URL
+
+GOOGLE_ADS_DEVELOPER_TOKEN = 'your_token'
+GOOGLE_ADS_CLIENT_ID = 'your_client_id'
+GOOGLE_ADS_CLIENT_SECRET = 'your_client_secret'
+GOOGLE_ADS_REFRESH_TOKEN = 'your_refresh_token'
+GOOGLE_ADS_ACCOUNT_ID = 'your_account_id'
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -46,13 +63,14 @@ INSTALLED_APPS = [
     'posts',
     'analytics',
     'socialbu_proxy',  # Added the new app
+    'google_ads',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',

@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserProfile
+from django.contrib.auth.models import Group
 
 User = get_user_model()
 
@@ -15,11 +16,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(required=False)
+    is_google_ads_manager = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'timezone', 'date_joined', 'profile']
+        fields = ['id', 'username', 'email', 'is_active', 'is_google_ads_manager', 'last_login', 'profile']
         read_only_fields = ['id', 'date_joined']
+    
+    def get_is_google_ads_manager(self, obj):
+        return obj.groups.filter(name='google_ads_managers').exists()
     
     def update(self, instance, validated_data):
         profile_data = validated_data.pop('profile', None)

@@ -34,3 +34,5 @@ dj-database-url==2.1.0
 
 # Diagnostic tools
 Flask==2.2.3
+
+google-ads>=21.0.0

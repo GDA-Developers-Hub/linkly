@@ -1,11 +1,12 @@
-from rest_framework import generics, status, permissions
+from rest_framework import generics, status, permissions, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
-from rest_framework.permissions import AllowAny
-
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.contrib.auth.models import Group
+from rest_framework.decorators import action
 
 from .serializers import (
     UserSerializer, 
@@ -14,6 +15,7 @@ from .serializers import (
     ChangePasswordSerializer
 )
 from socialbu_proxy.services import SocialBuService, generate_secure_password
+from google_ads.permissions import IsGoogleAdsManager
 
 User = get_user_model()
 
@@ -111,3 +113,89 @@ class ChangePasswordView(generics.UpdateAPIView):
                            status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated, IsGoogleAdsManager]
+
+    def get_queryset(self):
+        return User.objects.all().order_by('username')
+
+    def create(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response(
+                {'success': False, 'message': 'Email is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Create user with email as username if it doesn't exist
+            user, created = User.objects.get_or_create(
+                email=email,
+                defaults={'username': email}
+            )
+
+            if not created:
+                return Response(
+                    {'success': False, 'message': 'User already exists'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            return Response({
+                'success': True,
+                'message': 'User created successfully',
+                'user': UserSerializer(user).data
+            })
+
+        except Exception as e:
+            return Response(
+                {'success': False, 'message': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['patch'])
+    def role(self, request, pk=None):
+        user = self.get_object()
+        is_manager = request.data.get('is_google_ads_manager', False)
+        
+        try:
+            google_ads_group = Group.objects.get(name='google_ads_managers')
+            
+            if is_manager:
+                google_ads_group.user_set.add(user)
+            else:
+                google_ads_group.user_set.remove(user)
+
+            return Response({
+                'success': True,
+                'message': f"User role {'granted' if is_manager else 'revoked'} successfully",
+                'user': UserSerializer(user).data
+            })
+
+        except Group.DoesNotExist:
+            return Response(
+                {'success': False, 'message': 'Google Ads Managers group does not exist'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            return Response(
+                {'success': False, 'message': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+        try:
+            user.delete()
+            return Response({
+                'success': True,
+                'message': 'User removed successfully'
+            })
+        except Exception as e:
+            return Response(
+                {'success': False, 'message': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
