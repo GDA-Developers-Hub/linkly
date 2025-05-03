@@ -17,6 +17,7 @@ import {
   Hash,
   Sparkles,
   Link2,
+  ChartBarIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useIsMobile } from "@/components/ui/use-mobile"
@@ -97,6 +98,12 @@ export function AppSidebar({ className }: SidebarProps) {
       icon: Settings,
       href: "/dashboard/settings",
       active: pathname === "/dashboard/settings",
+    },
+    {
+      name: 'Google Ads',
+      href: '/dashboard/google-ads',
+      icon: ChartBarIcon,
+      current: pathname === '/dashboard/google-ads',
     },
   ]
 
