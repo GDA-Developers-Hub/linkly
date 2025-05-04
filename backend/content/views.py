@@ -237,6 +237,8 @@ Return ONLY a JSON array of hashtags, with no additional text or explanations.
                             tag = tag.strip()
                             if tag.startswith('#'):
                                 tag = tag[1:]
+                            # Remove trailing numbers (like '0' at the end)
+                            tag = tag.rstrip('0123456789')
                             if tag and ' ' not in tag:  # Skip empty tags or tags with spaces
                                 cleaned_hashtags.append(tag)
 

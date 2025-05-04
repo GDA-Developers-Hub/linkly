@@ -5,6 +5,7 @@ from django.conf.urls.static import static
 from django.http import JsonResponse
 import sys
 import os
+from social_platforms.views import GoogleOAuthCallbackView
 
 def debug_view(request):
     """A simple view that returns debugging information."""
@@ -26,8 +27,12 @@ urlpatterns = [
     path('api/platforms/', include('platforms.urls')),
     path('api/posts/', include('posts.urls')),
     path('api/analytics/', include('analytics.urls')),
+    path('api/social_platforms/', include('social_platforms.urls')),  # Social platforms within API namespace
     path('api/', include('socialbu_proxy.urls')),  # Added the new app URLs
     path('debug/', debug_view, name='debug'),
+    
+    # Google OAuth callback route
+    path('auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback'),
 ]
 
 # Serve media files in development

@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'analytics',
     'socialbu_proxy',  # Added the new app
     'google_ads',
+    'social_platforms',  # New social platforms OAuth integration
 ]
 
 MIDDLEWARE = [

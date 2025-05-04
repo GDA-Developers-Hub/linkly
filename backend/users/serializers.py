@@ -20,7 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'is_active', 'is_google_ads_manager', 'last_login', 'profile']
+        fields = ['id', 'email', 'first_name', 'last_name', 'is_active', 'is_google_ads_manager', 'last_login', 'profile']
         read_only_fields = ['id', 'date_joined']
     
     def get_is_google_ads_manager(self, obj):
