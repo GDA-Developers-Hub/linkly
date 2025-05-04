@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useRouter } from 'next/router';
+import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 
 interface GoogleAdsAuthProps {
@@ -15,6 +15,7 @@ export const GoogleAdsAuth: React.FC<GoogleAdsAuthProps> = ({ onAuthSuccess }) =
     const [error, setError] = useState<string | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     useEffect(() => {
         // Check if we have a Google Ads account
@@ -32,11 +33,12 @@ export const GoogleAdsAuth: React.FC<GoogleAdsAuthProps> = ({ onAuthSuccess }) =
 
     useEffect(() => {
         // Handle OAuth callback
-        const { code, state } = router.query;
+        const code = searchParams.get('code');
+        const state = searchParams.get('state');
         if (code && state) {
             handleOAuthCallback();
         }
-    }, [router.query]);
+    }, [searchParams]);
 
     const handleOAuthCallback = async () => {
         try {
@@ -47,7 +49,7 @@ export const GoogleAdsAuth: React.FC<GoogleAdsAuthProps> = ({ onAuthSuccess }) =
                 onAuthSuccess();
             }
             // Clean up URL
-            router.replace('/dashboard/google-ads', undefined, { shallow: true });
+            router.replace('/dashboard/google-ads');
         } catch (err) {
             setError('Failed to complete authentication. Please try again.');
         } finally {

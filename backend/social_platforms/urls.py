@@ -15,10 +15,6 @@ urlpatterns = [
     path('api/oauth/init/<str:platform>/', views.OAuthInitView.as_view(), name='oauth_init'),
     path('api/posts/', views.SocialAccountPostView.as_view(), name='posts'),
     
-    # Twitter-specific endpoints
-    path('api/twitter/post/', views.TwitterPostView.as_view(), name='twitter_post'),
-    path('api/twitter/analytics/', views.TwitterAnalyticsView.as_view(), name='twitter_analytics'),
-    
     # Public OAuth endpoints (no authentication required)
     path('api/public/oauth/init/<str:platform>/', views.PublicOAuthInitView.as_view(), name='public_oauth_init'),
     

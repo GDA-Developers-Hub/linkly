@@ -1,45 +1,11 @@
-import type React from "react"
-import type { Metadata } from "next"
+'use client'
+
+import React from "react"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { AuthProvider } from "@/contexts/auth-context"
-import { Toaster } from "@/components/ui/toaster"
+import ClientProviders from "@/components/client-providers"
 
 const inter = Inter({ subsets: ["latin"] })
-
-export const metadata: Metadata = {
-  title: "Linkly - Social Media Management Platform",
-  description: "Connect and manage all your social media accounts in one place. Schedule posts, analyze performance, and grow your social media presence.",
-  generator: 'v0.dev',
-  metadataBase: new URL('https://linkly-social.web.app'),
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "32x32" },
-      { url: "/logo-no-bg.png", type: "image/png", sizes: "192x192" }
-    ],
-    shortcut: ["/favicon.ico"],
-    apple: [
-      { url: "/logo-no-bg.png", sizes: "180x180", type: "image/png" }
-    ]
-  },
-  manifest: "/manifest.json",
-  openGraph: {
-    title: "Linkly - Social Media Management Platform",
-    description: "Connect and manage all your social media accounts in one place. Schedule posts, analyze performance, and grow your social media presence.",
-    images: [{ url: "/logo-no-bg.png", width: 400, height: 400, alt: "Linkly Logo" }],
-    type: "website",
-    siteName: "Linkly",
-    url: "https://linkly-social.web.app"
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Linkly - Social Media Management Platform",
-    description: "Connect and manage all your social media accounts in one place",
-    images: [{ url: "/logo-no-bg.png", alt: "Linkly Logo" }],
-    site: "@linkly"
-  }
-}
 
 export default function RootLayout({
   children,
@@ -48,13 +14,35 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <title>Linkly - Social Media Management Platform</title>
+        <meta 
+          name="description" 
+          content="Connect and manage all your social media accounts in one place. Schedule posts, analyze performance, and grow your social media presence." 
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/logo-no-bg.png" />
+        <link rel="apple-touch-icon" type="image/png" sizes="180x180" href="/logo-no-bg.png" />
+        <link rel="manifest" href="/manifest.json" />
+        
+        {/* Open Graph */}
+        <meta property="og:title" content="Linkly - Social Media Management Platform" />
+        <meta property="og:description" content="Connect and manage all your social media accounts in one place. Schedule posts, analyze performance, and grow your social media presence." />
+        <meta property="og:image" content="/logo-no-bg.png" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Linkly" />
+        <meta property="og:url" content="https://linkly-social.web.app" />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Linkly - Social Media Management Platform" />
+        <meta name="twitter:description" content="Connect and manage all your social media accounts in one place" />
+        <meta name="twitter:image" content="/logo-no-bg.png" />
+        <meta name="twitter:site" content="@linkly" />
+      </head>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <AuthProvider>
-            {children}
-            <Toaster />
-          </AuthProvider>
-        </ThemeProvider>
+        <ClientProviders>{children}</ClientProviders>
       </body>
     </html>
   )

@@ -254,30 +254,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Main dashboard layout with modern sidebar
   return (
-    <div className="flex min-h-screen w-full bg-muted/10">
-      <div className="md:w-16 lg:w-64 flex-shrink-0">
+    <div className="flex min-h-screen w-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="md:w-16 lg:w-64 flex-shrink-0 shadow-lg z-10">
         <AppSidebar />
       </div>
       
       <main className="flex-1 w-full">
-        <div className="flex h-16 items-center justify-end gap-4 border-b bg-background px-4">
+        <div className="flex h-16 items-center justify-end gap-4 border-b bg-white dark:bg-gray-900 px-4 shadow-sm">
           {user && (
             <div className="flex items-center gap-4">
               <div className="text-right text-sm mr-2">
-                <p className="font-medium">{(user.first_name && user.last_name) ? `${user.first_name} ${user.last_name}` : user.email}</p>
+                <p className="font-medium text-gray-800 dark:text-gray-200">{(user.first_name && user.last_name) ? `${user.first_name} ${user.last_name}` : user.email}</p>
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
-              <Avatar className="h-9 w-9">
+              <Avatar className="h-9 w-9 border-2 border-primary/20">
                 <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${(user.first_name && user.last_name) ? `${user.first_name} ${user.last_name}` : user.email}`} />
-                <AvatarFallback>{(user.first_name && user.last_name) ? `${user.first_name[0]}${user.last_name[0]}` : user.email[0].toUpperCase()}</AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary font-medium">{(user.first_name && user.last_name) ? `${user.first_name[0]}${user.last_name[0]}` : user.email[0].toUpperCase()}</AvatarFallback>
               </Avatar>
             </div>
           )}
         </div>
         
-        <div className="p-4 md:p-6">
+        <div className="p-4 md:p-6 lg:p-8 overflow-auto">
           {children}
-          </div>
+        </div>
       </main>
     </div>
   )

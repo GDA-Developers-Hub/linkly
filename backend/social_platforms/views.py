@@ -18,8 +18,6 @@ import json
 import logging
 import uuid
 import urllib.parse
-import requests
-from datetime import datetime, timedelta
 
 from .models import SocialPlatform, UserSocialAccount
 from .serializers import SocialPlatformSerializer, UserSocialAccountSerializer, SocialAccountDetailSerializer
@@ -229,32 +227,24 @@ class OAuthCallbackView(views.APIView):
         error = request.GET.get('error')
         state = request.GET.get('state')
         
-        logger.info(f"OAuth callback received for platform: {platform}, code: {code[:5]}..., state: {state}")
-        
         # Check for errors
         if error:
             logger.error(f"OAuth error: {error}")
-            
-            # For browser-based flows, return an HTML page that closes itself
-            html_response = self.close_window(
-                success=False,
-                platform=platform,
-                error=error
-            )
-            return HttpResponse(html_response)
+            return JsonResponse({
+                'success': False,
+                'error': error,
+                'platform': platform
+            }, status=400)
             
         # Validate state for CSRF protection
         expected_state = request.session.get(f'oauth_state_{platform}')
         if not expected_state or expected_state != state:
             logger.error(f"OAuth state mismatch. Expected: {expected_state}, Got: {state}")
-            
-            # For browser-based flows, return an HTML page that closes itself
-            html_response = self.close_window(
-                success=False,
-                platform=platform,
-                error='Invalid state parameter'
-            )
-            return HttpResponse(html_response)
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid state parameter',
+                'platform': platform
+            }, status=400)
             
         # Clean up session
         if f'oauth_state_{platform}' in request.session:
@@ -263,81 +253,28 @@ class OAuthCallbackView(views.APIView):
         try:
             # Connect social account
             account = connect_social_account(request.user, platform, code)
-            logger.info(f"Successfully connected {platform} account: {account.account_name}")
             
-            # Return HTML response that will close the popup
-            html_response = self.close_window(
-                success=True,
-                platform=platform,
-                account_name=account.account_name
-            )
-            return HttpResponse(html_response)
+            # Return success response with account details
+            return JsonResponse({
+                'success': True,
+                'platform': platform,
+                'account': {
+                    'id': account.id,
+                    'platform_name': account.platform.name,
+                    'account_name': account.account_name,
+                    'account_type': account.account_type,
+                    'profile_picture_url': account.profile_picture_url,
+                    'status': account.status
+                }
+            })
             
         except Exception as e:
             logger.error(f"Error connecting account: {str(e)}")
-            
-            # For browser-based flows, return an HTML page that closes itself
-            html_response = self.close_window(
-                success=False,
-                platform=platform,
-                error=str(e)
-            )
-            return HttpResponse(html_response)
-    
-    def close_window(self, success=True, account_name=None, platform=None, error=None):
-        """Return an HTML page that closes the popup window and sends a message to the opener"""
-        context = {
-            'success': success,
-            'message': 'Account connected successfully' if success else f'Error: {error}',
-            'account_name': account_name,
-            'platform': platform,
-            'error': error
-        }
-        
-        html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>{'Success' if success else 'Error'} - {platform} Authorization</title>
-            <script>
-                window.onload = function() {{
-                    if (window.opener) {{
-                        window.opener.postMessage(
-                            JSON.stringify({json.dumps(context)}),
-                            "*"
-                        );
-                        
-                        // Add a small delay before closing the window
-                        setTimeout(function() {{
-                            window.close();
-                        }}, 1500);
-                    }} else {{
-                        document.getElementById('message').style.display = 'block';
-                    }}
-                }};
-            </script>
-            <style>
-                body {{ font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }}
-                .success {{ color: green; }}
-                .error {{ color: red; }}
-            </style>
-        </head>
-        <body>
-            <div id="message" style="display:none; text-align:center; margin-top:50px;">
-                <h3 class="{'success' if success else 'error'}">{'Success!' if success else 'Error'}</h3>
-                <p>{context['message']}</p>
-                <p>You can close this window now.</p>
-            </div>
-            <div id="auto-message" style="text-align:center; margin-top:50px;">
-                <h3 class="{'success' if success else 'error'}">{'Success!' if success else 'Error'}</h3>
-                <p>{context['message']}</p>
-                <p>This window will close automatically...</p>
-            </div>
-        </body>
-        </html>
-        """
-        
-        return html
+            return JsonResponse({
+                'success': False,
+                'error': str(e),
+                'platform': platform
+            }, status=400)
 
 
 class SocialAccountPostView(views.APIView):
@@ -519,7 +456,7 @@ class GoogleOAuthCallbackView(views.APIView):
         </head>
         <body>
             <div id="message" style="display:none; text-align:center; margin-top:50px;">
-                <h3>{'Success' if success else 'Error'}</h3>
+                <h3>{'Success!' if success else 'Error'}</h3>
                 <p>{context['message']}</p>
                 <p>You can close this window now.</p>
             </div>
@@ -528,287 +465,3 @@ class GoogleOAuthCallbackView(views.APIView):
         """
         
         return HttpResponse(html)
-
-
-class TwitterPostView(views.APIView):
-    """
-    Post content to Twitter accounts
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request, format=None):
-        """Create a post on Twitter"""
-        # Get post data
-        post_data = request.data
-        text = post_data.get('text')
-        media_ids = post_data.get('media_ids', [])
-        scheduled_time = post_data.get('scheduled_time')  # Optional, for scheduling
-        account_id = post_data.get('account_id')
-        
-        # Validate essential data
-        if not text:
-            return Response(
-                {'error': 'Text content is required for Twitter posts'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        # Get the user's Twitter account
-        try:
-            if account_id:
-                account = UserSocialAccount.objects.get(
-                    id=account_id,
-                    user=request.user,
-                    platform__name='twitter',
-                    status='active'
-                )
-            else:
-                # Get primary Twitter account if account_id not specified
-                account = UserSocialAccount.objects.get(
-                    user=request.user,
-                    platform__name='twitter',
-                    is_primary=True,
-                    status='active'
-                )
-        except UserSocialAccount.DoesNotExist:
-            return Response(
-                {'error': 'No active Twitter account found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-            
-        # Refresh token if needed
-        if account.is_expired:
-            if not refresh_token_if_needed(account):
-                return Response(
-                    {'error': 'Twitter token expired and could not be refreshed'},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-        
-        # If scheduled_time is provided, create a scheduled post
-        if scheduled_time:
-            try:
-                # Convert to datetime if it's a string
-                if isinstance(scheduled_time, str):
-                    scheduled_time = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
-                
-                # Store in DB for later processing (implementation depends on your schedule processing system)
-                # For example:
-                # ScheduledPost.objects.create(
-                #     user=request.user,
-                #     account=account,
-                #     content=text,
-                #     media_ids=media_ids,
-                #     scheduled_time=scheduled_time
-                # )
-                
-                return Response({
-                    'success': True,
-                    'message': f'Post scheduled for {scheduled_time.isoformat()}'
-                })
-            except Exception as e:
-                logger.error(f"Error scheduling Twitter post: {str(e)}")
-                return Response(
-                    {'error': f'Failed to schedule Twitter post: {str(e)}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        # Post immediately if no scheduled_time
-        try:
-            # Prepare API call to Twitter
-            api_url = "https://api.twitter.com/2/tweets"
-            headers = {
-                'Authorization': f'Bearer {account.access_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            payload = {
-                'text': text
-            }
-            
-            # Include media if provided
-            if media_ids:
-                payload['media'] = {
-                    'media_ids': media_ids
-                }
-            
-            # Make the API call
-            response = requests.post(api_url, headers=headers, json=payload)
-            
-            if response.status_code != 201:
-                return Response(
-                    {'error': f'Twitter API error: {response.text}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-                
-            # Parse response to get tweet ID
-            tweet_data = response.json()
-            
-            # Update account usage timestamp
-            account.last_used_at = timezone.now()
-            account.save()
-            
-            return Response({
-                'success': True,
-                'tweet_id': tweet_data.get('data', {}).get('id'),
-                'text': text
-            })
-            
-        except Exception as e:
-            logger.error(f"Error posting to Twitter: {str(e)}")
-            return Response(
-                {'error': f'Failed to post to Twitter: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-class TwitterAnalyticsView(views.APIView):
-    """
-    Retrieve analytics for Twitter accounts
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request, format=None):
-        """Get analytics for a Twitter account"""
-        account_id = request.query_params.get('account_id')
-        period = request.query_params.get('period', '30d')  # Default to 30 days
-        
-        # Validate account_id
-        if not account_id:
-            return Response(
-                {'error': 'account_id is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        # Get the account
-        try:
-            account = UserSocialAccount.objects.get(
-                id=account_id,
-                user=request.user,
-                platform__name='twitter',
-                status='active'
-            )
-        except UserSocialAccount.DoesNotExist:
-            return Response(
-                {'error': 'Twitter account not found or not active'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-            
-        # Refresh token if needed
-        if account.is_expired:
-            if not refresh_token_if_needed(account):
-                return Response(
-                    {'error': 'Twitter token expired and could not be refreshed'},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-                
-        # Calculate date range based on period
-        end_date = timezone.now()
-        if period == '7d':
-            start_date = end_date - timedelta(days=7)
-        elif period == '14d':
-            start_date = end_date - timedelta(days=14)
-        elif period == '30d':
-            start_date = end_date - timedelta(days=30)
-        elif period == '90d':
-            start_date = end_date - timedelta(days=90)
-        else:
-            # Default to 30 days if invalid period
-            start_date = end_date - timedelta(days=30)
-            
-        # Format dates for Twitter API
-        start_date_str = start_date.strftime('%Y-%m-%d')
-        end_date_str = end_date.strftime('%Y-%m-%d')
-        
-        try:
-            # Get Twitter user ID from account
-            user_id = account.account_id
-            
-            # Make API call to get user metrics
-            headers = {
-                'Authorization': f'Bearer {account.access_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            # Getting user profile with public metrics
-            profile_url = f"https://api.twitter.com/2/users/{user_id}?user.fields=public_metrics,profile_image_url,verified,description"
-            profile_response = requests.get(profile_url, headers=headers)
-            
-            if profile_response.status_code != 200:
-                return Response(
-                    {'error': f'Twitter API error: {profile_response.text}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-                
-            profile_data = profile_response.json().get('data', {})
-            public_metrics = profile_data.get('public_metrics', {})
-            
-            # Get recent tweets to analyze engagement
-            tweets_url = f"https://api.twitter.com/2/users/{user_id}/tweets?max_results=100&tweet.fields=public_metrics,created_at"
-            tweets_response = requests.get(tweets_url, headers=headers)
-            
-            tweet_analytics = {
-                'total_tweets': 0,
-                'total_likes': 0,
-                'total_retweets': 0,
-                'total_replies': 0,
-                'avg_engagement_rate': 0,
-                'period': {
-                    'start': start_date_str,
-                    'end': end_date_str
-                }
-            }
-            
-            if tweets_response.status_code == 200:
-                tweets_data = tweets_response.json()
-                tweets = tweets_data.get('data', [])
-                
-                if tweets:
-                    # Filter tweets by date range and calculate metrics
-                    filtered_tweets = [
-                        t for t in tweets 
-                        if start_date_str <= t.get('created_at', '')[:10] <= end_date_str
-                    ]
-                    
-                    tweet_analytics['total_tweets'] = len(filtered_tweets)
-                    
-                    # Calculate engagement metrics
-                    if filtered_tweets:
-                        total_likes = sum(t.get('public_metrics', {}).get('like_count', 0) for t in filtered_tweets)
-                        total_retweets = sum(t.get('public_metrics', {}).get('retweet_count', 0) for t in filtered_tweets)
-                        total_replies = sum(t.get('public_metrics', {}).get('reply_count', 0) for t in filtered_tweets)
-                        
-                        tweet_analytics['total_likes'] = total_likes
-                        tweet_analytics['total_retweets'] = total_retweets
-                        tweet_analytics['total_replies'] = total_replies
-                        
-                        # Calculate average engagement rate
-                        followers = public_metrics.get('followers_count', 1)  # Avoid division by zero
-                        if followers > 0:
-                            total_engagement = total_likes + total_retweets + total_replies
-                            avg_engagement = (total_engagement / len(filtered_tweets)) / followers * 100
-                            tweet_analytics['avg_engagement_rate'] = round(avg_engagement, 2)
-            
-            # Combine everything into a comprehensive analytics response
-            result = {
-                'account_info': {
-                    'id': account.id,
-                    'username': profile_data.get('username'),
-                    'name': profile_data.get('name'),
-                    'profile_image_url': profile_data.get('profile_image_url'),
-                    'verified': profile_data.get('verified', False),
-                    'description': profile_data.get('description')
-                },
-                'followers': public_metrics.get('followers_count', 0),
-                'following': public_metrics.get('following_count', 0),
-                'tweet_count': public_metrics.get('tweet_count', 0),
-                'tweet_analytics': tweet_analytics,
-                'period': period
-            }
-            
-            return Response(result)
-            
-        except Exception as e:
-            logger.error(f"Error fetching Twitter analytics: {str(e)}")
-            return Response(
-                {'error': f'Failed to fetch Twitter analytics: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )

@@ -10,6 +10,7 @@ import { Menu, X } from "lucide-react"
 import logo from "@/public/logo-no-bg.png"
 import { motion } from "framer-motion"
 import { useTheme } from "next-themes"
+import { PlatformIcons } from "@/components/platform-icons"
 
 export function MainNav() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -41,16 +42,12 @@ export function MainNav() {
       }`}
     >
       <div className="container mx-auto flex h-20 items-center justify-between px-5">
-        <div className="flex items-center gap-2 w-48 h-36">
+        <div className="flex items-center gap-2 relative w-48 h-36">
           <Link href="/" className="flex items-center">
-            <Image 
-              src={logo} 
-              alt="Linkly Logo" 
-              className="w-32 h-auto filter brightness-110 contrast-125"
-              style={{ 
-                filter: theme === 'dark' ? 'brightness(1.4) contrast(1.1)' : 'none' 
-              }}
-            />
+            {/* PlatformIcons component with reduced size */}
+            <div className="scale-50 origin-left -ml-20 -my-24 w-80 h-80">
+              <PlatformIcons />
+            </div>
           </Link>
         </div>
 
@@ -155,4 +152,4 @@ export function MainNav() {
       </div>
     </motion.header>
   )
-} 
+}

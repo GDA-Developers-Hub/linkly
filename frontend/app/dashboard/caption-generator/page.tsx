@@ -35,9 +35,10 @@ export default function CaptionGeneratorPage() {
     const fetchSavedCaptions = async () => {
       try {
         const captions = await api.getSavedCaptions()
-        setSavedCaptions(captions)
+        setSavedCaptions(captions || []) // Ensure we always set an array
       } catch (error) {
         console.error("Error fetching saved captions:", error)
+        setSavedCaptions([]) // Set empty array on error
       }
     }
 
@@ -96,7 +97,8 @@ export default function CaptionGeneratorPage() {
         hashtags: generatedCaption.hashtags,
       })
 
-      setSavedCaptions((prev) => [savedCaption, ...prev])
+      // Ensure we're working with an array when updating state
+      setSavedCaptions((prev) => Array.isArray(prev) ? [savedCaption, ...prev] : [savedCaption])
 
       toast({
         title: "Caption saved",

@@ -1,889 +1,508 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import {
+  AlertCircle, 
+  RefreshCw, 
+  Link2, 
   Facebook,
+  Twitter, 
   Instagram,
-  Twitter,
   Linkedin,
   Youtube,
-  TwitterIcon as TikTok,
-  PinIcon as Pinterest,
-  Link2,
-  RefreshCw,
-  AlertCircle,
-  CheckCircle2,
   Plus,
-  Settings,
-  Trash2,
-  ExternalLink,
+  CheckCircle,
+  PinIcon,
+  LineChart,
   Info,
-  LogIn,
+  MessageCircle,
+  Zap
 } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Separator } from "@/components/ui/separator"
-import { ModeToggle } from "@/components/mode-toggle"
-import { getSocialBuAPI, withErrorHandling, type Account } from "@/lib/socialbu-api"
 import { useToast } from "@/components/ui/use-toast"
+import { socialPlatformsApi, SocialAccount } from "@/lib/social-platforms-api"
+import { useRouter } from "next/navigation"
+import { getAPI } from "@/lib/api"
+import { CircularNav } from "./CircularNav"
 
-// Map platform names to icons and colors
-const platformConfig: Record<string, { icon: any; color: string }> = {
-  facebook: { icon: Facebook, color: "#1877F2" },
-  instagram: { icon: Instagram, color: "#E1306C" },
-  twitter: { icon: Twitter, color: "#1DA1F2" },
-  linkedin: { icon: Linkedin, color: "#0A66C2" },
-  youtube: { icon: Youtube, color: "#FF0000" },
-  tiktok: { icon: TikTok, color: "#000000" },
-  pinterest: { icon: Pinterest, color: "#E60023" },
-}
+// Platform configurations with expanded icons and platforms
+const availablePlatforms = [
+  {
+    id: "instagram",
+    name: "Instagram",
+    icon: Instagram,
+    description: "Share photos and stories, manage your Instagram presence",
+    color: "from-pink-500 via-purple-500 to-orange-500",
+    popular: true
+  },
+  {
+    id: "facebook",
+    name: "Facebook",
+    icon: Facebook,
+    description: "Manage your Facebook pages and content",
+    color: "from-blue-600 to-blue-500",
+    popular: true
+  },
+  {
+    id: "twitter",
+    name: "Twitter/X",
+    icon: Twitter, 
+    description: "Schedule tweets and manage your Twitter presence",
+    color: "from-blue-400 to-blue-300",
+    popular: true
+  },
+  {
+    id: "linkedin",
+    name: "LinkedIn",
+    icon: Linkedin,
+    description: "Share professional updates and manage company pages",
+    color: "from-blue-700 to-blue-600",
+    popular: false
+  },
+  {
+    id: "youtube",
+    name: "YouTube",
+    icon: Youtube,
+    description: "Manage your YouTube channel and content",
+    color: "from-red-600 to-red-500",
+    popular: true
+  },
+  {
+    id: "pinterest",
+    name: "Pinterest",
+    icon: PinIcon,
+    description: "Share pins and manage your Pinterest boards",
+    color: "from-red-700 to-red-600",
+    popular: false
+  },
+  {
+    id: "google",
+    name: "Google Ads",
+    icon: LineChart,
+    description: "Manage your Google Ads campaigns and analytics",
+    color: "from-blue-500 to-green-500",
+    popular: true
+  },
+  {
+    id: "tiktok",
+    name: "TikTok",
+    icon: Zap,
+    description: "Create and manage TikTok content and campaigns",
+    color: "from-black to-gray-800",
+    popular: true
+  },
+  {
+    id: "threads",
+    name: "Threads",
+    icon: MessageCircle,
+    description: "Share text-based updates and join conversations",
+    color: "from-purple-600 to-purple-400",
+    popular: false
+  }
+]
 
 export default function PlatformConnectPage() {
-  const [activeTab, setActiveTab] = useState("connected")
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [connectedAccounts, setConnectedAccounts] = useState<Account[]>([])
-  const [hasError, setHasError] = useState(false)
-  const [hasToken, setHasToken] = useState(true)
-  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false)
-  const [authType, setAuthType] = useState<"register" | "login">("login")
-  const [isAuthenticatedWithSocialBu, setIsAuthenticatedWithSocialBu] = useState(false)
-  const [userInfo, setUserInfo] = useState<{
-    name?: string;
-    email?: string;
-    verified?: boolean;
-    user_id?: string;
-  } | null>(null);
-  const [authForm, setAuthForm] = useState({
-    email: "",
-    password: "",
-  })
+  // Initialize as empty array to ensure proper typing
+  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [isConnecting, setIsConnecting] = useState<string | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const [selectedPlatformId, setSelectedPlatformId] = useState<string | null>(null)
   const { toast } = useToast()
-
-  // Check if user has a token and get user info
-  const checkUserToken = async () => {
-    try {
-      console.log("Checking for SocialBu token");
-      
-      // Get SocialBu API client
-      const socialBuAPI = getSocialBuAPI();
-      
-      // Check authentication state from localStorage first
-      const authState = socialBuAPI.loadAuthState();
-      console.log("Found SocialBu auth state in localStorage:", authState);
-      
-      // Set initial auth state based on what's in localStorage
-      setIsAuthenticatedWithSocialBu(authState.authenticated);
-      setHasToken(authState.authenticated);
-      
-      if (authState.authenticated && authState.userData) {
-        setUserInfo(authState.userData);
-        return; // We're already authenticated with valid user data
-      }
-      
-      // If no valid auth state in localStorage, check with API
-      const isTokenValid = await socialBuAPI.checkToken();
-      console.log("SocialBu token is valid:", isTokenValid);
-      
-      setHasToken(isTokenValid);
-      setIsAuthenticatedWithSocialBu(isTokenValid);
-      
-      // If token is valid, get user info
-      if (isTokenValid) {
-        const userInfoResponse = await socialBuAPI.getUserInfo();
-        const userData = {
-          name: userInfoResponse.name,
-          email: userInfoResponse.email,
-          verified: userInfoResponse.verified,
-          user_id: userInfoResponse.user_id
-        };
-        setUserInfo(userData);
-        
-        // Update localStorage with the authenticated state
-        socialBuAPI.storeAuthState({
-          authenticated: true,
-          userData
-        });
-      } else {
-        // Update localStorage with the unauthenticated state
-        socialBuAPI.storeAuthState({ authenticated: false });
-      }
-    } catch (error) {
-      console.error("Error checking token:", error);
-      setHasToken(false);
-      setIsAuthenticatedWithSocialBu(false);
-      getSocialBuAPI().storeAuthState({ authenticated: false });
-    }
-  }
-
-  // Handle auth form input changes
-  const handleAuthFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setAuthForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  // Handle login submission
-  const handleLogin = async () => {
-    if (!authForm.email || !authForm.password) {
-      toast({
-        title: "Login failed",
-        description: "Please enter your email and password",
-        variant: "destructive",
-      });
-      return;
-    }
+  const router = useRouter()
+  
+  // Check authentication status on mount
+  useEffect(() => {
+    const api = getAPI();
+    setIsAuthenticated(api.isAuthenticated());
     
-    try {
-      const api = getSocialBuAPI();
-      await api.authenticate(authForm.email, authForm.password);
-      
-      toast({
-        title: "Login successful",
-        description: "You have been authenticated with SocialBu.",
-      });
-      
-      // Set authentication status
-      setIsAuthenticatedWithSocialBu(true);
-      setHasToken(true);
-      
-      // Update user info and token status
-      await checkUserToken();
-      
-      setIsAuthDialogOpen(false);
-      
-      // Refresh accounts after successful login
-      fetchAccounts();
-    } catch (error) {
-      console.error("Login error:", error);
-      setIsAuthenticatedWithSocialBu(false);
-      toast({
-        title: "Login failed",
-        description: error instanceof Error 
-          ? error.message 
-          : "Failed to authenticate with SocialBu. Please check your credentials.",
-        variant: "destructive",
-      });
+    if (api.isAuthenticated()) {
+      loadConnectedAccounts();
     }
-  }
-
-  // Function to handle message events from the iframe
-  const handleIframeMessage = (event: MessageEvent) => {
-    // Check if the message is from the expected domain
-    if (event.origin === "https://socialbu.com") {
-      if (event.data.type === "REGISTRATION_COMPLETE") {
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created. Please log in to continue.",
-        })
-        
-        setAuthType("login")
-      }
-    }
-  }
-
-  // Add and remove event listener for iframe messages
-  useEffect(() => {
-    window.addEventListener("message", handleIframeMessage)
-    return () => {
-      window.removeEventListener("message", handleIframeMessage)
-    }
-  }, [])
-
-  // Open SocialBu registration in popup
-  const openSocialBuRegistration = () => {
-    // Calculate popup dimensions
-    const width = 600
-    const height = 700
-    const left = window.innerWidth / 2 - width / 2
-    const top = window.innerHeight / 2 - height / 2
-
-    // Open popup
-    const popup = window.open(
-      "https://socialbu.com/auth/register",
-      "SocialBu Registration",
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    )
-
-    if (!popup) {
-      toast({
-        title: "Popup blocked",
-        description: "Please allow popups for this site to register with SocialBu.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    let registrationUrl = "https://socialbu.com/auth/register"
-    let popupCheckInterval: NodeJS.Timeout | null = null
-
-    // Poll to check if URL has changed, which might indicate successful registration
-    popupCheckInterval = setInterval(() => {
-      if (popup.closed) {
-        if (popupCheckInterval) clearInterval(popupCheckInterval)
-        
-        toast({
-          title: "Registration",
-          description: "If you completed registration, you can now log in with your credentials.",
-        })
-        
-        setAuthType("login")
-        return
-      }
-
-      try {
-        const currentUrl = popup.location.href
-        
-        // Check if URL has changed from registration page
-        if (currentUrl && currentUrl !== registrationUrl) {
-          // URL has changed - could be success, login page, or dashboard
-          if (popupCheckInterval) clearInterval(popupCheckInterval)
-          
-          // Close the popup window
-          popup.close()
-          
-          toast({
-            title: "Registration Complete",
-            description: "Your account has been created. Please log in with your credentials.",
-          })
-          
-          setAuthType("login")
-        }
-      } catch (error) {
-        // CORS error, which may happen after redirect - continue polling
-      }
-    }, 1000)
-
-    // Safety cleanup after 5 minutes
-    setTimeout(() => {
-      if (popupCheckInterval) {
-        clearInterval(popupCheckInterval)
-        
-        // Only show toast and switch view if popup is still open
-        if (!popup.closed) {
-          popup.close()
-          
-          toast({
-            title: "Registration Timeout",
-            description: "Registration window was open for too long. Please try again if needed.",
-          })
-        }
-      }
-    }, 5 * 60 * 1000)
-  }
-
-  // Fetch connected accounts
-  const fetchAccounts = async () => {
-    setIsRefreshing(true)
-    try {
-      await withErrorHandling(async () => {
-        const api = getSocialBuAPI()
-        const accounts = await api.getAccounts()
-        setConnectedAccounts(accounts)
-        setHasError(accounts.some((account) => account.status === "token_expired" || account.status === "error"))
-      }, "Failed to fetch connected accounts")
-    } catch (error) {
-      console.error("Error fetching accounts:", error)
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
-
-  // Disconnect an account
-  const disconnectAccount = async (accountId: number) => {
-    try {
-      await withErrorHandling(async () => {
-        const api = getSocialBuAPI()
-        await api.disconnectAccount(accountId)
-        toast({
-          title: "Account disconnected",
-          description: "The account has been successfully disconnected.",
-        })
-        // Refresh accounts list
-        fetchAccounts()
-      }, "Failed to disconnect account")
-    } catch (error) {
-      console.error("Error disconnecting account:", error)
-    }
-  }
-
-  // Fetch accounts and check token on component mount
-  useEffect(() => {
-    checkUserToken();
-    fetchAccounts();
   }, []);
 
-  const availablePlatforms = [
-    {
-      name: "TikTok",
-      platform: "tiktok",
-      description: "Share short-form videos to your TikTok account",
-      popular: true,
-    },
-    {
-      name: "YouTube",
-      platform: "youtube",
-      description: "Manage your YouTube channel and video content",
-      popular: true,
-    },
-    {
-      name: "Pinterest",
-      platform: "pinterest",
-      description: "Share pins and manage your Pinterest boards",
-      popular: false,
-    },
-    {
-      name: "Facebook",
-      platform: "facebook",
-      description: "Share posts and manage your Facebook page",
-      popular: false,
-    },
-    {
-      name: "Twitter",
-      platform: "twitter",
-      description: "Share tweets and manage your Twitter account",
-      popular: false,
-    },
-    {
-      name: "Instagram",
-      platform: "instagram",
-      description: "Share posts and manage your Instagram account",
-      popular: false,
-    },
-    {
-      name: "LinkedIn",
-      platform: "linkedin",
-      description: "Share posts and manage your LinkedIn account",
-      popular: false,
-    },
-  ]
-
-  // Function to initiate OAuth flow for connecting a new account
-  const connectAccount = async (platform: string) => {
-    // Check if user has token first
-    if (!hasToken) {
-      setIsAuthDialogOpen(true)
-      setAuthType("register")
-      return
-    }
-
+  // Function to load connected accounts from API
+  const loadConnectedAccounts = async () => {
+    setIsLoading(true)
     try {
+      const accounts = await socialPlatformsApi.getAccounts()
+        setConnectedAccounts(accounts)
+    } catch (err: any) {
+      console.error('Error loading accounts:', err)
+      
+      // Handle various errors but don't immediately redirect
       toast({
-        title: "Connecting account",
-        description: `Initiating connection to ${platform}...`,
+        title: "Error",
+        description: "Failed to load connected accounts",
+        variant: "destructive",
       })
+      
+      // Ensure we have an empty array on error
+      setConnectedAccounts([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-      const api = getSocialBuAPI()
+  // Handle platform selection from circular nav
+  const handleSelectPlatform = (platform: { id: string }) => {
+    setSelectedPlatformId(platform.id);
+    
+    // If on the available tab, scroll to the platform card
+    setTimeout(() => {
+      const platformCard = document.getElementById(`platform-card-${platform.id}`);
+      if (platformCard) {
+        platformCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
 
-      // Open popup for OAuth flow
-      const result = await api.openConnectionPopup(platform)
-
+  // Handle platform connection
+  const handleConnectPlatform = async (platform: any) => {
+    setIsConnecting(platform.id)
+    try {
+      // Get authorization URL and open popup window
+      await socialPlatformsApi.connectPlatform(platform.id)
+      
+      // Show toast to guide the user
       toast({
-        title: "Account connected",
-        description: `Successfully connected to ${result.accountName}`,
+        title: "Authorization Started",
+        description: `Please complete the authorization in the popup window.`,
       })
-
-      // Refresh accounts list
-      fetchAccounts()
-    } catch (error) {
-      console.error("Error connecting account:", error)
+      
+      // If user is authenticated, poll for new accounts
+      if (isAuthenticated) {
+        // Set up polling to check for newly connected accounts
+        let attempts = 0
+        const interval = setInterval(async () => {
+          attempts++
+          if (attempts > 30) { // Stop after 30 attempts (1 minute)
+            clearInterval(interval)
       toast({
-        title: "Connection failed",
-        description: error instanceof Error ? error.message : "Failed to connect account",
+              title: "Connection Timeout",
+              description: "Please try connecting again",
+        variant: "destructive",
+            })
+            return
+          }
+          
+          try {
+            // Check for new accounts
+            const updatedAccounts = await socialPlatformsApi.getAccounts()
+            
+            // Compare account counts
+            const currentCount = connectedAccounts.length
+            const newAccountsCount = updatedAccounts.length - currentCount
+            
+            if (newAccountsCount > 0) {
+              clearInterval(interval)
+              setConnectedAccounts(updatedAccounts)
+              
+        toast({
+                title: "Account Connected",
+                description: `Successfully connected ${platform.name}`,
+              })
+            }
+          } catch (e) {
+            console.error("Error checking for new accounts:", e)
+          }
+        }, 2000) // Poll every 2 seconds
+      } else {
+        // For unauthenticated users, just show a success message
+        setTimeout(() => {
+          toast({
+            title: "Demo Mode",
+            description: "In demo mode, connections are simulated. Login for full functionality.",
+          })
+        }, 5000);
+      }
+      
+    } catch (err: any) {
+      console.error('Error connecting platform:', err)
+      
+      toast({
+        title: "Connection Failed",
+        description: err.message || "Failed to connect platform. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsConnecting(null)
+    }
+  }
+
+  // Handle account disconnection
+  const handleDisconnectAccount = async (accountId: number) => {
+    try {
+      await socialPlatformsApi.disconnectAccount(accountId)
+      
+      // Update local state
+      setConnectedAccounts(connectedAccounts.filter(account => account.id !== accountId))
+      
+      toast({
+        title: "Account Disconnected",
+        description: "Successfully disconnected account",
+      })
+    } catch (err) {
+      console.error('Error disconnecting account:', err)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect account",
         variant: "destructive",
       })
     }
   }
 
-  // Auth modal content based on type (register or login)
-  const renderAuthContent = () => {
-    if (authType === "register") {
+  // Render a demo/unauthenticated view or the full authenticated view
+  if (!isAuthenticated) {
       return (
-        <div className="w-full space-y-6 py-8 text-center">
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold">Register with SocialBu</h3>
-            <p className="text-sm text-muted-foreground">
-              Create a SocialBu account to connect your social media platforms
-            </p>
-          </div>
-          
-          <Button 
-            size="lg" 
-            className="mx-auto" 
-            onClick={openSocialBuRegistration}
-          >
-            Open Registration Page
-          </Button>
-          
-          <div className="mt-4">
-            <span className="text-sm text-muted-foreground mr-2">Already registered?</span>
-            <Button variant="link" className="px-0" onClick={() => setAuthType("login")}>Log In</Button>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Platform Connect</h2>
+            <p className="text-muted-foreground">Connect and manage your social media accounts</p>
           </div>
         </div>
-      )
-    } else {
-      return (
-        <>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                name="email" 
-                type="email" 
-                value={authForm.email} 
-                onChange={handleAuthFormChange}
-                placeholder="your.email@example.com" 
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                name="password" 
-                type="password" 
-                value={authForm.password} 
-                onChange={handleAuthFormChange}
-                placeholder="••••••••" 
-              />
-            </div>
-          </div>
-          <DialogFooter className="flex flex-col sm:flex-row sm:justify-between items-center gap-2 mt-4">
-            <div>
-              <span className="text-sm text-muted-foreground mr-2">Don't have an account?</span>
-              <Button variant="link" className="px-0" onClick={() => setAuthType("register")}>Sign Up</Button>
-            </div>
-            <Button onClick={handleLogin}>Log In</Button>
-          </DialogFooter>
-        </>
-      )
-    }
-  }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Platform Connect</h2>
-          <p className="text-muted-foreground">Connect and manage your social media accounts</p>
-          {userInfo && (
-            <div className="mt-2 text-sm text-muted-foreground">
-              Connected as <span className="font-medium">{userInfo.name}</span> ({userInfo.email})
-              {userInfo.verified && (
-                <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 dark:bg-green-900/20">
-                  <CheckCircle2 className="mr-1 h-3 w-3" />
-                  Verified
-                </Badge>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {!isAuthenticatedWithSocialBu && (
-            <Button onClick={() => {
-              setIsAuthDialogOpen(true)
-              setAuthType("login")
-            }}>
-              <LogIn className="mr-2 h-4 w-4" />
-              Authorize SocialBu
-            </Button>
-          )}
-          <Button variant="outline" onClick={fetchAccounts} disabled={isRefreshing}>
-            {isRefreshing ? (
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            Refresh Connections
-          </Button>
-          <ModeToggle />
-        </div>
-      </div>
-
-      {/* SocialBu Auth Dialog */}
-      <Dialog open={isAuthDialogOpen} onOpenChange={setIsAuthDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{authType === "register" ? "Register with SocialBu" : "Authorize SocialBu"}</DialogTitle>
-            <DialogDescription>
-              {authType === "register" 
-                ? "Create a SocialBu account to connect your social media platforms." 
-                : "Log in to your SocialBu account to authorize access."}
-            </DialogDescription>
-          </DialogHeader>
-          {renderAuthContent()}
-        </DialogContent>
-      </Dialog>
-
-      {hasError && (
         <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Connection Status</AlertTitle>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Demo Mode</AlertTitle>
           <AlertDescription>
-            One or more of your connected accounts requires attention. Check the status below.
+            You are in demo mode. Connections will open OAuth windows but won't fully connect without authentication.
+            <div className="mt-4">
+              <Button onClick={() => router.push('/login')} variant="outline" size="sm">
+                Login for Full Access
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
-      )}
 
-      {!isAuthenticatedWithSocialBu && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Authentication Required</AlertTitle>
-          <AlertDescription>
-            You need to register or log in to your SocialBu account to connect social media platforms.
-          </AlertDescription>
-        </Alert>
-      )}
+        {/* Add the circular navigation component for demo mode too */}
+        <CircularNav 
+          platforms={availablePlatforms} 
+          onSelectPlatform={handleSelectPlatform} 
+          selectedPlatformId={selectedPlatformId}
+        />
 
-      <Tabs defaultValue="connected" value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="connected">Connected Platforms</TabsTrigger>
-          <TabsTrigger value="available">Available Platforms</TabsTrigger>
-        </TabsList>
-        <TabsContent value="connected" className="space-y-4">
-          {isRefreshing && connectedAccounts.length === 0 ? (
-            <div className="flex justify-center p-8">
-              <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : connectedAccounts.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center p-8 text-center">
-                <Link2 className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium">No Connected Platforms</h3>
-                <p className="text-muted-foreground mt-2">
-                  You haven't connected any social media platforms yet. Go to the "Available Platforms" tab to get
-                  started.
-                </p>
-                <Button className="mt-4" onClick={() => setActiveTab("available")}>
-                  Connect a Platform
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {Array.isArray(connectedAccounts) && connectedAccounts.length > 0 ? connectedAccounts.map((account) => {
-                const platform = platformConfig[account.platform] || { icon: Link2, color: "#666" }
-                const PlatformIcon = platform.icon
-
-                return (
-                  <Card key={account.id}>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="flex h-8 w-8 items-center justify-center rounded-full"
-                            style={{ backgroundColor: platform.color }}
-                          >
-                            <PlatformIcon className="h-4 w-4 text-white" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-base">{account.name}</CardTitle>
-                            <CardDescription>{account.platform}</CardDescription>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          {account.status !== "token_expired" && account.status !== "error" ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/20">
-                              <CheckCircle2 className="mr-1 h-3 w-3" />
-                              Connected
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-amber-50 text-amber-700 dark:bg-amber-900/20">
-                              <AlertCircle className="mr-1 h-3 w-3" />
-                              Needs Attention
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pb-2">
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Account Type:</span> {account.type || "Standard"}
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Connected:</span>{" "}
-                          {account.connected_at ? new Date(account.connected_at).toLocaleDateString() : "Recently"}
-                        </div>
-                      </div>
-                    </CardContent>
-                    <CardFooter className="flex justify-between pt-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <Settings className="mr-2 h-3.5 w-3.5" />
-                            Manage
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Manage {account.name} Connection</DialogTitle>
-                            <DialogDescription>Configure your connection settings and permissions</DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4 py-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="flex h-8 w-8 items-center justify-center rounded-full"
-                                  style={{ backgroundColor: platform.color }}
-                                >
-                                  <PlatformIcon className="h-4 w-4 text-white" />
-                                </div>
-                                <div>
-                                  <div className="font-medium">{account.name}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {account.type || "Standard Account"}
-                                  </div>
-                                </div>
-                              </div>
-                              {account.status !== "token_expired" && account.status !== "error" ? (
-                                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/20">
-                                  <CheckCircle2 className="mr-1 h-3 w-3" />
-                                  Connected
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="bg-amber-50 text-amber-700 dark:bg-amber-900/20">
-                                  <AlertCircle className="mr-1 h-3 w-3" />
-                                  Needs Attention
-                                </Badge>
-                              )}
-                            </div>
-
-                            <Separator />
-
-                            <div className="space-y-2">
-                              <h4 className="font-medium">Permissions</h4>
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <Label htmlFor={`post-permission-${account.id}`} className="flex items-center gap-2">
-                                    <span>Post Content</span>
-                                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </Label>
-                                  <Switch id={`post-permission-${account.id}`} defaultChecked />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <Label htmlFor={`read-permission-${account.id}`} className="flex items-center gap-2">
-                                    <span>Read Content</span>
-                                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </Label>
-                                  <Switch id={`read-permission-${account.id}`} defaultChecked />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <Label
-                                    htmlFor={`insights-permission-${account.id}`}
-                                    className="flex items-center gap-2"
-                                  >
-                                    <span>Access Insights</span>
-                                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </Label>
-                                  <Switch id={`insights-permission-${account.id}`} defaultChecked />
-                                </div>
-                              </div>
-                            </div>
-
-                            <Separator />
-
-                            <div className="space-y-2">
-                              <h4 className="font-medium">Account Settings</h4>
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <Label htmlFor={`auto-sync-${account.id}`} className="flex items-center gap-2">
-                                    <span>Auto-sync content</span>
-                                  </Label>
-                                  <Switch id={`auto-sync-${account.id}`} defaultChecked />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <Label htmlFor={`notifications-${account.id}`} className="flex items-center gap-2">
-                                    <span>Receive notifications</span>
-                                  </Label>
-                                  <Switch id={`notifications-${account.id}`} defaultChecked />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <DialogFooter className="flex items-center justify-between">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => {
-                                disconnectAccount(account.id)
-                                document
-                                  .querySelector('[data-state="open"] button[aria-label="Close"]')
-                                  ?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
-                              }}
-                            >
-                              <Trash2 className="mr-2 h-3.5 w-3.5" />
-                              Disconnect
-                            </Button>
-                            <div className="flex gap-2">
-                              <Button variant="outline">Cancel</Button>
-                              <Button>Save Changes</Button>
-                            </div>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Settings className="h-3.5 w-3.5" />
-                            <span className="sr-only">More options</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Options</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem>
-                            <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                            Refresh Token
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                            View Profile
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onClick={() => disconnectAccount(account.id)}>
-                            <Trash2 className="mr-2 h-3.5 w-3.5" />
-                            Disconnect
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </CardFooter>
-                  </Card>
-                )
-              }) : (
-                <div className="text-center py-8">
-                  <div className="bg-muted rounded-full p-3 mb-3 mx-auto w-fit">
-                    <AlertCircle className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <h4 className="font-medium mb-1">No Accounts Connected</h4>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    You haven't connected any social media accounts yet.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="available" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            {availablePlatforms.map((platform) => {
-              const platformInfo = platformConfig[platform.platform] || { icon: Link2, color: "#666" }
-              const PlatformIcon = platformInfo.icon
-
-              return (
-                <Card key={platform.name} className="overflow-hidden">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="flex h-8 w-8 items-center justify-center rounded-full"
-                          style={{ backgroundColor: platformInfo.color }}
-                        >
-                          <PlatformIcon className="h-4 w-4 text-white" />
-                        </div>
-                        <CardTitle className="text-base">{platform.name}</CardTitle>
-                      </div>
-                      {platform.popular && (
-                        <Badge variant="secondary" className="bg-primary/10 text-primary">
-                          Popular
-                        </Badge>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pb-2">
-                    <p className="text-sm text-muted-foreground">{platform.description}</p>
-                  </CardContent>
-                  <CardFooter className="pt-2">
-                    <Button className="w-full" onClick={() => connectAccount(platform.platform)}>
-                      <Plus className="mr-2 h-3.5 w-3.5" />
-                      Connect
-                    </Button>
-                  </CardFooter>
-                </Card>
-              )
-            })}
-
-            <Card className="overflow-hidden border-dashed">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {availablePlatforms.map((platform) => (
+            <Card 
+              key={platform.id} 
+              id={`platform-card-${platform.id}`}
+              className={`overflow-hidden transition-all duration-300 ${selectedPlatformId === platform.id ? 'ring-2 ring-accent shadow-lg' : ''}`}
+            >
               <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                    <Link2 className="h-4 w-4" />
+                <div className="flex items-center space-x-2">
+                  <div className={`p-3 rounded-full shadow-lg bg-gradient-to-br ${platform.color}`}>
+                    <platform.icon className="h-5 w-5 text-white" />
                   </div>
-                  <CardTitle className="text-base">Request Platform</CardTitle>
-                </div>
+                  <div>
+                    <CardTitle className="text-xl">{platform.name}</CardTitle>
+                    {platform.popular && (
+                      <Badge className="mt-1">Popular</Badge>
+                    )}
+            </div>
+          </div>
               </CardHeader>
-              <CardContent className="pb-2">
+              <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Don't see the platform you need? Request a new integration.
+                  {platform.description}
                 </p>
               </CardContent>
-              <CardFooter className="pt-2">
-                <Button variant="outline" className="w-full">
-                  Request Platform
+              <CardFooter>
+                <Button
+                  className="w-full"
+                  onClick={() => handleConnectPlatform(platform)}
+                  disabled={isConnecting === platform.id}
+                >
+                  {isConnecting === platform.id ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="mr-2 h-4 w-4" />
+                      Connect {platform.name}
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+          ))}
+        </div>
+            </div>
+    );
+  }
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Connection Settings</CardTitle>
-          <CardDescription>Manage global settings for all connected platforms</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="auto-refresh">Auto-refresh tokens</Label>
-                <p className="text-sm text-muted-foreground">
-                  Automatically refresh connection tokens before they expire
-                </p>
-              </div>
-              <Switch id="auto-refresh" defaultChecked />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="sync-profiles">Sync profile changes</Label>
-                <p className="text-sm text-muted-foreground">Keep your profile information in sync across platforms</p>
-              </div>
-              <Switch id="sync-profiles" />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="connection-notifications">Connection notifications</Label>
-                <p className="text-sm text-muted-foreground">Receive notifications about connection status changes</p>
-              </div>
-              <Switch id="connection-notifications" defaultChecked />
-            </div>
+  // The rest of your authenticated UI with tabs, etc.
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+          <div>
+          <h2 className="text-3xl font-bold tracking-tight">Platform Connect</h2>
+          <p className="text-muted-foreground">Connect and manage your social media accounts</p>
           </div>
-        </CardContent>
-      </Card>
+        <Button onClick={loadConnectedAccounts} disabled={isLoading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+        </div>
+
+      {/* Add the circular navigation component */}
+      <CircularNav 
+        platforms={availablePlatforms} 
+        onSelectPlatform={handleSelectPlatform} 
+        selectedPlatformId={selectedPlatformId}
+      />
+
+      {connectedAccounts.length === 0 && (
+        <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Configuration Required</AlertTitle>
+            <AlertDescription>
+            Please connect at least one social media account.
+            </AlertDescription>
+          </Alert>
+        )}
+
+      <Tabs defaultValue={connectedAccounts.length > 0 ? "connected" : "available"} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="connected">Connected Platforms</TabsTrigger>
+          <TabsTrigger value="available">Available Platforms</TabsTrigger>
+          </TabsList>
+
+        <TabsContent value="connected">
+          {isLoading ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Loading accounts...</CardTitle>
+                    </CardHeader>
+              <CardContent className="flex justify-center py-6">
+                <RefreshCw className="h-8 w-8 animate-spin" />
+                    </CardContent>
+                  </Card>
+            ) : connectedAccounts.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {connectedAccounts.map((account) => (
+                <Card key={account.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                            <div>
+                          <CardTitle className="text-base">{account.account_name}</CardTitle>
+                          <CardDescription>{account.platform.display_name}</CardDescription>
+                        </div>
+                      </div>
+                      <Badge variant={account.status === 'active' ? 'default' : 'secondary'}>
+                        {account.status}
+                          </Badge>
+                        </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      Connected on: {new Date(account.created_at).toLocaleDateString()}
+                    </p>
+                      </CardContent>
+                  <CardFooter className="flex justify-end">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDisconnectAccount(account.id)}
+                    >
+                      Disconnect
+                    </Button>
+                  </CardFooter>
+                    </Card>
+              ))}
+              </div>
+            ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>No Connected Accounts</CardTitle>
+                <CardDescription>
+                  You haven't connected any social media accounts yet.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex justify-center">
+                <Button onClick={() => {
+                  const availableTab = document.querySelector('[value="available"]') as HTMLElement;
+                  if (availableTab) availableTab.click();
+                }}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Connect Platform
+                  </Button>
+              </CardContent>
+            </Card>
+            )}
+          </TabsContent>
+
+        <TabsContent value="available">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {availablePlatforms.map((platform) => {
+                // Add safety check for array before using .some()
+                const isConnected = Array.isArray(connectedAccounts) && connectedAccounts.some(
+                  account => account?.platform?.name?.toLowerCase() === platform.id.toLowerCase() && account.status === 'active'
+                );
+                
+                return (
+                <Card 
+                  key={platform.id} 
+                  id={`platform-card-${platform.id}`}
+                  className={`overflow-hidden transition-all duration-300 ${selectedPlatformId === platform.id ? 'ring-2 ring-accent shadow-lg' : ''}`}
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center space-x-2">
+                      <div className={`p-3 rounded-full shadow-lg bg-gradient-to-br ${platform.color}`}>
+                        <platform.icon className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                        <CardTitle className="text-xl">{platform.name}</CardTitle>
+                        {platform.popular && (
+                          <Badge className="mt-1">Popular</Badge>
+                        )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                  <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                      {platform.description}
+                      </p>
+                    </CardContent>
+                    <CardFooter>
+                      <Button
+                      className="w-full"
+                      onClick={() => handleConnectPlatform(platform)}
+                      disabled={isConnecting === platform.id}
+                        variant={isConnected ? "outline" : "default"}
+                      >
+                      {isConnecting === platform.id ? (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : isConnected ? (
+                          <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                            Connected
+                          </>
+                        ) : (
+                          <>
+                            <Link2 className="mr-2 h-4 w-4" />
+                          Connect {platform.name}
+                          </>
+                        )}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                );
+              })}
+            </div>
+          </TabsContent>
+        </Tabs>
     </div>
   )
 }

@@ -164,94 +164,27 @@ class TwitterOAuthManager(OAuthManager):
         super().__init__('twitter')
         self.api_base_url = "https://api.twitter.com/2"
         
-    def exchange_code_for_token(self, code):
-        """Exchange authorization code for access token - Twitter specific implementation"""
-        data = {
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'code': code,
-            'redirect_uri': self.redirect_uri,
-            'grant_type': 'authorization_code',
-            'code_verifier': 'challenge'  # This is required for PKCE flow but we're using a simplified approach
-        }
-        
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-        
-        # Log the request to help with debugging
-        logger.info(f"Exchanging code for token with Twitter. Redirect URI: {self.redirect_uri}")
-        
-        response = requests.post(self.token_url, data=data, headers=headers)
-        
-        if response.status_code != 200:
-            logger.error(f"Twitter token exchange failed: {response.status_code} - {response.text}")
-            raise Exception(f"Failed to exchange code for token with Twitter: {response.text}")
-            
-        token_data = response.json()
-        logger.info(f"Successfully obtained token from Twitter: access_token present: {bool(token_data.get('access_token'))}, refresh_token present: {bool(token_data.get('refresh_token'))}")
-        
-        return token_data
-    
     def get_user_profile(self, access_token):
         """Get Twitter user profile"""
         headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Content-Type': 'application/json'
+            'Authorization': f'Bearer {access_token}'
         }
         
-        # For Twitter API v2, we need to use the /users/me endpoint
-        profile_url = f"{self.api_base_url}/users/me?user.fields=id,name,username,profile_image_url,public_metrics,description,verified"
-        
-        logger.info(f"Fetching Twitter user profile from: {profile_url}")
+        profile_url = f"{self.api_base_url}/users/me?user.fields=id,name,username,profile_image_url"
         response = requests.get(profile_url, headers=headers)
         
         if response.status_code != 200:
-            logger.error(f"Failed to get Twitter user profile: {response.status_code} - {response.text}")
-            raise Exception(f"Failed to get Twitter user profile: {response.text}")
+            raise Exception(f"Failed to get user profile: {response.text}")
             
         data = response.json()
         user_data = data.get('data', {})
         
-        logger.info(f"Successfully fetched Twitter profile for user: {user_data.get('username')}")
-        
-        # Return enhanced user data
         return {
             'id': user_data.get('id'),
             'name': user_data.get('name'),
             'username': user_data.get('username'),
-            'profile_image_url': user_data.get('profile_image_url'),
-            'verified': user_data.get('verified', False),
-            'description': user_data.get('description'),
-            'public_metrics': user_data.get('public_metrics', {}),
-            'account_type': 'twitter_profile',
-            'raw_response': data
+            'profile_image_url': user_data.get('profile_image_url')
         }
-    
-    def refresh_access_token(self, refresh_token):
-        """Refresh an expired Twitter access token"""
-        data = {
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'refresh_token': refresh_token,
-            'grant_type': 'refresh_token'
-        }
-        
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-        
-        logger.info(f"Refreshing Twitter access token")
-        response = requests.post(self.token_url, data=data, headers=headers)
-        
-        if response.status_code != 200:
-            logger.error(f"Twitter token refresh failed: {response.status_code} - {response.text}")
-            raise Exception(f"Failed to refresh Twitter token: {response.text}")
-            
-        token_data = response.json()
-        logger.info(f"Successfully refreshed Twitter token: access_token present: {bool(token_data.get('access_token'))}")
-        
-        return token_data
 
 
 class LinkedInOAuthManager(OAuthManager):

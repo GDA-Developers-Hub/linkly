@@ -2,22 +2,26 @@
 import { toast } from "@/components/ui/use-toast"
 
 // API Base URL with trailing slash for consistency
-const API_BASE_URL = "https://linkly-production.up.railway.app/api/"
+const API_BASE_URL = "http://127.0.0.1:8000/api/"
 
 // API request helper function to ensure URLs are properly formed with trailing slashes
 const buildUrl = (endpoint: string): string => {
-  console.log(`Original endpoint: "${endpoint}"`);
-  
   // Remove leading slash if present
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint.substring(1) : endpoint;
-  console.log(`After removing leading slash: "${cleanEndpoint}"`);
   
-  // Always add trailing slash
+  // Always add trailing slash if not present
   const endpointWithSlash = cleanEndpoint.endsWith("/") ? cleanEndpoint : `${cleanEndpoint}/`;
-  console.log(`After ensuring trailing slash: "${endpointWithSlash}"`);
+  
+  // Use the endpoint as is - no special handling for OAuth endpoints
+  let finalEndpoint = endpointWithSlash;
+  
+  // Log all steps for debugging
+  console.log(`Endpoint: "${endpoint}"`);
+  console.log(`Clean endpoint: "${cleanEndpoint}"`);
+  console.log(`Endpoint with slash: "${endpointWithSlash}"`);
   
   // Construct URL
-  const url = `${API_BASE_URL}${endpointWithSlash}`;
+  const url = `${API_BASE_URL}${finalEndpoint}`;
   console.log(`Final URL: "${url}"`);
   
   return url;

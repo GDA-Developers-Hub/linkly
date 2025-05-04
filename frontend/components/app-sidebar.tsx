@@ -17,10 +17,12 @@ import {
   Hash,
   Sparkles,
   Link2,
-  ChartBarIcon,
+  LogOut,
+  Target,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useIsMobile } from "@/components/ui/use-mobile"
+import { useAuth } from "@/contexts/auth-context"
 
 interface SidebarProps {
   className?: string
@@ -29,8 +31,23 @@ interface SidebarProps {
 export function AppSidebar({ className }: SidebarProps) {
   const pathname = usePathname()
   const isMobile = useIsMobile()
-  const [isCollapsed, setIsCollapsed] = useState(false)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const { logout } = useAuth()
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    // Initialize from localStorage if available
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebarCollapsed')
+      return saved ? JSON.parse(saved) : false
+    }
+    return false
+  })
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    // Initialize from localStorage if available
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebarOpen')
+      return saved ? JSON.parse(saved) : true
+    }
+    return true
+  })
 
   // Reset sidebar state when switching between mobile and desktop
   useEffect(() => {
@@ -38,9 +55,21 @@ export function AppSidebar({ className }: SidebarProps) {
       setIsCollapsed(false)
       setIsSidebarOpen(false)
     } else {
+      // Only set to true if there's no saved state
+      if (!localStorage.getItem('sidebarOpen')) {
       setIsSidebarOpen(true)
+      }
     }
   }, [isMobile])
+
+  // Save sidebar state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(isCollapsed))
+  }, [isCollapsed])
+
+  useEffect(() => {
+    localStorage.setItem('sidebarOpen', JSON.stringify(isSidebarOpen))
+  }, [isSidebarOpen])
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -48,6 +77,13 @@ export function AppSidebar({ className }: SidebarProps) {
     } else {
       setIsCollapsed(!isCollapsed)
     }
+  }
+
+  const handleLogout = async () => {
+    // Clear sidebar state from localStorage before logout
+    localStorage.removeItem('sidebarCollapsed')
+    localStorage.removeItem('sidebarOpen')
+    await logout()
   }
 
   const routes = [
@@ -100,10 +136,10 @@ export function AppSidebar({ className }: SidebarProps) {
       active: pathname === "/dashboard/settings",
     },
     {
-      name: 'Google Ads',
+      label: 'Google Ads',
       href: '/dashboard/google-ads',
-      icon: ChartBarIcon,
-      current: pathname === '/dashboard/google-ads',
+      icon: Target,
+      active: pathname === '/dashboard/google-ads',
     },
   ]
 
@@ -196,6 +232,21 @@ export function AppSidebar({ className }: SidebarProps) {
             ))}
           </nav>
         </ScrollArea>
+        
+        {/* Logout Button */}
+        <div className="mt-auto border-t p-2">
+          <Button
+            variant="destructive"
+            onClick={handleLogout}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 justify-center",
+              isCollapsed && !isMobile ? "px-2" : "",
+            )}
+          >
+            <LogOut className="h-5 w-5" />
+            {(!isCollapsed || isMobile) && <span>Logout</span>}
+          </Button>
+        </div>
       </aside>
     </>
   )
