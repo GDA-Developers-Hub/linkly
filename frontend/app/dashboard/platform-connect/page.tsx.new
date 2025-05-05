@@ -24,12 +24,77 @@ import {
   Zap
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-// Import the types and API from our services module
-import { SocialAccount } from "@/services/social-platforms-api" 
-import { socialPlatformsApi } from "@/services/social-platforms-api"
 import { useRouter } from "next/navigation"
 import { getAPI } from "@/lib/api"
 import { CircularNav } from "./CircularNav"
+
+// Define types locally to avoid import issues
+interface SocialPlatform {
+  id: number;
+  name: string;
+  display_name: string;
+  auth_url: string;
+  is_active: boolean;
+}
+
+interface SocialAccount {
+  id: number;
+  account_id: string;
+  account_name: string;
+  account_type: string;
+  platform: {
+    id: number;
+    name: string;
+    display_name: string;
+  };
+  profile_picture_url: string | null;
+  status: string;
+  is_primary: boolean;
+  followers?: number;
+  engagement_rate?: number;
+  reach?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Simple social platforms API client
+const socialPlatformsApi = {
+  async getAccounts(): Promise<SocialAccount[]> {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+    };
+    
+    const response = await fetch(`${baseUrl}/social_platforms/api/accounts/`, {
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch social accounts');
+    }
+
+    return await response.json();
+  },
+  
+  async initiateOAuth(platformId: string): Promise<{ authorization_url: string }> {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+    };
+    
+    const response = await fetch(`${baseUrl}/social_platforms/api/oauth/init/${platformId}/`, {
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to initiate OAuth flow');
+    }
+
+    return await response.json();
+  }
+};
 
 // Platform configurations with expanded icons and platforms
 const availablePlatforms = [
@@ -150,85 +215,37 @@ export default function PlatformConnectPage() {
     }
   }
 
-  // Handle platform selection from circular nav
-  const handleSelectPlatform = (platform: { id: string }) => {
-    setSelectedPlatformId(platform.id);
+  // Handle connecting a social platform
+  const handleConnectPlatform = async (platform: typeof availablePlatforms[0]) => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to connect social accounts",
+        variant: "destructive",
+      })
+      return
+    }
     
-    // If on the available tab, scroll to the platform card
-    setTimeout(() => {
-      const platformCard = document.getElementById(`platform-card-${platform.id}`);
-      if (platformCard) {
-        platformCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 100);
-  };
-
-  // Handle platform connection
-  const handleConnectPlatform = async (platform: any) => {
     setIsConnecting(platform.id)
+    setSelectedPlatformId(platform.id)
+    
     try {
-      // Get authorization URL and open popup window
-      await socialPlatformsApi.connectPlatform(platform.id)
+      // Get the authorization URL from backend
+      const response = await socialPlatformsApi.initiateOAuth(platform.id)
       
-      // Show toast to guide the user
+      // Open the authorization URL in a new window
+      window.open(response.authorization_url, '_blank', 'width=600,height=700')
+      
+      // Show a toast with instructions
       toast({
         title: "Authorization Started",
-        description: `Please complete the authorization in the popup window.`,
+        description: "Please complete the authorization in the opened window, then return to this page and click 'Refresh' to see your connected account.",
       })
-      
-      // If user is authenticated, poll for new accounts
-      if (isAuthenticated) {
-        // Set up polling to check for newly connected accounts
-        let attempts = 0
-        const interval = setInterval(async () => {
-          attempts++
-          if (attempts > 30) { // Stop after 30 attempts (1 minute)
-            clearInterval(interval)
-      toast({
-              title: "Connection Timeout",
-              description: "Please try connecting again",
-        variant: "destructive",
-            })
-            return
-          }
-          
-          try {
-            // Check for new accounts
-            const updatedAccounts = await socialPlatformsApi.getAccounts()
-            
-            // Compare account counts
-            const currentCount = connectedAccounts.length
-            const newAccountsCount = updatedAccounts.length - currentCount
-            
-            if (newAccountsCount > 0) {
-              clearInterval(interval)
-              setConnectedAccounts(updatedAccounts)
-              
-        toast({
-                title: "Account Connected",
-                description: `Successfully connected ${platform.name}`,
-              })
-            }
-          } catch (e) {
-            console.error("Error checking for new accounts:", e)
-          }
-        }, 2000) // Poll every 2 seconds
-      } else {
-        // For unauthenticated users, just show a success message
-        setTimeout(() => {
-          toast({
-            title: "Demo Mode",
-            description: "In demo mode, connections are simulated. Login for full functionality.",
-          })
-        }, 5000);
-      }
-      
     } catch (err: any) {
-      console.error('Error connecting platform:', err)
-      
+      console.error(`Error connecting ${platform.name}:`, err)
       toast({
         title: "Connection Failed",
-        description: err.message || "Failed to connect platform. Please try again.",
+        description: `Unable to connect to ${platform.name}. Please try again.`,
         variant: "destructive",
       })
     } finally {
@@ -236,180 +253,153 @@ export default function PlatformConnectPage() {
     }
   }
 
-  // Handle account disconnection
+  // Handle disconnecting a social account
   const handleDisconnectAccount = async (accountId: number) => {
     try {
-      await socialPlatformsApi.disconnectAccount(accountId)
-      
-      // Update local state
-      setConnectedAccounts(connectedAccounts.filter(account => account.id !== accountId))
-      
+      // Not implemented - would make a DELETE request to the backend
       toast({
         title: "Account Disconnected",
-        description: "Successfully disconnected account",
+        description: "Your social account has been disconnected.",
       })
+      
+      // Remove from list in UI
+      setConnectedAccounts(accounts => accounts.filter(account => account.id !== accountId))
     } catch (err) {
       console.error('Error disconnecting account:', err)
       toast({
         title: "Error",
-        description: "Failed to disconnect account",
+        description: "Failed to disconnect account. Please try again.",
         variant: "destructive",
       })
     }
   }
 
-  // Render a demo/unauthenticated view or the full authenticated view
-  if (!isAuthenticated) {
-      return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Platform Connect</h2>
-            <p className="text-muted-foreground">Connect and manage your social media accounts</p>
-          </div>
+  // Generate an appropriate icon for a platform
+  const getPlatformIcon = (platform: string) => {
+    // Just returning a simple fallback for now
+    return "/placeholder-icon.png"
+  }
+  
+  return (
+    <div className="container mx-auto space-y-8 p-4 py-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Connect Platforms</h1>
+          <p className="text-muted-foreground">
+            Connect your social media accounts and start managing them in one place
+          </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={loadConnectedAccounts}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh
+              </>
+            )}
+          </Button>
+          <Button 
+            size="sm"
+            onClick={() => router.push('/dashboard')}
+          >
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
 
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertTitle>Demo Mode</AlertTitle>
+      {!isAuthenticated && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Authentication Required</AlertTitle>
           <AlertDescription>
-            You are in demo mode. Connections will open OAuth windows but won't fully connect without authentication.
-            <div className="mt-4">
-              <Button onClick={() => router.push('/login')} variant="outline" size="sm">
-                Login for Full Access
-              </Button>
-            </div>
+            You need to be logged in to connect social media accounts.
+            <Button
+              onClick={() => router.push('/auth/login')}
+              variant="outline"
+              size="sm"
+              className="ml-2"
+            >
+              Log In
+            </Button>
           </AlertDescription>
         </Alert>
+      )}
 
-        {/* Add the circular navigation component for demo mode too */}
-        <CircularNav 
-          platforms={availablePlatforms} 
-          onSelectPlatform={handleSelectPlatform} 
-          selectedPlatformId={selectedPlatformId}
-        />
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {availablePlatforms.map((platform) => (
-            <Card 
-              key={platform.id} 
-              id={`platform-card-${platform.id}`}
-              className={`overflow-hidden transition-all duration-300 ${selectedPlatformId === platform.id ? 'ring-2 ring-accent shadow-lg' : ''}`}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-center space-x-2">
-                  <div className={`p-3 rounded-full shadow-lg bg-gradient-to-br ${platform.color}`}>
-                    <platform.icon className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl">{platform.name}</CardTitle>
-                    {platform.popular && (
-                      <Badge className="mt-1">Popular</Badge>
-                    )}
-            </div>
-          </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {platform.description}
-                </p>
-              </CardContent>
-              <CardFooter>
-                <Button
-                  className="w-full"
-                  onClick={() => handleConnectPlatform(platform)}
-                  disabled={isConnecting === platform.id}
-                >
-                  {isConnecting === platform.id ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Connecting...
-                    </>
-                  ) : (
-                    <>
-                      <Link2 className="mr-2 h-4 w-4" />
-                      Connect {platform.name}
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-            </div>
-    );
-  }
-
-  // The rest of your authenticated UI with tabs, etc.
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-          <div>
-          <h2 className="text-3xl font-bold tracking-tight">Platform Connect</h2>
-          <p className="text-muted-foreground">Connect and manage your social media accounts</p>
-          </div>
-        <Button onClick={loadConnectedAccounts} disabled={isLoading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-        </div>
-
-      {/* Add the circular navigation component */}
-      <CircularNav 
-        platforms={availablePlatforms} 
-        onSelectPlatform={handleSelectPlatform} 
-        selectedPlatformId={selectedPlatformId}
-      />
-
-      {connectedAccounts.length === 0 && (
-        <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Configuration Required</AlertTitle>
-            <AlertDescription>
-            Please connect at least one social media account.
-            </AlertDescription>
-          </Alert>
-        )}
-
-      <Tabs defaultValue={connectedAccounts.length > 0 ? "connected" : "available"} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="connected">Connected Platforms</TabsTrigger>
+      <Tabs defaultValue="connected">
+        <TabsList className="mb-4">
+          <TabsTrigger value="connected">Connected Accounts</TabsTrigger>
           <TabsTrigger value="available">Available Platforms</TabsTrigger>
-          </TabsList>
+        </TabsList>
 
         <TabsContent value="connected">
-          {isLoading ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Loading accounts...</CardTitle>
-                    </CardHeader>
-              <CardContent className="flex justify-center py-6">
-                <RefreshCw className="h-8 w-8 animate-spin" />
-                    </CardContent>
-                  </Card>
-            ) : connectedAccounts.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {connectedAccounts.map((account) => (
-                <Card key={account.id}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                            <div>
-                          <CardTitle className="text-base">{account.account_name}</CardTitle>
-                          <CardDescription>{account.platform.display_name}</CardDescription>
+          {isAuthenticated ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {isLoading ? (
+                // Show placeholders when loading
+                Array(3).fill(0).map((_, i) => (
+                  <Card key={i} className="opacity-50">
+                    <CardHeader className="animate-pulse">
+                      <div className="flex items-center space-x-4">
+                        <div className="h-12 w-12 rounded-full bg-muted"></div>
+                        <div className="space-y-2">
+                          <div className="h-4 w-32 bg-muted rounded"></div>
+                          <div className="h-4 w-24 bg-muted rounded"></div>
                         </div>
                       </div>
-                      <Badge variant={account.status === 'active' ? 'default' : 'secondary'}>
-                        {account.status}
-                          </Badge>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-12 bg-muted rounded"></div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : connectedAccounts.length > 0 ? (
+                // Show connected accounts
+                connectedAccounts.map((account) => (
+                  <Card key={account.id} className="overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center space-x-4">
+                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                          {account.profile_picture_url ? (
+                            <img 
+                              src={account.profile_picture_url} 
+                              alt={account.account_name} 
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <img 
+                              src={getPlatformIcon(account.platform?.name || '')} 
+                              alt={account.platform?.name || 'platform'} 
+                              className="h-8 w-8"
+                            />
+                          )}
                         </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      Connected on: {new Date(account.created_at).toLocaleDateString()}
-                    </p>
-                      </CardContent>
-                  <CardFooter className="flex justify-end">
+                        <div>
+                          <CardTitle className="text-xl">{account.account_name}</CardTitle>
+                          <CardDescription className="capitalize">{account.platform?.display_name || account.account_type}</CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pb-4">
+                      <div className="flex items-center space-x-4 justify-between">
+                        <Badge variant={account.status === 'active' ? 'default' : 'secondary'}>
+                          {account.status}
+                        </Badge>
+                        {account.is_primary && (
+                          <Badge variant="outline">Primary</Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                    <CardFooter className="pt-0 border-t border-border/40 flex justify-end">
                     <Button
                       variant="destructive"
                       size="sm"

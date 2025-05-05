@@ -42,7 +42,14 @@ const formatErrorMessage = (error: any): string => {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  // Initialize user state from localStorage if available
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      const storedUser = localStorage.getItem('user')
+      return storedUser ? JSON.parse(storedUser) : null
+    }
+    return null
+  })
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [hasValidToken, setHasValidToken] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -57,13 +64,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const accessToken = localStorage.getItem("accessToken")
       const refreshToken = localStorage.getItem("refreshToken")
       
+      console.log('Token validation check:', {
+        accessToken: accessToken ? 'present' : 'missing',
+        refreshToken: refreshToken ? 'present' : 'missing'
+      });
+      
       if (!accessToken || !refreshToken) {
+        console.warn('Missing tokens during validation');
         return false
       }
       
       // Verify token validity by making a profile request
       const userData = await api.getProfile()
       if (userData) {
+        // Update localStorage with latest user data
+        localStorage.setItem('user', JSON.stringify(userData))
         setUser(userData)
         return true
       }
@@ -98,13 +113,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (data: LoginData) => {
     setIsLoading(true)
     try {
-      const response = await api.login(data)
-      setUser(response.user)
+      // Make direct fetch call without authentication headers for login
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
+      const loginUrl = `${baseUrl}/users/token/`;
+      
+      console.log('Making direct login request to:', loginUrl);
+      const response = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Login failed');
+      }
+      
+      const responseData = await response.json();
+      
+      // Log the response data to ensure we're receiving the tokens correctly
+      console.log('Login response data structure:', Object.keys(responseData));
+      
+      // Store tokens - ensure we handle both object formats that Django might return
+      if (responseData.access || responseData.access_token) {
+        const accessToken = responseData.access || responseData.access_token;
+        console.log('Storing access token, length:', accessToken.length);
+        localStorage.setItem('accessToken', accessToken);
+      } else {
+        console.warn('No access token found in response');
+      }
+      
+      if (responseData.refresh || responseData.refresh_token) {
+        const refreshToken = responseData.refresh || responseData.refresh_token;
+        console.log('Storing refresh token, length:', refreshToken.length);
+        localStorage.setItem('refreshToken', refreshToken);
+      } else {
+        console.warn('No refresh token found in response');
+      }
+      
+      // Verify tokens were stored correctly
+      console.log('Tokens saved to localStorage:', {
+        access: localStorage.getItem('accessToken') ? 'present' : 'missing',
+        refresh: localStorage.getItem('refreshToken') ? 'present' : 'missing'
+      });
+      
+      // Save user data to localStorage
+      localStorage.setItem('user', JSON.stringify(responseData.user))
+      
+      setUser(responseData.user)
       setHasValidToken(true)
       setIsAuthenticated(true)
       toast({
         title: "Login successful",
-        description: `Welcome back, ${response.user.first_name}!`,
+        description: `Welcome back, ${responseData.user.first_name}!`,
       })
       
       // Go directly to dashboard - it will handle subscription check
@@ -149,6 +212,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Registration successful. Response:", response)
       
       // User is automatically logged in after registration
+      // Log the response data to ensure we're receiving the tokens correctly
+      console.log('Registration response data structure:', Object.keys(response));
+      
+      // Store tokens - ensure we handle both object formats that Django might return
+      if (response.tokens) {
+        console.log('Token structure:', Object.keys(response.tokens));
+        
+        if (response.tokens.access) {
+          console.log('Storing access token, length:', response.tokens.access.length);
+          localStorage.setItem('accessToken', response.tokens.access);
+        }
+        
+        if (response.tokens.refresh) {
+          console.log('Storing refresh token, length:', response.tokens.refresh.length);
+          localStorage.setItem('refreshToken', response.tokens.refresh);
+        }
+      } else if (response.access || response.access_token) {
+        // Direct token in response
+        const accessToken = response.access || response.access_token;
+        console.log('Storing access token, length:', accessToken.length);
+        localStorage.setItem('accessToken', accessToken);
+        
+        const refreshToken = response.refresh || response.refresh_token;
+        if (refreshToken) {
+          console.log('Storing refresh token, length:', refreshToken.length);
+          localStorage.setItem('refreshToken', refreshToken);
+        }
+      } else {
+        console.warn('No tokens found in registration response');
+      }
+      
+      // Verify tokens were stored correctly
+      console.log('Tokens saved to localStorage after registration:', {
+        access: localStorage.getItem('accessToken') ? 'present' : 'missing',
+        refresh: localStorage.getItem('refreshToken') ? 'present' : 'missing'
+      });
+      
+      // Save user data to localStorage
+      localStorage.setItem('user', JSON.stringify(response.user))
+      
       setUser(response.user)
       setHasValidToken(true)
       setIsAuthenticated(true)
@@ -189,6 +292,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     try {
       await api.logout()
+      // Clear user data from localStorage
+      localStorage.removeItem('user')
+      
       setUser(null)
       setIsAuthenticated(false)
       setHasValidToken(false)

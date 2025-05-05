@@ -10,6 +10,18 @@ import { getSocialBuAPI, withErrorHandling } from "@/lib/socialbu-api"
 import { useToast } from "@/components/ui/use-toast"
 import { Avatar } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { SocialPlatformsAPI } from "@/services/social-platforms-api"
+
+interface PlatformMetrics {
+  followers: number
+  engagement: number
+  reach: number
+  posts: {
+    scheduled: number
+    published: number
+    total: number
+  }
+}
 
 interface InsightsData {
   followers: number
@@ -27,7 +39,10 @@ interface InsightsData {
     type?: string
     image?: string
     active: boolean
+    metrics?: PlatformMetrics
   }>
+  // Platform-specific metrics
+  platformMetrics: Record<string, PlatformMetrics>
 }
 
 interface RecentPost {
@@ -154,6 +169,49 @@ export default function DashboardPage() {
         const totalReach = insightsData.reduce((sum, insight) => 
           insight.metric === 'reach' ? sum + insight.value : sum, 0);
 
+        // Create platform-specific metrics
+        const platformMetrics: Record<string, PlatformMetrics> = {};
+        
+        // Initialize metrics for each connected account/platform
+        connectedAccounts.forEach(account => {
+          const platformType = account.type || (account as any)._type || 'unknown';
+          
+          if (!platformMetrics[platformType]) {
+            platformMetrics[platformType] = {
+              followers: 0,
+              engagement: 0,
+              reach: 0,
+              posts: {
+                scheduled: 0,
+                published: 0,
+                total: 0
+              }
+            };
+          }
+          
+          // Add metrics for this account based on available data
+          // In a real implementation, you would get this data from your API
+          platformMetrics[platformType].followers += (account as any).followers || 0;
+          if ((account as any).engagement_rate) {
+            platformMetrics[platformType].engagement = 
+          Math.max(platformMetrics[platformType].engagement, (account as any).engagement_rate || 0);
+          }
+          platformMetrics[platformType].reach += (account as any).reach || 0;
+        });
+        
+        // Count platform-specific posts
+        postsData.forEach(post => {
+          const platform = post.account_type || 'unknown';
+          if (platformMetrics[platform]) {
+            if (post.status === 'scheduled') {
+              platformMetrics[platform].posts.scheduled++;
+            } else if (post.status === 'published') {
+              platformMetrics[platform].posts.published++;
+            }
+            platformMetrics[platform].posts.total++;
+          }
+        });
+        
         // Transform data for the dashboard
         const transformedInsights: InsightsData = {
           followers: totalFollowers,
@@ -164,15 +222,18 @@ export default function DashboardPage() {
             published: postsData.filter((post) => post.status === "published").length,
             total: postsResponse.total, // Use the total from the response
           },
+          platformMetrics,
           connectedAccounts: connectedAccounts.map(account => {
+            const platformType = account.type || (account as any)._type || 'Unknown';
             // Extract properties safely with defaults
             return {
               id: account.id,
               name: account.name,
               _type: (account as any)._type || account.type || 'Unknown',
-              type: account.type || '',
+              type: platformType,
               image: (account as any).image || '',
-              active: typeof (account as any).active === 'boolean' ? (account as any).active : true
+              active: typeof (account as any).active === 'boolean' ? (account as any).active : true,
+              metrics: platformMetrics[platformType] || null
             }
           })
         }
@@ -279,8 +340,8 @@ export default function DashboardPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {/* Insights Cards */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {/* Stats Overview */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
             <Card className="overflow-hidden border-0 hover:shadow-lg transition-all duration-200 bg-white dark:bg-gray-900 shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Followers</CardTitle>
@@ -302,6 +363,21 @@ export default function DashboardPage() {
                   </span>
                   <span className="text-xs text-muted-foreground ml-1">from last month</span>
                 </div>
+                
+                {/* Platform-specific metrics popup */}
+                {!isLoading && insights?.platformMetrics && Object.keys(insights.platformMetrics).length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-border/40">
+                    <p className="text-xs font-medium mb-1">Platform Breakdown:</p>
+                    <div className="space-y-1">
+                      {Object.entries(insights.platformMetrics).map(([platform, metrics]) => (
+                        <div key={platform} className="flex justify-between text-xs">
+                          <span className="capitalize">{platform}:</span>
+                          <span className="font-medium">{metrics.followers.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -326,6 +402,21 @@ export default function DashboardPage() {
                   </span>
                   <span className="text-xs text-muted-foreground ml-1">from last week</span>
                 </div>
+                
+                {/* Platform-specific metrics popup */}
+                {!isLoading && insights?.platformMetrics && Object.keys(insights.platformMetrics).length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-border/40">
+                    <p className="text-xs font-medium mb-1">Platform Breakdown:</p>
+                    <div className="space-y-1">
+                      {Object.entries(insights.platformMetrics).map(([platform, metrics]) => (
+                        <div key={platform} className="flex justify-between text-xs">
+                          <span className="capitalize">{platform}:</span>
+                          <span className="font-medium">{metrics.engagement}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -350,6 +441,21 @@ export default function DashboardPage() {
                   </span>
                   <span className="text-xs text-muted-foreground ml-1">from last month</span>
                 </div>
+                
+                {/* Platform-specific metrics popup */}
+                {!isLoading && insights?.platformMetrics && Object.keys(insights.platformMetrics).length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-border/40">
+                    <p className="text-xs font-medium mb-1">Platform Breakdown:</p>
+                    <div className="space-y-1">
+                      {Object.entries(insights.platformMetrics).map(([platform, metrics]) => (
+                        <div key={platform} className="flex justify-between text-xs">
+                          <span className="capitalize">{platform}:</span>
+                          <span className="font-medium">{metrics.reach.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -373,6 +479,21 @@ export default function DashboardPage() {
                     {insights?.posts.published || "0"} published this week
                   </span>
                 </div>
+                
+                {/* Platform-specific metrics popup */}
+                {!isLoading && insights?.platformMetrics && Object.keys(insights.platformMetrics).length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-border/40">
+                    <p className="text-xs font-medium mb-1">Platform Breakdown:</p>
+                    <div className="space-y-1">
+                      {Object.entries(insights.platformMetrics).map(([platform, metrics]) => (
+                        <div key={platform} className="flex justify-between text-xs">
+                          <span className="capitalize">{platform}:</span>
+                          <span className="font-medium">{metrics.posts.scheduled} scheduled</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -390,7 +511,8 @@ export default function DashboardPage() {
                   {customIntegrationAvailable && (
                     <Button variant="outline" size="sm" className="h-8" asChild>
                       <a href="/dashboard/platform-connect">
-                        <Plus className="h-3.5 w-3.5" />
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Connect
                       </a>
                     </Button>
                   )}
@@ -408,32 +530,47 @@ export default function DashboardPage() {
                     </div>
                   ))
                 ) : insights?.connectedAccounts.length ? (
-                  insights.connectedAccounts.map((account) => (
-                    <div key={account.id} className="flex items-center space-x-4 rounded-lg p-2 hover:bg-muted transition-colors">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center overflow-hidden">
-                        {account.image ? (
-                          <img 
-                            src={account.image} 
-                            alt={account.name} 
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <img 
-                            src={getPlatformIcon(account.type || '')} 
-                            alt={account.type || 'platform'} 
-                            className="h-6 w-6 object-contain"
-                          />
-                        )}
+                  <div className="space-y-2">
+                    {insights.connectedAccounts.map((account) => (
+                      <div key={account.id} className="flex items-center space-x-4 rounded-lg p-2 hover:bg-muted transition-colors">
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center overflow-hidden">
+                          {account.image ? (
+                            <img 
+                              src={account.image} 
+                              alt={account.name} 
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <img 
+                              src={getPlatformIcon(account.type || '')} 
+                              alt={account.type || 'platform'} 
+                              className="h-6 w-6 object-contain"
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{account.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-muted-foreground capitalize">{account.type || account._type}</p>
+                            {account.metrics && (
+                              <p className="text-xs text-muted-foreground">
+                                <span className="text-primary font-medium">{account.metrics.followers.toLocaleString()}</span> followers
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Badge variant="outline" className={`px-2 ${account.active ? 'bg-green-50 text-green-700 dark:bg-green-900/20' : 'bg-gray-50 text-gray-700 dark:bg-gray-900/20'}`}>
+                          {account.active ? 'Active' : 'Inactive'}
+                        </Badge>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{account.name}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{account.type || account._type}</p>
-                      </div>
-                      <Badge variant="outline" className={`px-2 ${account.active ? 'bg-green-50 text-green-700 dark:bg-green-900/20' : 'bg-gray-50 text-gray-700 dark:bg-gray-900/20'}`}>
-                        {account.active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </div>
-                  ))
+                    ))}
+                    <Button variant="outline" size="sm" className="w-full mt-2" asChild>
+                      <a href="/dashboard/platform-connect">
+                        <Plus className="mr-2 h-3.5 w-3.5" />
+                        Connect Another Account
+                      </a>
+                    </Button>
+                  </div>
                 ) : (
                   <div className="text-center py-4">
                     <p className="text-sm text-muted-foreground mb-3">No accounts connected</p>
@@ -456,10 +593,20 @@ export default function DashboardPage() {
                     <CardTitle>Recent Posts</CardTitle>
                     <CardDescription>Your latest content across platforms</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" className="h-8">
-                    <BarChart3 className="mr-2 h-3.5 w-3.5" />
-                    View Analytics
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="h-8" asChild>
+                      <a href="/dashboard/post-create">
+                        <Plus className="mr-2 h-3.5 w-3.5" />
+                        Create Post
+                      </a>
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8" asChild>
+                      <a href="/dashboard/analytics">
+                        <BarChart3 className="mr-2 h-3.5 w-3.5" />
+                        Analytics
+                      </a>
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>

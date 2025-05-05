@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { SocialAccount } from "@/lib/social-platforms-api"
+import { SocialAccount } from "@/services/social-platforms-api"
 
 // Platform type definition
 interface Platform {
