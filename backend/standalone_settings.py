@@ -175,7 +175,36 @@ SIMPLE_JWT = {
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
-CORS_ALLOWED_ORIGINS = [origin for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://linkly-frontend.up.railway.app').split(',') if origin]
+CORS_ALLOWED_ORIGINS = [origin for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://linkly-frontend.up.railway.app,https://linkly-production.up.railway.app,https://linkly-gd.web.app,https://linkly-gd.firebaseapp.com').split(',') if origin]
+
+# Additional CORS settings
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# CSRF trusted origins
+CSRF_TRUSTED_ORIGINS = [
+    "https://linkly-production.up.railway.app",
+    "https://linkly-gd.web.app",
+    "https://linkly-gd.firebaseapp.com"
+]
 
 # Celery settings
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')

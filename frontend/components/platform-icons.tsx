@@ -155,14 +155,17 @@ function PlatformIconsComponent() {
           </div>
         </div>
 
-        {/* Social Media Icons */}
-        {platformConfig.map((platform, index) => (
-          <PlatformIcon
-            key={platform.name}
-            platform={platform}
-            index={index}
-          />
-        ))}
+        {/* Rotating container for social media icons */}
+        <div className="absolute inset-0 animate-spin-slow">
+          {/* Social Media Icons */}
+          {platformConfig.map((platform, index) => (
+            <PlatformIcon
+              key={platform.name}
+              platform={platform}
+              index={index}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
