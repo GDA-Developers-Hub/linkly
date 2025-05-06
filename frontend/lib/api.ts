@@ -201,7 +201,21 @@ export async function withErrorHandling<T>(fn: () => Promise<T>, errorMessage = 
 class API {
   private accessToken: string | null = null
   private refreshToken: string | null = null
-
+// Helper method to check if an endpoint is public (doesn't need authentication)
+private isPublicEndpoint(endpoint: string): boolean {
+  const publicEndpoints = [
+    'users/register',
+    'users/login',
+    'users/token/refresh',
+    'auth/register',
+    'auth/login'
+  ];
+  
+  // Check if the endpoint contains any of the public paths
+  return publicEndpoints.some(publicPath => 
+    endpoint.toLowerCase().includes(publicPath.toLowerCase())
+  );
+}
   constructor() {
     // Try to get tokens from localStorage
     if (typeof window !== "undefined") {
@@ -243,16 +257,17 @@ class API {
   }
 
   // Get headers
-  private getHeaders(): HeadersInit {
+  private getHeaders(endpoint: string = ""): HeadersInit {
     const headers: HeadersInit = {
       "Content-Type": "application/json",
     }
 
-    if (this.accessToken) {
+    // Only add Authorization header for non-public endpoints
+    if (!this.isPublicEndpoint(endpoint) && this.accessToken) {
       headers["Authorization"] = `Bearer ${this.accessToken}`
       console.log(`Adding Authorization header: Bearer ${this.accessToken.substring(0, 10)}...`);
-    } else {
-      console.warn("No access token available for request!");
+    } else if (!this.isPublicEndpoint(endpoint)) {
+      console.warn("No access token available for protected request!");
       
       // Try to retrieve token again from localStorage as a fallback
       if (typeof window !== "undefined") {
@@ -263,6 +278,8 @@ class API {
           headers["Authorization"] = `Bearer ${storedToken}`;
         }
       }
+    } else {
+      console.log("Public endpoint detected, skipping Authorization header");
     }
 
     return headers
@@ -304,7 +321,7 @@ class API {
     const url = buildUrl(endpoint);
     const options: RequestInit = {
       method,
-      headers: this.getHeaders(),
+      headers: this.getHeaders(endpoint),
     }
 
     if (data) {
@@ -450,26 +467,9 @@ class API {
     try {
       console.log("API: Starting login process", { email: data.email });
       
-      // Explicitly use endpoint with trailing slash and include protocol
-      const url = buildUrl("users/login/");
-      console.log("Full login URL:", url);
-      
-      // First check if the API is accessible at all using a direct fetch
-      try {
-        const testResponse = await fetch(url.replace('/users/login/', ''), {
-          method: 'HEAD',
-        });
-        console.log(`API accessibility check: ${testResponse.status}`);
-        
-        if (!testResponse.ok) {
-          console.error(`API server returned ${testResponse.status} - it may be unavailable`);
-        }
-      } catch (testError) {
-        console.error("Failed to reach API server:", testError);
-      }
-      
-      // Now try the actual login
-      const response = await this.request<LoginResponse>("users/login/", "POST", data)
+      // Skip the API accessibility test that's causing 405 errors
+      // Just use the token endpoint directly
+      const response = await this.request<LoginResponse>("users/token/", "POST", data);
       console.log("API: Login successful, response:", response);
       console.log("API: Tokens received:", response.tokens);
       
@@ -478,17 +478,14 @@ class API {
         throw new Error("No authentication tokens received from server");
       }
       
-      this.setTokens(response.tokens)
+      this.setTokens(response.tokens);
       console.log("API: Auth tokens stored in local storage");
       
-      // Try to auto-authenticate with SocialBu
-      await this.ensureSocialBuAuthentication();
-      
-      return response
+      return response;
     } catch (error: any) {
       console.error("Login API error:", error);
       
-      // If there's a specific error about HTML responses
+      // Error handling remains the same
       if (error.message && error.message.includes('HTML instead of JSON')) {
         const enhancedError = new Error(
           "Connection to server failed. Please check your internet connection and try again. " +
@@ -497,17 +494,15 @@ class API {
         throw enhancedError;
       }
       
-      // If there's a specific authentication error, enhance the message
       if (error.response?.status === 401) {
-        const enhancedError: any = new Error("Invalid email or password. Please check your credentials and try again.")
-        enhancedError.response = error.response
-        throw enhancedError
+        const enhancedError: any = new Error("Invalid email or password. Please check your credentials and try again.");
+        enhancedError.response = error.response;
+        throw enhancedError;
       }
       
-      throw error
+      throw error;
     }
   }
-
   // Helper method to ensure SocialBu authentication
   private async ensureSocialBuAuthentication(): Promise<void> {
     try {
