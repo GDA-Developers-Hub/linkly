@@ -168,13 +168,32 @@ export default function PlatformConnectPage() {
     setIsConnecting(platform.id)
     try {
       // Get authorization URL and open popup window
-      await socialPlatformsApi.initiateOAuth(platform.id)
+      const response = await socialPlatformsApi.initiateOAuth(platform.id)
+      console.log('OAuth response:', response)
       
-      // Show toast to guide the user
-      toast({
-        title: "Authorization Started",
-        description: `Please complete the authorization in the popup window.`,
-      })
+      if (response && response.authorization_url) {
+        // Open the authorization URL in a new window
+        const authWindow = window.open(response.authorization_url, '_blank', 'width=600,height=700')
+        
+        if (!authWindow) {
+          // If popup was blocked
+          toast({
+            title: "Popup Blocked",
+            description: `Please allow popups for this site and try again.`,
+            variant: "destructive",
+          })
+          setIsConnecting(null)
+          return
+        }
+        
+        // Show toast to guide the user
+        toast({
+          title: "Authorization Started",
+          description: `Please complete the authorization in the popup window.`,
+        })
+      } else {
+        throw new Error('No authorization URL received')
+      }
       
       // If user is authenticated, poll for new accounts
       if (isAuthenticated) {

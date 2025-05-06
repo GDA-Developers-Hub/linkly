@@ -64,14 +64,30 @@ const safeLocalStorage = {
 // API Class
 export class SocialPlatformsAPI {
   private baseUrl: string;
-  private headers: HeadersInit;
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
-    this.headers = {
+    // Default to the production URL instead of local development
+    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://linkly-production.up.railway.app/api';
+    
+    console.log('SocialPlatformsAPI using backend URL:', this.baseUrl);
+  }
+  
+  // Get headers with current token
+  private getHeaders(): HeadersInit {
+    const token = safeLocalStorage.getItem('accessToken') || safeLocalStorage.getItem('linkly_access_token');
+    
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${safeLocalStorage.getItem('accessToken')}`,
     };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      console.log('SocialPlatformsAPI: Using token:', token.substring(0, 10) + '...');
+    } else {
+      console.warn('SocialPlatformsAPI: No access token available');
+    }
+    
+    return headers;
   }
 
   /**
@@ -79,7 +95,7 @@ export class SocialPlatformsAPI {
    */
   async getAccounts(): Promise<SocialAccount[]> {
     const response = await fetch(`${this.baseUrl}/social_platforms/api/accounts/`, {
-      headers: this.headers,
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
@@ -94,7 +110,7 @@ export class SocialPlatformsAPI {
    */
   async getPlatforms(): Promise<SocialPlatform[]> {
     const response = await fetch(`${this.baseUrl}/social_platforms/api/platforms/`, {
-      headers: this.headers,
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
@@ -109,7 +125,7 @@ export class SocialPlatformsAPI {
    */
   async initiateOAuth(platformId: string): Promise<{ authorization_url: string }> {
     const response = await fetch(`${this.baseUrl}/social_platforms/api/oauth/init/${platformId}/`, {
-      headers: this.headers,
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
@@ -134,7 +150,7 @@ export class SocialPlatformsAPI {
     const url = `${this.baseUrl}/social_platforms/api/posts/?${queryParams.toString()}`;
     
     const response = await fetch(url, {
-      headers: this.headers,
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
@@ -153,7 +169,7 @@ export class SocialPlatformsAPI {
    */
   async getMetrics(): Promise<any> {
     const response = await fetch(`${this.baseUrl}/social_platforms/api/metrics/`, {
-      headers: this.headers,
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
@@ -169,7 +185,7 @@ export class SocialPlatformsAPI {
   async disconnectAccount(accountId: number): Promise<void> {
     const response = await fetch(`${this.baseUrl}/social_platforms/api/accounts/${accountId}/`, {
       method: 'DELETE',
-      headers: this.headers,
+      headers: this.getHeaders(),
     });
 
     if (!response.ok) {
