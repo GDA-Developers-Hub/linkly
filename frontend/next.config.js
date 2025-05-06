@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
-module.exports = {
+
+// Determine if we're in development mode
+const isDev = process.env.NODE_ENV === 'development';
+
+const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -7,13 +11,13 @@ module.exports = {
     ignoreBuildErrors: true,
   },
   images: {
-    unoptimized: true,
+    unoptimized: !isDev, // Only unoptimize in production
     domains: ['api.dicebear.com', 'avatar.vercel.sh'],
   },
-  // Set output to 'export' for static site generation
-  output: 'export',
-  // Set the output directory to be 'out' for Firebase hosting
-  distDir: 'out',
+  // Only use static export in production, not in development
+  ...(isDev ? {} : { output: 'export' }),
+  // Only set custom output directory in production
+  ...(isDev ? {} : { distDir: 'out' }),
   // Enable trailing slashes for Firebase hosting
   trailingSlash: true,
   // Use relative paths if not in production
@@ -22,4 +26,6 @@ module.exports = {
   experimental: {
     scrollRestoration: true,
   },
-}
+};
+
+module.exports = nextConfig;
