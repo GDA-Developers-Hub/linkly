@@ -2,7 +2,25 @@
 import { toast } from "@/components/ui/use-toast"
 
 // API Base URL with trailing slash for consistency
-const API_BASE_URL = "http://127.0.0.1:8000/api/"
+const API_BASE_URL = (() => {
+  // Get the URL from environment if available
+  let baseUrl = process.env.API_URL 
+    ? `${process.env.API_URL}`
+    : "linkly-production.up.railway.app/api";
+  
+  // Add protocol if missing
+  if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+    baseUrl = `https://${baseUrl}`;
+  }
+  
+  // Add trailing slash if missing
+  if (!baseUrl.endsWith('/')) {
+    baseUrl = `${baseUrl}/`;
+  }
+  
+  console.log(`Configured API Base URL: ${baseUrl}`);
+  return baseUrl;
+})();
 
 // API request helper function to ensure URLs are properly formed with trailing slashes
 const buildUrl = (endpoint: string): string => {
@@ -20,11 +38,11 @@ const buildUrl = (endpoint: string): string => {
   console.log(`Clean endpoint: "${cleanEndpoint}"`);
   console.log(`Endpoint with slash: "${endpointWithSlash}"`);
   
-  // Construct URL
-  const url = `${API_BASE_URL}${finalEndpoint}`;
-  console.log(`Final URL: "${url}"`);
+  // Construct URL - no additional protocol check needed since API_BASE_URL is already normalized
+  const finalUrl = `${API_BASE_URL}${finalEndpoint}`;
+  console.log(`Final URL: "${finalUrl}"`);
   
-  return url;
+  return finalUrl;
 }
 
 // Types
@@ -293,62 +311,61 @@ class API {
       options.body = JSON.stringify(data)
     }
 
-    console.log(`API Request to ${url}`, { 
-      hasAccessToken: !!this.accessToken,
-      hasRefreshToken: !!this.refreshToken,
-      method
-    });
+    console.log(`API Request to ${url}`, { method, data })
 
+    // Try to make the request
     let response = await fetch(url, options)
+    console.log(`API Response from ${url}:`, { status: response.status })
 
-    // Log response status
-    console.log(`API Response from ${url}:`, { 
-      status: response.status,
-      ok: response.ok
-    });
-
-    // If unauthorized, try to refresh token
+    // Check if token is expired and try to refresh
     if (response.status === 401 && this.refreshToken) {
-      console.log("Token expired, attempting refresh");
-      const refreshed = await this.refreshAccessToken()
-
-      if (refreshed) {
-        // Retry with new token
-        console.log("Token refreshed successfully, retrying request");
+      const refreshSuccess = await this.refreshAccessToken()
+      if (refreshSuccess) {
+        // Update headers with new token
         options.headers = this.getHeaders()
+        // Retry the request
         response = await fetch(url, options)
-        console.log(`API Retry Response from ${url}:`, { 
-          status: response.status,
-          ok: response.ok
-        });
-      } else {
-        // Clear tokens and throw error
-        console.log("Token refresh failed, clearing tokens");
-        this.clearTokens()
-        throw new Error("Session expired. Please log in again.")
       }
     }
 
+    // Check for error responses
     if (!response.ok) {
-      // Try to parse response body as JSON
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch (e) {
-        // If response is not JSON, use text or status
+      let errorMessage = `Request failed with status ${response.status}`
+
+      // Try to get error details from response
+      const contentType = response.headers.get('content-type');
+      let errorData: any = {};
+      
+      // Only try to parse as JSON if the content type is application/json
+      if (contentType && contentType.includes('application/json')) {
         try {
+          errorData = await response.json()
+        } catch (e) {
+          console.error(`Failed to parse error response from ${url}:`, e)
+          // If we can't parse JSON, try to get text
           const text = await response.text();
-          errorData = { detail: text || `Request failed with status ${response.status}` };
-        } catch (textError) {
-          errorData = { detail: `Request failed with status ${response.status}` };
+          console.error(`Error response text: ${text.substring(0, 200)}${text.length > 200 ? '...' : ''}`);
+          errorData = { detail: text.substring(0, 200) };
+        }
+      } else {
+        // Handle HTML responses
+        const text = await response.text();
+        console.error(`Received non-JSON response from ${url}. First 200 chars: ${text.substring(0, 200)}`);
+        
+        // Check if it's likely an HTML error page
+        if (text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+          errorMessage = `Server returned HTML instead of JSON. The API server may be experiencing issues.`;
+          
+          // If it's a 404, it might be a wrong API URL
+          if (response.status === 404) {
+            errorMessage = `API endpoint not found. Please check the API URL configuration.`;
+          }
+        } else {
+          errorData = { detail: text.substring(0, 200) };
         }
       }
-      
-      console.error(`API Error for ${url}:`, errorData);
-      
-      // Create a more descriptive error message
-      let errorMessage = "An error occurred while processing your request.";
-      
+
+      // Get specific error message from response if available
       if (errorData.detail) {
         errorMessage = errorData.detail;
       } else if (errorData.message) {
@@ -377,13 +394,27 @@ class API {
 
     // Try to parse response as JSON
     try {
-      return await response.json();
+      // First check if there's any content to parse
+      const contentType = response.headers.get('content-type');
+      
+      // If we got a 204 No Content or empty response
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return {} as T;
+      }
+      
+      // Only try to parse as JSON if the content type is application/json
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json();
+      } else {
+        // Log the content type we received
+        console.error(`Invalid content type from ${url}: ${contentType}`);
+        const text = await response.text();
+        console.error(`Response text: ${text.substring(0, 200)}${text.length > 200 ? '...' : ''}`);
+        throw new Error("Server returned non-JSON content");
+      }
     } catch (e) {
       // Handle empty or non-JSON responses
       console.error(`Failed to parse JSON from ${url}:`, e);
-      if (response.status === 204) { // No content
-        return {} as T;
-      }
       throw new Error("Invalid response format from server");
     }
   }
@@ -419,7 +450,25 @@ class API {
     try {
       console.log("API: Starting login process", { email: data.email });
       
-      // Explicitly use endpoint with trailing slash
+      // Explicitly use endpoint with trailing slash and include protocol
+      const url = buildUrl("users/login/");
+      console.log("Full login URL:", url);
+      
+      // First check if the API is accessible at all using a direct fetch
+      try {
+        const testResponse = await fetch(url.replace('/users/login/', ''), {
+          method: 'HEAD',
+        });
+        console.log(`API accessibility check: ${testResponse.status}`);
+        
+        if (!testResponse.ok) {
+          console.error(`API server returned ${testResponse.status} - it may be unavailable`);
+        }
+      } catch (testError) {
+        console.error("Failed to reach API server:", testError);
+      }
+      
+      // Now try the actual login
       const response = await this.request<LoginResponse>("users/login/", "POST", data)
       console.log("API: Login successful, response:", response);
       console.log("API: Tokens received:", response.tokens);
@@ -437,13 +486,24 @@ class API {
       
       return response
     } catch (error: any) {
-      console.error("Login API error:", error)
+      console.error("Login API error:", error);
+      
+      // If there's a specific error about HTML responses
+      if (error.message && error.message.includes('HTML instead of JSON')) {
+        const enhancedError = new Error(
+          "Connection to server failed. Please check your internet connection and try again. " +
+          "The API server may be unavailable or misconfigured."
+        );
+        throw enhancedError;
+      }
+      
       // If there's a specific authentication error, enhance the message
       if (error.response?.status === 401) {
         const enhancedError: any = new Error("Invalid email or password. Please check your credentials and try again.")
         enhancedError.response = error.response
         throw enhancedError
       }
+      
       throw error
     }
   }

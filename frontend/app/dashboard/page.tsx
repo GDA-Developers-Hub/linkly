@@ -103,25 +103,50 @@ export default function DashboardPage() {
             },
           }).then(res => res.ok ? res.json() : {items: [], total: 0}).catch(() => ({items: [], total: 0}));
           
+          // Define post type to avoid TypeScript errors
+          interface Post {
+            status?: string;
+            id: number;
+            content: string;
+            published?: boolean;
+            draft?: boolean;
+            publish_at?: string;
+            account_type?: string;
+          }
+          
+          // Define account interface to match the expected structure
+          interface SocialAccountExtended {
+            id: number;
+            account_name?: string;
+            name?: string;
+            platform?: { name: string };
+            account_type?: string;
+            status?: string;
+            profile_picture_url?: string;
+          }
+          
           const transformedInsights = {
             followers: followers || 0,
             engagement: engagement || 0,
             reach: reach || 0,
             posts: {
-              scheduled: postsResponse.items?.filter(post => post.status === "scheduled").length || 0,
-              published: postsResponse.items?.filter(post => post.status === "published").length || 0,
+              scheduled: Array.isArray(postsResponse.items) ? 
+                postsResponse.items.filter((post: any) => post && typeof post === 'object' && post.status === "scheduled").length : 0,
+              published: Array.isArray(postsResponse.items) ? 
+                postsResponse.items.filter((post: any) => post && typeof post === 'object' && post.status === "published").length : 0,
               total: postsResponse.total || 0,
             },
-            connectedAccounts: accounts.map(account => ({
+            platformMetrics: {}, // Add empty platformMetrics
+            connectedAccounts: accounts.map((account: any) => ({
               id: account.id,
-              name: account.account_name || account.name,
+              name: account.account_name || account.name || '',
               type: account.platform?.name || account.account_type || 'Unknown',
               image: account.profile_picture_url || '',
               active: account.status === 'active'
             }))
           };
           
-          setInsights(transformedInsights);
+          setInsights(transformedInsights as InsightsData);
           setRecentPosts(postsResponse.items || []);
           console.log('[Dashboard] Dashboard data loaded from direct integration');
           setIsLoading(false);

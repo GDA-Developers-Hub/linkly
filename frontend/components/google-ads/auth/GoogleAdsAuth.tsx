@@ -10,6 +10,11 @@ interface GoogleAdsAuthProps {
     onAuthSuccess?: () => void;
 }
 
+// Define the response type for the authorization URL
+interface AuthorizationResponse {
+    authorization_url: string;
+}
+
 export const GoogleAdsAuth: React.FC<GoogleAdsAuthProps> = ({ onAuthSuccess }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -22,7 +27,7 @@ export const GoogleAdsAuth: React.FC<GoogleAdsAuthProps> = ({ onAuthSuccess }) =
         const checkAuth = async () => {
             try {
                 const response = await axios.get('/api/google-ads/account/');
-                setIsAuthenticated(response.data.length > 0);
+                setIsAuthenticated(Array.isArray(response.data) && response.data.length > 0);
             } catch (err) {
                 setIsAuthenticated(false);
             }
@@ -61,7 +66,9 @@ export const GoogleAdsAuth: React.FC<GoogleAdsAuthProps> = ({ onAuthSuccess }) =
         try {
             setIsLoading(true);
             setError(null);
-            const response = await axios.get('/api/google-ads/auth/init/');
+            const response = await axios.get<AuthorizationResponse>('/api/google-ads/auth/init/');
+            
+            // With the proper type, we can safely access the authorization_url
             window.location.href = response.data.authorization_url;
         } catch (err) {
             setError('Failed to initiate authentication. Please try again.');

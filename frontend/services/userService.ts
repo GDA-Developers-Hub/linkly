@@ -1,7 +1,20 @@
 import axios from 'axios';
 import { User, AddUserRequest, ToggleRoleRequest, UserResponse } from '@/types/user';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use a function to ensure the API URL has the correct protocol
+const getApiBaseUrl = () => {
+  let baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  
+  // Add protocol if missing
+  if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+    baseUrl = `https://${baseUrl}`;
+  }
+  
+  console.log(`UserService API URL: ${baseUrl}`);
+  return baseUrl;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 class UserService {
     private async get<T>(endpoint: string): Promise<T> {

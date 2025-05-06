@@ -6,6 +6,26 @@ import { getAPI, type User, type LoginData, type RegisterData } from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
 import Swal from 'sweetalert2'
 
+// Safe localStorage access
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(key);
+    }
+    return null;
+  },
+  setItem: (key: string, value: string): void => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(key, value);
+    }
+  },
+  removeItem: (key: string): void => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  }
+};
+
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
@@ -42,14 +62,7 @@ const formatErrorMessage = (error: any): string => {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Initialize user state from localStorage if available
-  const [user, setUser] = useState<User | null>(() => {
-    if (typeof window !== 'undefined') {
-      const storedUser = localStorage.getItem('user')
-      return storedUser ? JSON.parse(storedUser) : null
-    }
-    return null
-  })
+  const [user, setUser] = useState<User | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [hasValidToken, setHasValidToken] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -57,51 +70,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast()
   const api = getAPI()
 
-  // Function to validate token with backend
+  // Function to validate token
   const validateToken = async (): Promise<boolean> => {
-    try {
-      // First check if tokens exist in localStorage
-      const accessToken = localStorage.getItem("accessToken")
-      const refreshToken = localStorage.getItem("refreshToken")
-      
-      console.log('Token validation check:', {
-        accessToken: accessToken ? 'present' : 'missing',
-        refreshToken: refreshToken ? 'present' : 'missing'
-      });
-      
-      if (!accessToken || !refreshToken) {
-        console.warn('Missing tokens during validation');
-        return false
-      }
-      
-      // Verify token validity by making a profile request
-      const userData = await api.getProfile()
-      if (userData) {
-        // Update localStorage with latest user data
-        localStorage.setItem('user', JSON.stringify(userData))
-        setUser(userData)
-        return true
-      }
+    // Check if we have an access token in localStorage
+    const token = safeStorage.getItem("accessToken")
+    
+    if (!token) {
       return false
+    }
+    
+    try {
+      // We'll try to get the user profile with the token
+      const user = await api.getProfile()
+      setUser(user)
+      setIsAuthenticated(true)
+      setHasValidToken(true)
+      return true
     } catch (error) {
-      console.error("Token validation failed:", error)
-      // Clear invalid tokens
-      localStorage.removeItem("accessToken")
-      localStorage.removeItem("refreshToken")
+      console.log("Token validation failed:", error)
+      // Clear user data from localStorage
+      safeStorage.removeItem("accessToken")
+      safeStorage.removeItem("refreshToken")
+      safeStorage.removeItem("user")
+      
+      setUser(null)
+      setIsAuthenticated(false)
+      setHasValidToken(false)
       return false
     }
   }
 
+  // Check auth status on mount
   useEffect(() => {
     const initAuth = async () => {
       try {
+        // Try to get stored user data
+        const userData = safeStorage.getItem("user")
+        if (userData) {
+          try {
+            setUser(JSON.parse(userData))
+          } catch (e) {
+            console.error("Error parsing user data from localStorage", e)
+          }
+        }
+
+        // Validate token
         const isValid = await validateToken()
-        setHasValidToken(isValid)
-        setIsAuthenticated(isValid)
+        
+        if (!isValid && typeof window !== 'undefined') {
+          // In Next.js App Router, we don't have router.pathname, so use window.location.pathname
+          const currentPath = window.location.pathname;
+          if (currentPath !== "/login" && currentPath !== "/register") {
+            // If token is invalid and user is not on login/register page,
+            // they may need to be redirected, but we'll let the page component handle that
+            console.log("Token is invalid, user may need to re-authenticate")
+          }
+        }
       } catch (error) {
-        console.error("Authentication validation error:", error)
-        setHasValidToken(false)
-        setIsAuthenticated(false)
+        console.error("Error initializing auth:", error)
       } finally {
         setIsLoading(false)
       }
@@ -112,62 +138,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (data: LoginData) => {
     setIsLoading(true)
+    console.log("Starting login process for:", data.email)
+    
     try {
-      // Make direct fetch call without authentication headers for login
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
-      const loginUrl = `${baseUrl}/users/token/`;
-      
-      console.log('Making direct login request to:', loginUrl);
-      const response = await fetch(loginUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Login failed');
-      }
-      
-      const responseData = await response.json();
-      
-      // Log the response data to ensure we're receiving the tokens correctly
-      console.log('Login response data structure:', Object.keys(responseData));
+      const response = await api.login(data)
+      console.log("Login successful! Response:", response)
       
       // Store tokens - ensure we handle both object formats that Django might return
-      if (responseData.access || responseData.access_token) {
-        const accessToken = responseData.access || responseData.access_token;
-        console.log('Storing access token, length:', accessToken.length);
-        localStorage.setItem('accessToken', accessToken);
+      if (response.tokens) {
+        console.log('Token structure:', Object.keys(response.tokens));
+        
+        if (response.tokens.access) {
+          console.log('Storing access token, length:', response.tokens.access.length);
+          safeStorage.setItem('accessToken', response.tokens.access);
+        }
+        
+        if (response.tokens.refresh) {
+          console.log('Storing refresh token, length:', response.tokens.refresh.length);
+          safeStorage.setItem('refreshToken', response.tokens.refresh);
+        }
       } else {
-        console.warn('No access token found in response');
-      }
-      
-      if (responseData.refresh || responseData.refresh_token) {
-        const refreshToken = responseData.refresh || responseData.refresh_token;
-        console.log('Storing refresh token, length:', refreshToken.length);
-        localStorage.setItem('refreshToken', refreshToken);
-      } else {
-        console.warn('No refresh token found in response');
+        // Handle direct token in response for backward compatibility
+        // Check if response has any token-like properties (this might be from a different API format)
+        const accessToken = (response as any).access || (response as any).access_token;
+        if (accessToken) {
+          console.log('Storing access token, length:', accessToken.length);
+          safeStorage.setItem('accessToken', accessToken);
+          
+          const refreshToken = (response as any).refresh || (response as any).refresh_token;
+          if (refreshToken) {
+            console.log('Storing refresh token, length:', refreshToken.length);
+            safeStorage.setItem('refreshToken', refreshToken);
+          }
+        } else {
+          console.warn('No tokens found in registration response');
+        }
       }
       
       // Verify tokens were stored correctly
       console.log('Tokens saved to localStorage:', {
-        access: localStorage.getItem('accessToken') ? 'present' : 'missing',
-        refresh: localStorage.getItem('refreshToken') ? 'present' : 'missing'
+        access: safeStorage.getItem('accessToken') ? 'present' : 'missing',
+        refresh: safeStorage.getItem('refreshToken') ? 'present' : 'missing'
       });
       
       // Save user data to localStorage
-      localStorage.setItem('user', JSON.stringify(responseData.user))
+      safeStorage.setItem('user', JSON.stringify(response.user))
       
-      setUser(responseData.user)
+      setUser(response.user)
       setHasValidToken(true)
       setIsAuthenticated(true)
       toast({
         title: "Login successful",
-        description: `Welcome back, ${responseData.user.first_name}!`,
+        description: `Welcome back, ${response.user.first_name}!`,
       })
       
       // Go directly to dashboard - it will handle subscription check
@@ -221,36 +243,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (response.tokens.access) {
           console.log('Storing access token, length:', response.tokens.access.length);
-          localStorage.setItem('accessToken', response.tokens.access);
+          safeStorage.setItem('accessToken', response.tokens.access);
         }
         
         if (response.tokens.refresh) {
           console.log('Storing refresh token, length:', response.tokens.refresh.length);
-          localStorage.setItem('refreshToken', response.tokens.refresh);
-        }
-      } else if (response.access || response.access_token) {
-        // Direct token in response
-        const accessToken = response.access || response.access_token;
-        console.log('Storing access token, length:', accessToken.length);
-        localStorage.setItem('accessToken', accessToken);
-        
-        const refreshToken = response.refresh || response.refresh_token;
-        if (refreshToken) {
-          console.log('Storing refresh token, length:', refreshToken.length);
-          localStorage.setItem('refreshToken', refreshToken);
+          safeStorage.setItem('refreshToken', response.tokens.refresh);
         }
       } else {
-        console.warn('No tokens found in registration response');
+        // Handle direct token in response for backward compatibility
+        // Check if response has any token-like properties (this might be from a different API format)
+        const accessToken = (response as any).access || (response as any).access_token;
+        if (accessToken) {
+          console.log('Storing access token, length:', accessToken.length);
+          safeStorage.setItem('accessToken', accessToken);
+          
+          const refreshToken = (response as any).refresh || (response as any).refresh_token;
+          if (refreshToken) {
+            console.log('Storing refresh token, length:', refreshToken.length);
+            safeStorage.setItem('refreshToken', refreshToken);
+          }
+        } else {
+          console.warn('No tokens found in registration response');
+        }
       }
       
       // Verify tokens were stored correctly
       console.log('Tokens saved to localStorage after registration:', {
-        access: localStorage.getItem('accessToken') ? 'present' : 'missing',
-        refresh: localStorage.getItem('refreshToken') ? 'present' : 'missing'
+        access: safeStorage.getItem('accessToken') ? 'present' : 'missing',
+        refresh: safeStorage.getItem('refreshToken') ? 'present' : 'missing'
       });
       
       // Save user data to localStorage
-      localStorage.setItem('user', JSON.stringify(response.user))
+      safeStorage.setItem('user', JSON.stringify(response.user))
       
       setUser(response.user)
       setHasValidToken(true)
@@ -293,7 +318,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.logout()
       // Clear user data from localStorage
-      localStorage.removeItem('user')
+      safeStorage.removeItem('user')
+      safeStorage.removeItem('accessToken')
+      safeStorage.removeItem('refreshToken')
       
       setUser(null)
       setIsAuthenticated(false)
@@ -306,8 +333,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Logout error:", error)
       // Even if logout fails, clear everything locally
-      localStorage.removeItem("accessToken")
-      localStorage.removeItem("refreshToken")
+      safeStorage.removeItem("accessToken")
+      safeStorage.removeItem("refreshToken")
       setUser(null)
       setIsAuthenticated(false)
       setHasValidToken(false)

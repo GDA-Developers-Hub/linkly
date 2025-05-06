@@ -19,7 +19,7 @@ export default function GoogleAdsDashboard() {
     const checkAuthStatus = async () => {
         try {
             const response = await axios.get('/api/google-ads/account/');
-            setIsAuthenticated(response.data.length > 0);
+            setIsAuthenticated(Array.isArray(response.data) && response.data.length > 0);
         } catch (err) {
             setIsAuthenticated(false);
         } finally {

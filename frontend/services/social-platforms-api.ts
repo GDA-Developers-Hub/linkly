@@ -46,6 +46,21 @@ export interface SocialPlatform {
   is_active: boolean;
 }
 
+// Safe localStorage access
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(key);
+    }
+    return null;
+  },
+  setItem: (key: string, value: string): void => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(key, value);
+    }
+  }
+};
+
 // API Class
 export class SocialPlatformsAPI {
   private baseUrl: string;
@@ -55,7 +70,7 @@ export class SocialPlatformsAPI {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
     this.headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+      'Authorization': `Bearer ${safeLocalStorage.getItem('accessToken')}`,
     };
   }
 
@@ -146,6 +161,20 @@ export class SocialPlatformsAPI {
     }
 
     return await response.json();
+  }
+
+  /**
+   * Disconnect a connected social account
+   */
+  async disconnectAccount(accountId: number): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/social_platforms/api/accounts/${accountId}/`, {
+      method: 'DELETE',
+      headers: this.headers,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to disconnect social account');
+    }
   }
 }
 

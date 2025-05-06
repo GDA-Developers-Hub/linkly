@@ -24,12 +24,12 @@ export const useGoogleAdsData = (): UseGoogleAdsDataReturn => {
       setError(null);
 
       // Get active campaigns
-      const campaignsResponse = await axios.get(`${API_BASE_URL}/campaigns`);
+      const campaignsResponse = await axios.get<Campaign[]>(`${API_BASE_URL}/campaigns`);
       setCampaigns(campaignsResponse.data);
 
       // Get performance data for all campaigns
       const performancePromises = campaignsResponse.data.map((campaign: Campaign) =>
-        axios.get(`${API_BASE_URL}/campaigns/${campaign.id}/performance`, {
+        axios.get<PerformanceReport[]>(`${API_BASE_URL}/campaigns/${campaign.id}/performance`, {
           params: {
             start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Last 30 days
             end: new Date().toISOString().split('T')[0],

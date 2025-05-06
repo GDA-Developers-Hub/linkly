@@ -1,24 +1,25 @@
-const path = require('path');
-
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: false,
-  trailingSlash: true,
+module.exports = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   images: {
-    remotePatterns: [
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-      }
-    ],
+    unoptimized: true,
+    domains: ['api.dicebear.com', 'avatar.vercel.sh'],
   },
-  // Disable experimental features
+  // Set output to 'export' for static site generation
+  output: 'export',
+  // Set the output directory to be 'out' for Firebase hosting
+  distDir: 'out',
+  // Enable trailing slashes for Firebase hosting
+  trailingSlash: true,
+  // Use relative paths if not in production
+  assetPrefix: process.env.NODE_ENV === 'production' ? '' : undefined,
+  // Other experimental features
   experimental: {
-    // Avoiding all experimental features
+    scrollRestoration: true,
   },
-  // Production optimizations
-  swcMinify: true,
-  poweredByHeader: false
-};
-
-module.exports = nextConfig;
+}

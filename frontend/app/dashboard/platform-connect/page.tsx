@@ -168,7 +168,7 @@ export default function PlatformConnectPage() {
     setIsConnecting(platform.id)
     try {
       // Get authorization URL and open popup window
-      await socialPlatformsApi.connectPlatform(platform.id)
+      await socialPlatformsApi.initiateOAuth(platform.id)
       
       // Show toast to guide the user
       toast({

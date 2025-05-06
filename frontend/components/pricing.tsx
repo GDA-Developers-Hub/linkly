@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { CheckCircle2, ChevronRight } from "lucide-react"
 
 // Custom hook for scroll animations
-function useScrollAnimation(threshold = 0.1): [React.RefObject<HTMLElement>, boolean] {
+function useScrollAnimation(threshold = 0.1) {
   const ref = useRef<HTMLElement>(null)
   const [isVisible, setIsVisible] = useState(false)
 
@@ -34,7 +34,7 @@ function useScrollAnimation(threshold = 0.1): [React.RefObject<HTMLElement>, boo
     }
   }, [threshold])
 
-  return [ref, isVisible]
+  return [ref, isVisible] as const // Use const assertion to preserve the tuple type
 }
 
 // Animation variants
