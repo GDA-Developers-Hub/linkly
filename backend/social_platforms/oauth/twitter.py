@@ -73,6 +73,9 @@ def get_twitter_auth_url(request, user):
         # Log the full URL for debugging
         logger.info(f"Complete auth URL: {auth_url}")
         
+        # Print the URL to console for easy copying
+        print(f"\n=== TWITTER AUTH URL ===\n{auth_url}\n===========================\n")
+        
         # Check if PKCE parameters are in the URL
         if 'code_challenge' not in auth_url:
             logger.error("CRITICAL: code_challenge not found in final URL!")
