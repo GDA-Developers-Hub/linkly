@@ -500,18 +500,21 @@ class TwitterOAuthCallbackView(views.APIView):
                 
                 function sendMessageToParent() {{
                     try {{
-                        console.log('Sending message to parent window:', {json.dumps(context)});
+                        // Important: We're using a direct string here, no need to double-stringify
+                        const messageData = {json.dumps(context)};
+                        console.log('Sending message to parent window:', messageData);
+                        
                         window.opener.postMessage(
-                            JSON.stringify({json.dumps(context)}),
+                            messageData,  // Send the data directly, no extra JSON.stringify
                             "*"
                         );
                         console.log('Message sent successfully');
                         
-                        // Add a slight delay before closing to ensure message is processed
+                        // Add a slightly longer delay before closing to ensure message is processed
                         setTimeout(function() {{
                             console.log('Closing popup window');
                             window.close();
-                        }}, 1000);
+                        }}, 2000);
                     }} catch(e) {{
                         console.error('Error sending message:', e);
                         document.getElementById('error').textContent = 'Error: ' + e.message;
