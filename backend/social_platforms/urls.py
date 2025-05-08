@@ -13,6 +13,7 @@ urlpatterns = [
     # API Endpoints
     path('api/', include(router.urls)),
     path('api/oauth/init/<str:platform>/', views.OAuthInitView.as_view(), name='oauth_init'),
+    path('api/oauth/complete/<str:platform>/', views.CompleteOAuthView.as_view(), name='complete_oauth'),
     path('api/posts/', views.SocialAccountPostView.as_view(), name='posts'),
     
     # Public OAuth endpoints (no authentication required)

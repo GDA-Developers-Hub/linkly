@@ -412,11 +412,11 @@ class SocialAccountPostView(views.APIView):
         })
 
 
-@method_decorator(login_required, name='dispatch')
 class TwitterOAuthCallbackView(views.APIView):
     """
-    Handle OAuth callback specifically for Twitter services
+    Handle OAuth callback specifically for Twitter services without requiring prior authentication
     """
+    permission_classes = [AllowAny]  # Allow unauthenticated access to this view
     
     def get(self, request):
         """Process Twitter OAuth callback and create social account"""
@@ -430,7 +430,7 @@ class TwitterOAuthCallbackView(views.APIView):
         logger.info(f"Twitter OAuth callback received: {request.GET}")
         logger.info(f"Session data: oauth_state_twitter={request.session.get('oauth_state_twitter')}")
         logger.info(f"Session data: twitter_code_verifier={bool(request.session.get('twitter_code_verifier'))}")
-        logger.info(f"Current user: {request.user.is_authenticated and request.user.username or 'Anonymous'}")
+        logger.info(f"Current user authentication status: {request.user.is_authenticated}")
         
         # Check if user denied access
         if denied:
@@ -448,13 +448,27 @@ class TwitterOAuthCallbackView(views.APIView):
             return self.close_window(success=False, error="No authorization code received")
             
         try:
-            # Handle the Twitter OAuth callback using our specialized service
+            # Check authentication status
+            if not request.user.is_authenticated:
+                logger.warning("User not authenticated during Twitter callback - returning success with auth required flag")
+                # Return a special response for frontend to handle unauthenticated state
+                return self.close_window(
+                    success=True,
+                    platform='twitter',
+                    auth_required=True,
+                    auth_data={
+                        'code': code,
+                        'state': state
+                    }
+                )
+            
+            # User is authenticated, proceed normally
             account = handle_twitter_callback(request, request.user, code, state)
             
             # Return success response
             return self.close_window(
                 success=True,
-                account_name=account.username,
+                account_name=account.account_name,  # Changed from username to account_name
                 platform='twitter'
             )
             
@@ -462,14 +476,18 @@ class TwitterOAuthCallbackView(views.APIView):
             logger.error(f"Error connecting Twitter account: {str(e)}")
             return self.close_window(success=False, error=str(e))
     
-    def close_window(self, success=True, account_name=None, platform=None, error=None):
+    def close_window(self, success=True, account_name=None, platform=None, error=None, auth_required=False, auth_data=None):
         """Return an HTML page that closes the popup window and sends a message to the opener"""
         context = {
             'success': success,
-            'message': 'Twitter account connected successfully' if success else f'Error: {error}',
+            'message': 'Twitter account connected successfully' if success and not auth_required 
+                     else 'Authentication required to complete Twitter connection' if auth_required 
+                     else f'Error: {error}',
             'account_name': account_name,
             'platform': platform,
-            'error': error
+            'error': error,
+            'auth_required': auth_required,
+            'auth_data': auth_data
         }
         
         html = f"""
@@ -478,30 +496,117 @@ class TwitterOAuthCallbackView(views.APIView):
         <head>
             <title>{'Success' if success else 'Error'} - Twitter Authorization</title>
             <script>
-                window.onload = function() {{
-                    if (window.opener) {{
+                console.log('Twitter OAuth callback window loaded');
+                
+                function sendMessageToParent() {{
+                    try {{
+                        console.log('Sending message to parent window:', {json.dumps(context)});
                         window.opener.postMessage(
                             JSON.stringify({json.dumps(context)}),
                             "*"
                         );
-                        window.close();
+                        console.log('Message sent successfully');
+                        
+                        // Add a slight delay before closing to ensure message is processed
+                        setTimeout(function() {{
+                            console.log('Closing popup window');
+                            window.close();
+                        }}, 1000);
+                    }} catch(e) {{
+                        console.error('Error sending message:', e);
+                        document.getElementById('error').textContent = 'Error: ' + e.message;
+                        document.getElementById('error').style.display = 'block';
+                    }}
+                }}
+                
+                window.onload = function() {{
+                    if (window.opener) {{
+                        console.log('Found parent window, sending message');
+                        sendMessageToParent();
                     }} else {{
+                        console.log('No parent window found');
                         document.getElementById('message').style.display = 'block';
                     }}
                 }};
             </script>
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; }}
+                .container {{ max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }}
+                .success {{ color: #10b981; }}
+                .error {{ color: #ef4444; }}
+            </style>
         </head>
         <body>
-            <div id="message" style="display:none; text-align:center; margin-top:50px;">
-                <h3>{'Success!' if success else 'Error'}</h3>
-                <p>{context['message']}</p>
-                <p>You can close this window now.</p>
+            <div class="container">
+                <div id="message" style="display:none;">
+                    <h2 class="{'success' if success else 'error'}">{'Success!' if success else 'Error'}</h2>
+                    <p>{context['message']}</p>
+                    <p>Status: {'Authentication required' if auth_required else 'Complete'}</p>
+                    <p>Platform: {platform or 'Unknown'}</p>
+                    <p>This window will close automatically. If it doesn't, you can close it manually.</p>
+                </div>
+                <div id="error" style="display:none; color: #ef4444;"></div>
+                
+                <div id="debug" style="margin-top: 30px; text-align: left; font-size: 12px; color: #666;">
+                    <p>Debug info:</p>
+                    <pre>{json.dumps(context, indent=2)}</pre>
+                </div>
             </div>
         </body>
         </html>
         """
         
         return HttpResponse(html)
+
+class CompleteOAuthView(views.APIView):
+    """
+    Complete OAuth flow using stored code and state after user authentication
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, platform):
+        try:
+            # Get the code and state from the request
+            code = request.data.get('code')
+            state = request.data.get('state')
+            
+            if not code or not state:
+                return Response(
+                    {'error': 'Missing required parameters (code, state)'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Handle different platforms
+            if platform == 'twitter':
+                # Special handling for Twitter with code verifier
+                # In this case, we'll need to generate a new code verifier and set it in the session
+                # before calling handle_twitter_callback
+                code_verifier = generate_code_verifier()
+                request.session['twitter_code_verifier'] = code_verifier
+                request.session['oauth_state_twitter'] = state
+                
+                # Handle the callback
+                account = handle_twitter_callback(request, request.user, code, state)
+                
+                # Return success response
+                return Response({
+                    'success': True,
+                    'account': UserSocialAccountSerializer(account).data
+                })
+            else:
+                # For other platforms, implement their specific completion logic
+                return Response(
+                    {'error': f'Completing OAuth for {platform} is not implemented'},
+                    status=status.HTTP_501_NOT_IMPLEMENTED
+                )
+                
+        except Exception as e:
+            logger.error(f"Error completing OAuth flow: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 
 class GoogleOAuthCallbackView(views.APIView):
     """
