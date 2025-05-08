@@ -451,10 +451,6 @@ private isPublicEndpoint(endpoint: string): boolean {
       this.setTokens(response.tokens);
       console.log("API: Auth tokens stored in local storage");
       
-      // Note: SocialBu registration is handled on the backend during user creation,
-      // and the tokens are stored there. We don't need to do anything additional here.
-      console.log("API: SocialBu registration is handled on the backend");
-      
       return response;
     } catch (error: any) {
       console.error("API: Registration error:", error);
@@ -501,49 +497,6 @@ private isPublicEndpoint(endpoint: string): boolean {
       }
       
       throw error;
-    }
-  }
-  // Helper method to ensure SocialBu authentication
-  private async ensureSocialBuAuthentication(): Promise<void> {
-    try {
-      // This endpoint will automatically try to authenticate with SocialBu
-      // using the stored credentials in the user model
-      console.log("Attempting to authenticate with SocialBu accounts endpoint");
-      
-      // Use an empty object for the body to prevent JSON parsing errors
-      await this.request("socialbu/accounts/", "GET", undefined);
-      
-      console.log("Successfully authenticated with SocialBu");
-    } catch (error) {
-      console.error("Error authenticating with SocialBu (will retry later):", error);
-      // We don't throw the error since this is a non-critical operation
-      // The backend will retry authentication when needed
-    }
-  }
-
-  // Get SocialBu user information
-  async getSocialBuUserInfo(): Promise<{
-    has_token: boolean;
-    user_id?: string;
-    name?: string;
-    email?: string;
-    verified?: boolean;
-    created_at?: string;
-    updated_at?: string;
-  }> {
-    try {
-      console.log("Fetching SocialBu user info from backend");
-      
-      // Ensure we have the access token
-      const accessToken = this.getAccessToken();
-      console.log(`Using access token for SocialBu request: ${accessToken ? 'Token exists' : 'No token'}`);
-      
-      // Make the request (the token is automatically included in headers via getHeaders method)
-      const response = await this.request<any>("socialbu/user_info/", "GET");
-      return response;
-    } catch (error) {
-      console.error("Error fetching SocialBu user info:", error);
-      return { has_token: false};
     }
   }
 
@@ -734,8 +687,3 @@ export function getAPI(): API {
   return apiInstance
 }
 
-export function getSocialBuAPI(token: string): API {
-  const api = new API()
-  api.setTokens({ access: token, refresh: "" })
-  return api
-}

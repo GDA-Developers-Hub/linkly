@@ -22,6 +22,7 @@ import urllib.parse
 from .models import SocialPlatform, UserSocialAccount
 from .serializers import SocialPlatformSerializer, UserSocialAccountSerializer, SocialAccountDetailSerializer
 from .services import get_oauth_manager, connect_social_account, refresh_token_if_needed
+from .oauth.twitter import get_twitter_auth_url, handle_twitter_callback
 
 logger = logging.getLogger(__name__)
 
@@ -134,20 +135,52 @@ class OAuthInitView(views.APIView):
                     {'error': f"Platform {platform} is not available"},
                     status=status.HTTP_404_NOT_FOUND
                 )
-                
-            # Generate unique state for CSRF protection
-            state = str(uuid.uuid4())
-            request.session[f'oauth_state_{platform}'] = state
             
-            # Build the authorization URL using the platform's stored credentials
-            auth_url = (
-                f"{social_platform.auth_url}"
-                f"?client_id={social_platform.client_id}"
-                f"&redirect_uri={urllib.parse.quote(social_platform.redirect_uri)}"
-                f"&response_type=code"
-                f"&scope={urllib.parse.quote(social_platform.scope)}"
-                f"&state={state}"
-            )
+            # Special handling for Twitter using PKCE
+            if platform == 'twitter':
+                logger.info("Using special Twitter PKCE OAuth flow")
+                auth_url = get_twitter_auth_url(request, request.user)
+                
+                # Verify URL contains required parameters
+                if 'code_challenge=' not in auth_url or 'code_challenge_method=' not in auth_url:
+                    logger.error("Twitter auth URL is missing PKCE parameters!")
+                    logger.info(f"Generated URL: {auth_url}")
+                    
+                    # If missing, add them explicitly as a fallback
+                    import secrets, hashlib, base64
+                    
+                    # Generate code verifier
+                    code_verifier = secrets.token_urlsafe(64)[:43]  # 43 chars is Twitter's min requirement
+                    request.session['twitter_code_verifier'] = code_verifier
+                    
+                    # Generate code challenge
+                    code_challenge = base64.urlsafe_b64encode(
+                        hashlib.sha256(code_verifier.encode('utf-8')).digest()
+                    ).decode('utf-8').rstrip('=')
+                    
+                    # Append the missing parameters
+                    if 'code_challenge=' not in auth_url:
+                        auth_url += f"&code_challenge={urllib.parse.quote(code_challenge)}"
+                    if 'code_challenge_method=' not in auth_url:
+                        auth_url += "&code_challenge_method=S256"
+                    
+                    logger.info(f"Fixed URL: {auth_url}")
+                else:
+                    logger.info("Twitter auth URL contains all required PKCE parameters")
+            else:
+                # Generate unique state for CSRF protection
+                state = str(uuid.uuid4())
+                request.session[f'oauth_state_{platform}'] = state
+                
+                # Build the authorization URL using the platform's stored credentials
+                auth_url = (
+                    f"{social_platform.auth_url}"
+                    f"?client_id={social_platform.client_id}"
+                    f"&redirect_uri={urllib.parse.quote(social_platform.redirect_uri)}"
+                    f"&response_type=code"
+                    f"&scope={urllib.parse.quote(social_platform.scope)}"
+                    f"&state={state}"
+                )
             
             logger.info(f"Generated authorization URL for {platform}: {auth_url[:100]}...")
             
@@ -380,6 +413,96 @@ class SocialAccountPostView(views.APIView):
 
 
 @method_decorator(login_required, name='dispatch')
+class TwitterOAuthCallbackView(views.APIView):
+    """
+    Handle OAuth callback specifically for Twitter services
+    """
+    
+    def get(self, request):
+        """Process Twitter OAuth callback and create social account"""
+        # Get parameters
+        code = request.GET.get('code')
+        error = request.GET.get('error')
+        state = request.GET.get('state')
+        denied = request.GET.get('denied')
+        
+        # Log the full request and session for debugging
+        logger.info(f"Twitter OAuth callback received: {request.GET}")
+        logger.info(f"Session data: oauth_state_twitter={request.session.get('oauth_state_twitter')}")
+        logger.info(f"Session data: twitter_code_verifier={bool(request.session.get('twitter_code_verifier'))}")
+        logger.info(f"Current user: {request.user.is_authenticated and request.user.username or 'Anonymous'}")
+        
+        # Check if user denied access
+        if denied:
+            logger.error(f"User denied Twitter authorization: {denied}")
+            return self.close_window(success=False, error="Authorization was denied by user")
+        
+        # Check for errors
+        if error:
+            logger.error(f"Twitter OAuth error: {error}")
+            return self.close_window(success=False, error=error)
+        
+        # Ensure we have the code
+        if not code:
+            logger.error("No authorization code received from Twitter")
+            return self.close_window(success=False, error="No authorization code received")
+            
+        try:
+            # Handle the Twitter OAuth callback using our specialized service
+            account = handle_twitter_callback(request, request.user, code, state)
+            
+            # Return success response
+            return self.close_window(
+                success=True,
+                account_name=account.username,
+                platform='twitter'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error connecting Twitter account: {str(e)}")
+            return self.close_window(success=False, error=str(e))
+    
+    def close_window(self, success=True, account_name=None, platform=None, error=None):
+        """Return an HTML page that closes the popup window and sends a message to the opener"""
+        context = {
+            'success': success,
+            'message': 'Twitter account connected successfully' if success else f'Error: {error}',
+            'account_name': account_name,
+            'platform': platform,
+            'error': error
+        }
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>{'Success' if success else 'Error'} - Twitter Authorization</title>
+            <script>
+                window.onload = function() {{
+                    if (window.opener) {{
+                        window.opener.postMessage(
+                            JSON.stringify({json.dumps(context)}),
+                            "*"
+                        );
+                        window.close();
+                    }} else {{
+                        document.getElementById('message').style.display = 'block';
+                    }}
+                }};
+            </script>
+        </head>
+        <body>
+            <div id="message" style="display:none; text-align:center; margin-top:50px;">
+                <h3>{'Success!' if success else 'Error'}</h3>
+                <p>{context['message']}</p>
+                <p>You can close this window now.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return HttpResponse(html)
+
 class GoogleOAuthCallbackView(views.APIView):
     """
     Handle OAuth callback specifically for Google services

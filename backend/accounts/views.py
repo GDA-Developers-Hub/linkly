@@ -104,8 +104,92 @@ class ConnectSocialAccountView(APIView):
         pass
 
     def handle_twitter_auth(self, auth_code):
-        # Similar implementation for Twitter
-        pass
+        # Get Twitter platform from database
+        try:
+            from social_platforms.models import SocialPlatform
+            twitter_platform = SocialPlatform.objects.get(name='twitter')
+            logger.info(f"Found Twitter platform: {twitter_platform.display_name}")
+        except SocialPlatform.DoesNotExist:
+            logger.error("Twitter platform not found in database")
+            raise Exception("Twitter platform not configured in system")
+        
+        # Exchange auth code for access token
+        token_url = twitter_platform.token_url  # Use URL from database
+        
+        # Prepare the request data
+        token_data = {
+            "code": auth_code,
+            "grant_type": "authorization_code",
+            "client_id": twitter_platform.client_id,
+            "redirect_uri": twitter_platform.redirect_uri,
+            "code_verifier": "challenge"  # Should match what you sent in the authorization request
+            # NOTE: For production, you should generate a random code_verifier and store it in session
+        }
+        
+        # Basic authentication with client ID and secret
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        
+        # Make the token request
+        token_response = requests.post(
+            token_url,
+            data=token_data,
+            headers=headers,
+            auth=(twitter_platform.client_id, twitter_platform.client_secret)
+        )
+        
+        # Log the response for debugging
+        logger.info(f"Twitter token response: {token_response.status_code} {token_response.text}")
+        
+        # Parse token response
+        if token_response.status_code != 200:
+            raise Exception(f"Failed to get access token: {token_response.text}")
+            
+        token_json = token_response.json()
+        
+        if "access_token" not in token_json:
+            raise Exception(f"Failed to get access token: {token_json.get('error_description')}")
+        
+        # Get user info
+        user_info_url = "https://api.twitter.com/2/users/me"
+        user_info_headers = {
+            "Authorization": f"Bearer {token_json['access_token']}"
+        }
+        user_info_params = {
+            "user.fields": "profile_image_url,username"
+        }
+        
+        user_info_response = requests.get(
+            user_info_url, 
+            headers=user_info_headers,
+            params=user_info_params
+        )
+        
+        # Log the response for debugging
+        logger.info(f"Twitter user info response: {user_info_response.status_code} {user_info_response.text}")
+        
+        if user_info_response.status_code != 200:
+            raise Exception(f"Failed to get user info: {user_info_response.text}")
+            
+        user_info = user_info_response.json().get('data', {})
+        
+        # Create or update the social media account
+        account, created = SocialMediaAccount.objects.update_or_create(
+            user=self.request.user,
+            platform='twitter',
+            account_id=user_info['id'],
+            defaults={
+                'username': user_info.get('username', ''),
+                'profile_picture': user_info.get('profile_image_url', ''),
+                'access_token': token_json['access_token'],
+                'refresh_token': token_json.get('refresh_token', ''),
+                'token_expires_at': timezone.now() + timedelta(seconds=token_json.get('expires_in', 7200)),
+                'status': 'active'
+            }
+        )
+        
+        return Response(SocialMediaAccountSerializer(account).data)
 
     def handle_linkedin_auth(self, auth_code):
         # Similar implementation for LinkedIn

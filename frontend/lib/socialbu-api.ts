@@ -792,10 +792,3 @@ export function getPlatformOptions(platform: string, baseOptions: Record<string,
   }
 }
 
-// Get SocialBu API instance
-export function getSocialBuAPI(): SocialBuAPI {
-  if (!socialBuAPIInstance) {
-    socialBuAPIInstance = new SocialBuAPI()
-  }
-  return socialBuAPIInstance
-}

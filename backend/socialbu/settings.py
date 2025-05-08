@@ -219,10 +219,16 @@ CELERY_TIMEZONE = 'UTC'
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
 # Social Media API Keys
+# Twitter API v1.1 keys (older API)
 TWITTER_API_KEY = os.getenv('TWITTER_API_KEY', '')
 TWITTER_API_SECRET = os.getenv('TWITTER_API_SECRET', '')
 TWITTER_ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN', '')
 TWITTER_ACCESS_TOKEN_SECRET = os.getenv('TWITTER_ACCESS_TOKEN_SECRET', '')
+
+# Twitter/X OAuth 2.0 credentials (newer API)
+TWITTER_CLIENT_ID = os.getenv('TWITTER_CLIENT_ID', 'WFZUOThVQmpjS1E4ZldpRTNkQm86MTpjaQ')
+TWITTER_CLIENT_SECRET = os.getenv('TWITTER_CLIENT_SECRET', '')
+TWITTER_REDIRECT_URI = os.getenv('TWITTER_REDIRECT_URI', 'http://localhost:8000/api/social_platforms/oauth/callback/twitter/')
 
 FACEBOOK_APP_ID = os.getenv('FACEBOOK_APP_ID', '')
 FACEBOOK_APP_SECRET = os.getenv('FACEBOOK_APP_SECRET', '')

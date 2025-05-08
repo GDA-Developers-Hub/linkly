@@ -20,6 +20,9 @@ urlpatterns = [
     
     # OAuth callbacks
     path('oauth/callback/', views.OAuthCallbackView.as_view(), name='oauth_callback'),
+    path('oauth/callback/twitter/', views.TwitterOAuthCallbackView.as_view(), name='twitter_oauth_callback'),
+    # This matches the redirect URI that Twitter is expecting
+    path('api/social_platforms/oauth/callback/twitter/', views.TwitterOAuthCallbackView.as_view(), name='twitter_oauth_callback_api'),
     
     # Add URL at project-level (to be included in project-level urls.py)
     path('auth/google/callback', views.GoogleOAuthCallbackView.as_view(), name='google_oauth_callback'),
