@@ -74,10 +74,17 @@ export class SocialPlatformsAPI {
   
   // Get headers with current token
   private getHeaders(): HeadersInit {
-    const token = safeLocalStorage.getItem('accessToken') || safeLocalStorage.getItem('linkly_access_token');
+    // Try multiple possible token storage locations
+    const token = 
+      safeLocalStorage.getItem('accessToken') || 
+      safeLocalStorage.getItem('linkly_access_token') ||
+      safeLocalStorage.getItem('auth_token') ||
+      safeLocalStorage.getItem('token');
     
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      // Add X-Requested-With header to help with CORS and auth
+      'X-Requested-With': 'XMLHttpRequest'
     };
     
     if (token) {
@@ -94,8 +101,9 @@ export class SocialPlatformsAPI {
    * Get all connected social accounts for the current user
    */
   async getAccounts(): Promise<SocialAccount[]> {
-    const response = await fetch(`${this.baseUrl}/social_platforms/api/accounts/`, {
+    const response = await fetch(`${this.baseUrl}/api/social_platforms/accounts/`, {
       headers: this.getHeaders(),
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -109,8 +117,9 @@ export class SocialPlatformsAPI {
    * Get all available social platforms
    */
   async getPlatforms(): Promise<SocialPlatform[]> {
-    const response = await fetch(`${this.baseUrl}/social_platforms/api/platforms/`, {
+    const response = await fetch(`${this.baseUrl}/api/social_platforms/platforms/`, {
       headers: this.getHeaders(),
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -124,8 +133,9 @@ export class SocialPlatformsAPI {
    * Initialize OAuth flow for a specific platform
    */
   async initiateOAuth(platformId: string): Promise<{ authorization_url: string }> {
-    const response = await fetch(`${this.baseUrl}/social_platforms/api/oauth/init/${platformId}/`, {
+    const response = await fetch(`${this.baseUrl}/api/social_platforms/oauth/init/${platformId}/`, {
       headers: this.getHeaders(),
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -147,10 +157,11 @@ export class SocialPlatformsAPI {
     if (params.offset) queryParams.append('offset', params.offset.toString());
     if (params.status) queryParams.append('status', params.status);
     
-    const url = `${this.baseUrl}/social_platforms/api/posts/?${queryParams.toString()}`;
+    const url = `${this.baseUrl}/api/social_platforms/posts/?${queryParams.toString()}`;
     
     const response = await fetch(url, {
       headers: this.getHeaders(),
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -168,8 +179,9 @@ export class SocialPlatformsAPI {
    * Get metrics for the connected social accounts
    */
   async getMetrics(): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/social_platforms/api/metrics/`, {
+    const response = await fetch(`${this.baseUrl}/api/social_platforms/metrics/`, {
       headers: this.getHeaders(),
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -183,14 +195,61 @@ export class SocialPlatformsAPI {
    * Disconnect a connected social account
    */
   async disconnectAccount(accountId: number): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/social_platforms/api/accounts/${accountId}/`, {
+    const response = await fetch(`${this.baseUrl}/api/social_platforms/accounts/${accountId}/`, {
       method: 'DELETE',
       headers: this.getHeaders(),
+      credentials: 'include'
     });
 
     if (!response.ok) {
       throw new Error('Failed to disconnect social account');
     }
+  }
+  
+  /**
+   * Complete OAuth flow using stored code and state after user authentication
+   * @param platform The platform name (e.g. 'linkedin', 'twitter')
+   * @param extraData Optional additional data to include in the request (e.g. state for LinkedIn)
+   */
+  async completeOAuth(platform: string, extraData: Record<string, any> = {}): Promise<any> {
+    // Support both Redis code_id and state parameter approaches
+    
+    // If we have a Redis code_id, use that instead of the state parameter
+    // This is the preferred authentication method for higher security
+    if (extraData.code_id) {
+      console.log(`Using Redis code_id for ${platform} authentication:`, extraData.code_id.substring(0, 8) + '...');
+    }
+    // Fallback to state parameter if code_id isn't available
+    else if (['linkedin', 'youtube'].includes(platform.toLowerCase()) && !extraData.state) {
+      const stateKey = `${platform.toLowerCase()}_oauth_state`;
+      const storedState = localStorage.getItem(stateKey);
+      
+      if (storedState) {
+        extraData.state = storedState;
+        console.log(`Using ${platform} state from localStorage:`, storedState);
+      } else {
+        // Generate a random state if needed
+        extraData.state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        console.log(`Generated new state for ${platform}:`, extraData.state);
+      }
+    }
+    
+    // Enhanced logging to help with debugging
+    console.log(`Completing OAuth for ${platform} with extra data:`, extraData)
+    
+    const response = await fetch(`${this.baseUrl}/api/social_platforms/oauth/complete/${platform}/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      credentials: 'include',
+      body: JSON.stringify(extraData) // Always include body to prevent issues
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to complete OAuth connection');
+    }
+
+    return await response.json();
   }
 }
 

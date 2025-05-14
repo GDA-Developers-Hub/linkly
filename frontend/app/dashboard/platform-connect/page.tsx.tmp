@@ -31,14 +31,7 @@ import { useRouter } from "next/navigation"
 import { getAPI } from "@/lib/api"
 import { CircularNav } from "./CircularNav"
 // Import our custom connection components
-import { 
-  TikTokConnect, 
-  LinkedInConnect, 
-  YouTubeConnect, 
-  ThreadsConnect,
-  PinterestConnect,
-  GoogleAdsConnect
-} from "@/components/connections"
+import { TikTokConnect, LinkedInConnect } from "@/components/connections"
 
 // Platform configurations with expanded icons and platforms
 const availablePlatforms = [
@@ -145,223 +138,12 @@ export default function PlatformConnectPage() {
     }
   }, []);
 
-  // Function to load connected accounts is defined below
-
-  useEffect(() => {
-    // Load connected accounts on component mount
-    loadConnectedAccounts();
-    
-    // Listen for messages from popup windows (OAuth callbacks)
-    const handleMessage = (event: MessageEvent) => {
-      const data = event.data;
-      
-      // Check if this is our auth_required message
-      if (data && data.auth_required === true) {
-        // Normalize the platform name if present
-        let platformName = data.platform || data.platform_id || "";
-        
-        // Special handling for platforms that use Redis-based auth
-        if (platformName.toLowerCase().includes('linkedin') || platformName.toLowerCase().includes('youtube')) {
-          // Normalize platform name
-          platformName = platformName.toLowerCase().includes('linkedin') ? 'linkedin' : 'youtube';
-          console.log(`${platformName.charAt(0).toUpperCase() + platformName.slice(1)} OAuth callback received`);
-          
-          // Check for code_id from Redis storage
-          const codeId = data.code_id;
-          console.log(`Redis code_id received:`, codeId ? codeId.substring(0, 8) + '...' : 'None');
-          
-          // Log extra data for debugging
-          if (data.code) {
-            console.log('LinkedIn partial code received:', data.code);
-          }
-          
-          // For LinkedIn, initiate polling for account changes right away
-          // This works around potential auth issues by checking if the account was connected
-          let attempts = 0;
-          const pollingInterval = setInterval(async () => {
-            attempts++;
-            console.log(`LinkedIn polling attempt ${attempts}...`);
-            if (attempts > 10) { // Stop after 10 attempts
-              clearInterval(pollingInterval);
-              return;
-            }
-            
-            try {
-              const accounts = await socialPlatformsApi.getAccounts();
-              const linkedInAccounts = Array.isArray(accounts) 
-                ? accounts.filter(acc => acc.platform.name.toLowerCase() === 'linkedin') 
-                : [];
-                
-              if (linkedInAccounts.length > 0) {
-                clearInterval(pollingInterval);
-                console.log('LinkedIn account found:', linkedInAccounts[0]);
-                setConnectedAccounts(accounts);
-                
-                toast({
-                  title: "LinkedIn Connected",
-                  description: `Your LinkedIn account has been connected successfully!`,
-                  variant: "default",
-                  duration: 5000,
-                });
-              }
-            } catch (e) {
-              console.error('Error polling for LinkedIn account:', e);
-            }
-          }, 2000); // Poll every 2 seconds
-        }
-        
-        // Special handling for YouTube which comes back from the OAuth callback
-        else if (platformName.toLowerCase().includes('youtube')) {
-          platformName = 'youtube';
-          console.log('YouTube OAuth callback received');
-          
-          // Log extra data for debugging
-          if (data.code) {
-            console.log('YouTube partial code received:', data.code);
-          }
-          
-          // For YouTube, initiate polling for account changes right away
-          // This works around potential auth issues by checking if the account was connected
-          let attempts = 0;
-          const pollingInterval = setInterval(async () => {
-            attempts++;
-            console.log(`YouTube polling attempt ${attempts}...`);
-            if (attempts > 10) { // Stop after 10 attempts
-              clearInterval(pollingInterval);
-              return;
-            }
-            
-            try {
-              const accounts = await socialPlatformsApi.getAccounts();
-              const youtubeAccounts = Array.isArray(accounts) 
-                ? accounts.filter(acc => acc.platform.name.toLowerCase() === 'youtube') 
-                : [];
-                
-              if (youtubeAccounts.length > 0) {
-                clearInterval(pollingInterval);
-                console.log('YouTube account found:', youtubeAccounts[0]);
-                setConnectedAccounts(accounts);
-                
-                toast({
-                  title: "YouTube Connected",
-                  description: `Your YouTube account has been connected successfully!`,
-                  variant: "default",
-                  duration: 5000,
-                });
-              }
-            } catch (e) {
-              console.error('Error polling for YouTube account:', e);
-            }
-          }, 2000); // Poll every 2 seconds
-        }
-        
-        // Show notification to user
-        toast({
-          title: "Authentication Required",
-          description: `Completing connection for your ${platformName || "social"} account...`,
-          variant: "default",
-          duration: 5000,
-        });
-        
-        // Delay the completion slightly to ensure the session is available
-        setTimeout(() => {
-          // Complete the OAuth flow with the stored code and normalized platform name
-          if (platformName) {
-            console.log(`Starting OAuth completion for: ${platformName}`);
-            completeOAuthConnection(platformName);
-          } else {
-            console.error('Platform name not provided in auth_required message');
-          }
-        }, 1000); // 1 second delay to ensure session is available
-      } else if (data && data.success === true && data.account) {
-        // Handle successful connection
-        toast({
-          title: "Connection Successful",
-          description: `Your ${data.platform || "social"} account has been connected!`,
-          variant: "default",
-          duration: 5000,
-        });
-        
-        // Refresh account list
-        loadConnectedAccounts();
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
-
-  // Function to complete OAuth connection after auth_required flag
-  const completeOAuthConnection = async (platform: string) => {
-    try {
-      // Prepare data to send to the backend
-      let extraData: Record<string, any> = {}
-      
-      // Special handling for LinkedIn
-      if (platform.toLowerCase() === 'linkedin') {
-        console.log('Completing LinkedIn OAuth connection...')
-        
-        // Get stored state and any other LinkedIn-specific data
-        const storedState = localStorage.getItem('linkedin_oauth_state')
-        if (storedState) {
-          extraData.state = storedState
-          console.log('Using stored LinkedIn state for completion:', storedState)
-        }
-        
-        // Check for LinkedIn pending cookie
-        if (document.cookie.includes('linkedin_oauth_pending=true')) {
-          extraData.fromCookie = true
-          console.log('Including cookie information in request')
-          
-          // Clear the pending cookie once we've used it
-          document.cookie = 'linkedin_oauth_pending=; Max-Age=0; path=/; secure;'
-        }
-      }
-      
-      // Add timestamp to prevent caching issues
-      extraData.timestamp = Date.now()
-      
-      // Log request details
-      console.log(`Sending completeOAuth request for ${platform}:`, extraData)
-      
-      // Call the complete OAuth endpoint with the platform name and any extra data
-      const response = await socialPlatformsApi.completeOAuth(platform, extraData)
-      
-      console.log(`OAuth completion response for ${platform}:`, response)
-      
-      if (response && response.success) {
-        // Refresh account list
-        loadConnectedAccounts()
-        
-        toast({
-          title: "Connection Successful",
-          description: `Your ${platform} account has been connected!`,
-          variant: "default",
-          duration: 5000,
-        })
-      } else {
-        // Handle error
-        throw new Error(response?.error || 'Failed to complete connection')
-      }
-    } catch (err: any) {
-      console.error('Error completing OAuth connection:', err)
-      
-      toast({
-        title: "Connection Failed",
-        description: err.message || "Failed to complete the connection process.",
-        variant: "destructive",
-        duration: 5000,
-      })
-    }
-  }
-  
   // Function to load connected accounts from API
   const loadConnectedAccounts = async () => {
     setIsLoading(true)
     try {
       const accounts = await socialPlatformsApi.getAccounts()
-      // Ensure accounts is always an array
-      setConnectedAccounts(Array.isArray(accounts) ? accounts : [])
+        setConnectedAccounts(accounts)
     } catch (err: any) {
       console.error('Error loading accounts:', err)
       
@@ -399,16 +181,6 @@ export default function PlatformConnectPage() {
       // Get authorization URL and open popup window
       const response = await socialPlatformsApi.initiateOAuth(platform.id)
       console.log('OAuth response:', response)
-      
-      // Store state in localStorage for LinkedIn specifically to handle state mismatch issues
-      if (platform.id.toLowerCase() === 'linkedin' && response.authorization_url) {
-        const stateMatch = response.authorization_url.match(/state=([^&]*)/)
-        if (stateMatch && stateMatch[1]) {
-          const state = decodeURIComponent(stateMatch[1])
-          localStorage.setItem('linkedin_oauth_state', state)
-          console.log('Stored LinkedIn OAuth state:', state)
-        }
-      }
       
       if (response && response.authorization_url) {
         // Open the authorization URL in a new window
@@ -544,17 +316,15 @@ export default function PlatformConnectPage() {
       )
     }
 
-    // Ensure connectedAccounts is an array before using reduce
-    const accountsByPlatform = Array.isArray(connectedAccounts) 
-      ? connectedAccounts.reduce((groups, account) => {
-          const platform = account.platform.name.toLowerCase();
-          if (!groups[platform]) {
-            groups[platform] = [];
-          }
-          groups[platform].push(account);
-          return groups;
-        }, {} as Record<string, SocialAccount[]>)
-      : {} as Record<string, SocialAccount[]>;
+    // Group accounts by platform for better organization
+    const accountsByPlatform = connectedAccounts.reduce((groups, account) => {
+      const platform = account.platform.name.toLowerCase();
+      if (!groups[platform]) {
+        groups[platform] = [];
+      }
+      groups[platform].push(account);
+      return groups;
+    }, {} as Record<string, SocialAccount[]>);
     
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -581,54 +351,10 @@ export default function PlatformConnectPage() {
           />
         ))}
 
-        {accountsByPlatform['youtube']?.map(account => (
-          <YouTubeConnect
-            key={account.id}
-            isConnected={true}
-            account={account}
-            onConnect={async () => {}}
-            onDisconnect={handleDisconnectAccount}
-            isConnecting={false}
-          />
-        ))}
-
-        {accountsByPlatform['threads']?.map(account => (
-          <ThreadsConnect
-            key={account.id}
-            isConnected={true}
-            account={account}
-            onConnect={async () => {}}
-            onDisconnect={handleDisconnectAccount}
-            isConnecting={false}
-          />
-        ))}
-
-        {accountsByPlatform['pinterest']?.map(account => (
-          <PinterestConnect
-            key={account.id}
-            isConnected={true}
-            account={account}
-            onConnect={async () => {}}
-            onDisconnect={handleDisconnectAccount}
-            isConnecting={false}
-          />
-        ))}
-
-        {accountsByPlatform['google']?.map(account => (
-          <GoogleAdsConnect
-            key={account.id}
-            isConnected={true}
-            account={account}
-            onConnect={async () => {}}
-            onDisconnect={handleDisconnectAccount}
-            isConnecting={false}
-          />
-        ))}
-
         {/* Render generic cards for other platforms */}
         {connectedAccounts
           .filter(account => 
-            !['tiktok', 'linkedin', 'youtube', 'threads', 'pinterest', 'google'].includes(account.platform.name.toLowerCase())
+            !['tiktok', 'linkedin'].includes(account.platform.name.toLowerCase())
           )
           .map(account => {
             // Determine the appropriate icon based on platform name
@@ -966,4 +692,3 @@ export default function PlatformConnectPage() {
     </div>
   )
 }
-

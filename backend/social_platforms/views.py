@@ -1,12 +1,16 @@
 from django.shortcuts import render, redirect
+from django.views import View
 from django.http import JsonResponse, HttpResponse
-from django.views.decorators.http import require_http_methods
-from django.contrib.auth.decorators import login_required
-from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from django.conf import settings
-from django.urls import reverse
-from django.utils import timezone
+from django.contrib.auth.mixins import LoginRequiredMixin
+
+# Import Redis OAuth utilities
+from .utils.redis_oauth import (
+    generate_oauth_state, store_oauth_state, validate_oauth_state,
+    store_oauth_code, get_oauth_code, get_oauth_code_by_state, delete_oauth_data
+)
 
 from rest_framework import viewsets, permissions, status, views
 from rest_framework.response import Response
@@ -14,6 +18,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import NotFound, ValidationError
 
+import os
 import json
 import logging
 import uuid
@@ -246,11 +251,54 @@ class PublicOAuthInitView(views.APIView):
             )
 
 
-@method_decorator(login_required, name='dispatch')
+#@method_decorator(login_required, name='dispatch')
 class OAuthCallbackView(views.APIView):
     """
     Handle OAuth callback from social platforms
     """
+    permission_classes = [permissions.AllowAny]
+    
+    def close_window(self, **data):
+        """
+        Create a response that will close the popup window and pass data back to opener.
+        This approach uses HTML/JS to close the window and communicate back to opener.
+        """
+        html_content = f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>OAuth Complete</title>
+            <script type="text/javascript">
+                // Data to pass back to opener window
+                var data = {json.dumps(data)};
+                
+                // Send message to parent/opener window
+                if (window.opener && !window.opener.closed) {{                    
+                    window.opener.postMessage(data, "*");
+                    window.close();
+                }} else {{                    
+                    document.getElementById("manual-close").style.display = "block";
+                }}
+            </script>
+            <style>
+                body {{ font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }}
+                .hidden {{ display: none; }}
+                button {{ padding: 10px 20px; background-color: #4285f4; color: white; 
+                        border: none; border-radius: 4px; cursor: pointer; }}
+            </style>
+        </head>
+        <body>
+            <h3>Authentication Complete</h3>
+            <p>{data.get('message', 'You can close this window now.')}</p>
+            <div id="manual-close" class="hidden">
+                <p>If this window doesn't close automatically:</p>
+                <button onclick="window.close()">Close Window</button>
+            </div>
+        </body>
+        </html>
+        '''
+        
+        return HttpResponse(html_content)
     
     def get(self, request):
         """Process OAuth callback and create social account"""
@@ -259,6 +307,47 @@ class OAuthCallbackView(views.APIView):
         code = request.GET.get('code')
         error = request.GET.get('error')
         state = request.GET.get('state')
+        scope = request.GET.get('scope', '')
+        
+        # Check for YouTube based on scope parameter
+        if not platform and 'youtube' in scope.lower():
+            platform = 'youtube'
+            logger.info(f"Detected YouTube platform from scope: {scope[:50]}...")
+        
+        # Try to determine platform from request path if not provided in query parameters
+        if not platform:
+            path = request.path
+            logger.info(f"Callback path: {path}")
+            
+            # Check if the URL path contains the platform
+            # Example patterns: /callback/linkedin/ or /callback/twitter/
+            if '/callback/' in path:
+                path_parts = path.split('/callback/')
+                if len(path_parts) > 1 and path_parts[1]:
+                    potential_platform = path_parts[1].strip('/').lower()
+                    logger.info(f"Extracted potential platform from path: {potential_platform}")
+                    
+                    # Check if this is a valid platform
+                    try:
+                        social_platform = SocialPlatform.objects.filter(name__iexact=potential_platform).first()
+                        if social_platform:
+                            platform = social_platform.name
+                            logger.info(f"Found platform in database: {platform}")
+                    except Exception as e:
+                        logger.error(f"Error checking for platform: {str(e)}")
+        
+        # If we still don't have a platform, try to infer from authorization parameters
+        if not platform and code:
+            # LinkedIn typically uses a long alphanumeric code
+            if len(code) > 20 and code.startswith('AQ'):
+                logger.info("Code format suggests LinkedIn")
+                platform = 'linkedin'
+            # Facebook/Instagram have similar patterns
+            elif code.startswith('AQCBU'):
+                logger.info("Code format suggests Facebook/Instagram")
+                platform = 'facebook'  # Default to Facebook, can be refined
+        
+        logger.info(f"Final identified platform: {platform}")
         
         # Check for errors
         if error:
@@ -268,30 +357,101 @@ class OAuthCallbackView(views.APIView):
                 'error': error,
                 'platform': platform
             }, status=400)
-            
-        # Validate state for CSRF protection
-        expected_state = request.session.get(f'oauth_state_{platform}')
-        if not expected_state or expected_state != state:
-            logger.error(f"OAuth state mismatch. Expected: {expected_state}, Got: {state}")
+        
+        # If we still don't have a platform or code, return error
+        if not platform or not code:
+            logger.error(f"Missing required parameters. Platform: {platform}, Code: {bool(code)}")
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid state parameter',
+                'error': 'Missing required parameters (platform or code)',
                 'platform': platform
             }, status=400)
+            
+        # Special cases for platforms which might not use the state parameter consistently
+        if platform.lower() in ['linkedin', 'youtube']:
+            expected_state = request.session.get(f'oauth_state_{platform}')
+            if not expected_state or expected_state != state:
+                # For certain platforms, we'll log the mismatch but continue anyway
+                logger.warning(f"{platform.capitalize()} state mismatch but proceeding. Expected: {expected_state}, Got: {state}")
+            
+            # Clean up session
+            if f'oauth_state_{platform}' in request.session:
+                del request.session[f'oauth_state_{platform}']
+        else:
+            # For other platforms, validate state for CSRF protection
+            expected_state = request.session.get(f'oauth_state_{platform}')
+            if not expected_state or expected_state != state:
+                logger.error(f"OAuth state mismatch. Expected: {expected_state}, Got: {state}")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Invalid state parameter',
+                    'platform': platform
+                }, status=400)
+                
+            # Clean up session
+            if f'oauth_state_{platform}' in request.session:
+                del request.session[f'oauth_state_{platform}']
             
         # Clean up session
         if f'oauth_state_{platform}' in request.session:
             del request.session[f'oauth_state_{platform}']
             
         try:
-            # Connect social account
+            # Check authentication status
+            if not request.user.is_authenticated:
+                # For certain platforms, we'll try a different approach
+                if platform.lower() in ['linkedin', 'youtube']:
+                    logger.info(f"{platform.capitalize()} OAuth: Proceeding with Redis-based auth")
+                    
+                    # Store OAuth data in Redis instead of cookies
+                    # This provides better cross-session persistence
+                    code_id = store_oauth_code(
+                        platform=platform.lower(),
+                        code=code,
+                        state=state,
+                        # Include user_id if available
+                        user_id=getattr(request.user, 'id', None)
+                    )
+                    
+                    # Set platform-specific details
+                    platform_id = platform.lower()
+                    message = f"Completing {platform.capitalize()} connection..."
+                    
+                    logger.info(f"Stored {platform} OAuth code in Redis with ID: {code_id}")
+                    
+                    response = self.close_window(
+                        success=True,
+                        auth_required=True,
+                        platform=platform,
+                        platform_id=platform_id,  # Use the actual platform as ID
+                        code_id=code_id,  # Include the Redis code ID for frontend to use
+                        code=code[:10] + '...',  # Include partial code for debug purposes (for logging only)
+                        message=message
+                    )
+                    
+                    # Return the response with Redis code_id - no cookies needed
+                    return response
+                else:
+                    logger.warning("User not authenticated during OAuth callback - returning success with auth required flag")
+                    # Store OAuth info in session for later use
+                    request.session[f'pending_oauth_{platform}_code'] = code
+                    
+                    # Close window with special flag for frontend to handle
+                    return self.close_window(
+                        success=True,
+                        auth_required=True,
+                        platform=platform,
+                        message="Please log in to complete account connection"
+                    )
+                
+            # User is authenticated, connect social account
             account = connect_social_account(request.user, platform, code)
             
             # Return success response with account details
-            return JsonResponse({
-                'success': True,
-                'platform': platform,
-                'account': {
+            return self.close_window(
+                success=True,
+                platform=platform,
+                account={
                     'id': account.id,
                     'platform_name': account.platform.name,
                     'account_name': account.account_name,
@@ -299,7 +459,7 @@ class OAuthCallbackView(views.APIView):
                     'profile_picture_url': account.profile_picture_url,
                     'status': account.status
                 }
-            })
+            )
             
         except Exception as e:
             logger.error(f"Error connecting account: {str(e)}")
@@ -569,13 +729,29 @@ class CompleteOAuthView(views.APIView):
     
     def post(self, request, platform):
         try:
-            # Get the code and state from the request
+            # Get parameters from the request
             code = request.data.get('code')
             state = request.data.get('state')
+            code_id = request.data.get('code_id')  # New Redis code ID parameter
             
-            if not code or not state:
+            # First try to get stored OAuth data from Redis if we have a code_id
+            if code_id:
+                logger.info(f"Looking up OAuth data from Redis using code_id: {code_id[:8]}...")
+                oauth_data = get_oauth_code(platform.lower(), code_id)
+                
+                if oauth_data:
+                    logger.info(f"Found OAuth data in Redis for {platform}")
+                    code = oauth_data.get('code')
+                    state = oauth_data.get('state')
+                    # Clean up Redis data after retrieval
+                    delete_oauth_data(platform.lower(), state=state, code_id=code_id)
+                else:
+                    logger.warning(f"No OAuth data found in Redis for code_id: {code_id[:8]}...")
+            
+            # Validate that we have a code (either from request or Redis)
+            if not code:
                 return Response(
-                    {'error': 'Missing required parameters (code, state)'},
+                    {'error': 'Missing required OAuth code'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -596,12 +772,40 @@ class CompleteOAuthView(views.APIView):
                     'success': True,
                     'account': UserSocialAccountSerializer(account).data
                 })
+            elif platform.lower() in ['linkedin', 'youtube']:
+                # Special handling for platforms using Redis-based OAuth
+                logger.info(f"Completing {platform.capitalize()} OAuth with code: {code[:10]}...")
+                
+                # Code from Redis already retrieved at the top of the method
+                # Just log that we're using it
+                if code_id:
+                    logger.info(f"Using code from Redis for {platform} with code_id: {code_id[:8]}...")
+                
+                # Connect the account using the code
+                account = connect_social_account(request.user, platform, code)
+                
+                # Return success response
+                return Response({
+                    'success': True,
+                    'account': UserSocialAccountSerializer(account).data
+                })
+                
             else:
-                # For other platforms, implement their specific completion logic
-                return Response(
-                    {'error': f'Completing OAuth for {platform} is not implemented'},
-                    status=status.HTTP_501_NOT_IMPLEMENTED
-                )
+                # For other platforms, use the generic connection
+                logger.info(f"Using generic OAuth completion for {platform}")
+                
+                # Code from Redis already retrieved at the top of the method if code_id was provided
+                # Otherwise, fallback to the provided code directly
+                if code_id:
+                    logger.info(f"Using code from Redis for {platform}")
+                
+                # Connect the account
+                account = connect_social_account(request.user, platform, code)
+                
+                return Response({
+                    'success': True,
+                    'account': UserSocialAccountSerializer(account).data
+                })
                 
         except Exception as e:
             logger.error(f"Error completing OAuth flow: {str(e)}")

@@ -206,3 +206,4 @@ def handle_twitter_callback(request, user, code, state):
     except Exception as e:
         logger.error(f"Error in Twitter callback: {str(e)}")
         raise
+
