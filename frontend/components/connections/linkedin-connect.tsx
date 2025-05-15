@@ -25,7 +25,8 @@ export function LinkedInConnect({
   const { toast } = useToast()
   const [companyPages, setCompanyPages] = useState<any[]>([])
   const [fullName, setFullName] = useState<string>("")
-  const [email, setEmail] = useState<string>("")
+  const [email, setEmail] = useState<string>("") 
+  const [authRequired, setAuthRequired] = useState<boolean>(false)
 
   // Extract LinkedIn-specific data if available
   useEffect(() => {
@@ -132,13 +133,30 @@ export function LinkedInConnect({
             <p className="mb-4 text-sm text-gray-500">
               Share professional updates and manage company pages
             </p>
-            <Button 
-              onClick={onConnect} 
-              className="bg-blue-700 hover:bg-blue-600 text-white"
-              disabled={isConnecting}
-            >
-              {isConnecting ? "Connecting..." : "Connect LinkedIn"}
-            </Button>
+            {authRequired ? (
+              <div className="space-y-3">
+                <div className="rounded-md bg-amber-50 p-4">
+                  <p className="text-sm text-amber-800">
+                    Please log in to complete your LinkedIn connection.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setAuthRequired(false)}
+                  className="w-full"
+                >
+                  Try Again
+                </Button>
+              </div>
+            ) : (
+              <Button 
+                onClick={onConnect} 
+                className="bg-blue-700 hover:bg-blue-600 text-white"
+                disabled={isConnecting}
+              >
+                {isConnecting ? "Connecting..." : "Connect LinkedIn"}
+              </Button>
+            )}
           </div>
         )}
       </CardContent>

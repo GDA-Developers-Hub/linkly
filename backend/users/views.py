@@ -14,7 +14,6 @@ from .serializers import (
     CustomTokenObtainPairSerializer,
     ChangePasswordSerializer
 )
-from socialbu_proxy.services import SocialBuService, generate_secure_password
 from google_ads.permissions import IsGoogleAdsManager
 
 User = get_user_model()

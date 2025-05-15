@@ -42,7 +42,6 @@ INSTALLED_APPS = [
     'platforms',
     'posts',
     'analytics',
-    'socialbu_proxy',  # Added the new app
     'google_ads',
     'social_platforms',  # New social platforms OAuth integration
 ]
@@ -262,11 +261,6 @@ LOGGING = {
             'propagate': True,
         },
         'users': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-        'socialbu_proxy': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
             'propagate': True,

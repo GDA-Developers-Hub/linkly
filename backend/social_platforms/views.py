@@ -23,11 +23,14 @@ import json
 import logging
 import uuid
 import urllib.parse
+# No longer need this import
+# from django_redis import get_redis_connection
 
 from .models import SocialPlatform, UserSocialAccount
 from .serializers import SocialPlatformSerializer, UserSocialAccountSerializer, SocialAccountDetailSerializer
 from .services import get_oauth_manager, connect_social_account, refresh_token_if_needed
-from .oauth.twitter import get_twitter_auth_url, handle_twitter_callback
+# Updated import path for Twitter OAuth compatibility
+from .deprecated.twitter import get_twitter_auth_url, handle_twitter_callback
 
 logger = logging.getLogger(__name__)
 
@@ -369,14 +372,19 @@ class OAuthCallbackView(views.APIView):
             
         # Special cases for platforms which might not use the state parameter consistently
         if platform.lower() in ['linkedin', 'youtube']:
-            expected_state = request.session.get(f'oauth_state_{platform}')
-            if not expected_state or expected_state != state:
-                # For certain platforms, we'll log the mismatch but continue anyway
-                logger.warning(f"{platform.capitalize()} state mismatch but proceeding. Expected: {expected_state}, Got: {state}")
+            # For LinkedIn, check the state parameter but don't require it to match
+            # This is because LinkedIn's OAuth implementation can be problematic with state
+            if state:
+                # Store the received state in the session for use by CompleteOAuthView
+                # We'll keep this state around longer to handle completion
+                request.session[f'received_oauth_state_{platform}'] = state
+                logger.info(f"Stored received {platform} state in session")
             
-            # Clean up session
-            if f'oauth_state_{platform}' in request.session:
-                del request.session[f'oauth_state_{platform}']
+            # Log the state handling but proceed anyway
+            expected_state = request.session.get(f'oauth_state_{platform}')
+            logger.warning(f"{platform.capitalize()} state handled specially. Expected: {expected_state}, Got: {state}")
+            
+            # Keep the state in session for now - we'll clean up after completion
         else:
             # For other platforms, validate state for CSRF protection
             expected_state = request.session.get(f'oauth_state_{platform}')
@@ -773,15 +781,19 @@ class CompleteOAuthView(views.APIView):
                     'account': UserSocialAccountSerializer(account).data
                 })
             elif platform.lower() in ['linkedin', 'youtube']:
-                # Special handling for platforms using Redis-based OAuth
+                # Special handling for LinkedIn and YouTube OAuth
                 logger.info(f"Completing {platform.capitalize()} OAuth with code: {code[:10]}...")
                 
-                # Code from Redis already retrieved at the top of the method
-                # Just log that we're using it
-                if code_id:
-                    logger.info(f"Using code from Redis for {platform} with code_id: {code_id[:8]}...")
+                # Check if we stored the state in session during callback
+                stored_state = request.session.get(f'received_oauth_state_{platform}')
+                if stored_state:
+                    logger.info(f"Found stored state for {platform} in session: {stored_state[:8]}...")
+                    # Clean up the session
+                    del request.session[f'received_oauth_state_{platform}']
+                    if f'oauth_state_{platform}' in request.session:
+                        del request.session[f'oauth_state_{platform}']
                 
-                # Connect the account using the code
+                # Connect the account using the code regardless of state
                 account = connect_social_account(request.user, platform, code)
                 
                 # Return success response
