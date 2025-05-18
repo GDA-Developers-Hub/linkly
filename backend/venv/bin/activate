@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV=/home/ismael/linkly/backend/venv
+VIRTUAL_ENV=/home/abdulhackxx/Projects/Portfolio/linkly/backend/venv
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

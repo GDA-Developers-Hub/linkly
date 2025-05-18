@@ -1,0 +1,64 @@
+version: '3.12'
+
+services:
+
+  web:
+    build: .
+    command: sh entrypoint.sh
+    volumes:
+      - .:/backend
+    env_file:
+      - ./.env
+    environment:
+      - MYSQL_HOST=linkly.db
+    ports:
+      - 8000:8000
+    container_name: linkly
+    networks:
+      - linkly
+    depends_on:
+      - db
+      - redis
+      - celery_worker
+
+  db:
+    image: postgres:13-alpine
+    user: 70:70
+    env_file:
+      - ./.env.local
+    ports:
+      - 5431:5432
+    container_name: linkly.db
+    volumes:
+      - postgres_data:/var/lib/postgres
+    networks:
+      - linkly
+
+  celery_worker:
+    build: .
+    command: celery -A auth worker --loglevel=info
+    volumes:
+      - .:/worker
+    env_file:
+      - ./.env
+    container_name: celery_worker
+    networks:
+      - linkly
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:6.0-alpine
+    container_name: redis
+    ports:
+      - "6378:6379"
+  
+volumes:
+  postgres_data:
+    name: "linkly-data"
+    external: true
+
+networks:
+  linkly:
+    driver: bridge
+    name: linkly
