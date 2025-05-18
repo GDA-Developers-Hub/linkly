@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-key-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DEBUG=True
 
 # Parse allowed hosts from environment variable
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,railway.app').split(',')
@@ -40,6 +40,24 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_filters',
     
+    # Django AllAuth
+    'django.contrib.sites',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    # Social providers
+    'allauth.socialaccount.providers.facebook',
+    'allauth.socialaccount.providers.instagram',
+    'allauth.socialaccount.providers.twitter',
+    'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.linkedin_oauth2',
+    'allauth.socialaccount.providers.pinterest',
+    # Custom providers (will be implemented)
+    'social_platforms.providers.tiktok',
+    'social_platforms.providers.youtube',
+    'social_platforms.providers.threads',
+    'social_platforms.providers.googleads',  # Renamed to avoid conflict with the local app
+    
     # Local apps
     'users',
     'subscriptions',
@@ -47,9 +65,8 @@ INSTALLED_APPS = [
     'platforms',
     'posts',
     'analytics',
-    'socialbu_proxy',  # Added the new app
     'google_ads',
-    'social_platforms',  # New social platforms OAuth integration
+    'social_platforms',  # Social platforms with AllAuth integration
 ]
 
 MIDDLEWARE = [
@@ -138,13 +155,93 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend'
+    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 25,
+    'PAGE_SIZE': 10
 }
+
+# Django AllAuth Configuration
+SITE_ID = 1
+
+AUTHENTICATION_BACKENDS = [
+    # Django backend
+    'django.contrib.auth.backends.ModelBackend',
+    # AllAuth backend
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+# AllAuth settings
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_EMAIL_VERIFICATION = 'optional'
+
+# Social Account settings
+SOCIALACCOUNT_AUTO_SIGNUP = False  # We'll handle user creation in our adapter
+SOCIALACCOUNT_ADAPTER = 'social_platforms.adapters.CustomSocialAccountAdapter'
+
+# Provider specific settings
+SOCIALACCOUNT_PROVIDERS = {
+    'facebook': {
+        'METHOD': 'oauth2',
+        'SCOPE': ['email', 'public_profile', 'pages_show_list'],
+        'FIELDS': ['id', 'email', 'name', 'picture'],
+    },
+    'instagram': {
+        'SCOPE': ['user_profile', 'user_media'],
+    },
+    'twitter': {
+        'SCOPE': ['tweet.read', 'users.read', 'offline.access'],
+    },
+    'linkedin_oauth2': {
+        'SCOPE': ['r_liteprofile', 'r_emailaddress', 'w_member_social'],
+        'PROFILE_FIELDS': ['id', 'first-name', 'last-name', 'email-address', 'picture-url'],
+    },
+    'google': {
+        'SCOPE': ['profile', 'email', 'https://www.googleapis.com/auth/youtube.readonly'],
+        'AUTH_PARAMS': {
+            'access_type': 'offline',
+        }
+    },
+    'pinterest': {
+        'SCOPE': ['boards:read', 'pins:read', 'user_accounts:read'],
+    },
+    # Custom providers require additional configuration in their respective provider classes
+    'tiktok': {
+        'METHOD': 'oauth2',
+        'SCOPE': ['user.info.basic', 'video.list'],
+    },
+    'youtube': {
+        'METHOD': 'oauth2',
+        'SCOPE': ['https://www.googleapis.com/auth/youtube.readonly', 'https://www.googleapis.com/auth/youtube'],
+    },
+    'threads': {
+        'METHOD': 'oauth2',
+        # Uses Instagram's permissions since Threads uses the Instagram API
+        'SCOPE': ['user_profile', 'user_media'],
+    },
+    'googleads': {
+        'METHOD': 'oauth2',
+        'SCOPE': ['https://www.googleapis.com/auth/adwords'],
+        'AUTH_PARAMS': {
+            'access_type': 'offline',
+        }
+    },
+}
+
+REDIS_URL = os.getenv('REDIS_URL', 'redis://default:GWrrpZmbktNIrwHMJiRRmuVJhBastQWM@shinkansen.proxy.rlwy.net:44916')
+REDIS_HOST = os.getenv('REDIS_HOST', 'shinkansen.proxy.rlwy.net')
+REDIS_PORT = int(os.getenv('REDIS_PORT', 44916))
+REDIS_DB = int(os.getenv('REDIS_DB', 0))
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', 'GWrrpZmbktNIrwHMJiRRmuVJhBastQWM')
 
 # JWT settings
 SIMPLE_JWT = {
@@ -239,9 +336,6 @@ INSTAGRAM_PASSWORD = os.getenv('INSTAGRAM_PASSWORD', '')
 LINKEDIN_CLIENT_ID = os.getenv('LINKEDIN_CLIENT_ID', '')
 LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET', '')
 
-# SocialBu API URL
-SOCIALBU_API_URL = os.getenv('SOCIALBU_API_URL', 'https://socialbu.com')
-
 # Logging configuration
 LOGGING = {
     'version': 1,
@@ -274,11 +368,6 @@ LOGGING = {
             'propagate': True,
         },
         'users': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-        'socialbu_proxy': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
             'propagate': True,

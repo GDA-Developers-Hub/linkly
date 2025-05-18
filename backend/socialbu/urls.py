@@ -5,7 +5,8 @@ from django.conf.urls.static import static
 from django.http import JsonResponse
 import sys
 import os
-from social_platforms.views import GoogleOAuthCallbackView
+# Import directly from social_platforms.allauth_views instead
+from social_platforms.allauth_views import SocialAuthInitView
 
 def debug_view(request):
     """A simple view that returns debugging information."""
@@ -28,11 +29,17 @@ urlpatterns = [
     path('api/posts/', include('posts.urls')),
     path('api/analytics/', include('analytics.urls')),
     path('api/social_platforms/', include('social_platforms.urls')),  # Social platforms within API namespace
-    path('api/', include('socialbu_proxy.urls')),  # Added the new app URLs
+    
+    # Django Allauth URLs
+    path('accounts/', include('allauth.urls')),
+    
+    # Custom Allauth providers
+    path('accounts/socialaccount/providers/', include('social_platforms.providers.urls')),
+    
     path('debug/', debug_view, name='debug'),
     
-    # Google OAuth callback route
-    path('auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback'),
+    # Use Django Allauth for OAuth callbacks instead of the custom callback view
+    path('auth/init', SocialAuthInitView.as_view(), name='oauth_init'),
 ]
 
 # Serve media files in development

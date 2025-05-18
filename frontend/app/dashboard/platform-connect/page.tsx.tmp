@@ -1,0 +1,694 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import {
+  AlertCircle, 
+  RefreshCw, 
+  Link2, 
+  Facebook,
+  Twitter, 
+  Instagram,
+  Linkedin,
+  Youtube,
+  Plus,
+  CheckCircle,
+  PinIcon,
+  LineChart,
+  Info,
+  MessageCircle,
+  Zap
+} from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+// Import the types and API from our services module
+import { SocialAccount } from "@/services/social-platforms-api" 
+import { socialPlatformsApi } from "@/services/social-platforms-api"
+import { useRouter } from "next/navigation"
+import { getAPI } from "@/lib/api"
+import { CircularNav } from "./CircularNav"
+// Import our custom connection components
+import { TikTokConnect, LinkedInConnect } from "@/components/connections"
+
+// Platform configurations with expanded icons and platforms
+const availablePlatforms = [
+  {
+    id: "instagram",
+    name: "Instagram",
+    icon: Instagram,
+    description: "Share photos and stories, manage your Instagram presence",
+    color: "from-pink-500 via-purple-500 to-orange-500",
+    popular: true
+  },
+  {
+    id: "facebook",
+    name: "Facebook",
+    icon: Facebook,
+    description: "Manage your Facebook pages and content",
+    color: "from-blue-600 to-blue-500",
+    popular: true
+  },
+  {
+    id: "twitter",
+    name: "Twitter/X",
+    icon: Twitter, 
+    description: "Schedule tweets and manage your Twitter presence",
+    color: "from-blue-400 to-blue-300",
+    popular: true
+  },
+  {
+    id: "linkedin",
+    name: "LinkedIn",
+    icon: Linkedin,
+    description: "Share professional updates and manage company pages",
+    color: "from-blue-700 to-blue-600",
+    popular: false
+  },
+  {
+    id: "youtube",
+    name: "YouTube",
+    icon: Youtube,
+    description: "Manage your YouTube channel and content",
+    color: "from-red-600 to-red-500",
+    popular: true
+  },
+  {
+    id: "pinterest",
+    name: "Pinterest",
+    icon: PinIcon,
+    description: "Share pins and manage your Pinterest boards",
+    color: "from-red-700 to-red-600",
+    popular: false
+  },
+  {
+    id: "google",
+    name: "Google Ads",
+    icon: LineChart,
+    description: "Manage your Google Ads campaigns and analytics",
+    color: "from-blue-500 to-green-500",
+    popular: true
+  },
+  {
+    id: "tiktok",
+    name: "TikTok",
+    icon: Zap,
+    description: "Create and manage TikTok content and campaigns",
+    color: "from-black to-gray-800",
+    popular: true
+  },
+  {
+    id: "threads",
+    name: "Threads",
+    icon: MessageCircle,
+    description: "Share text-based updates and join conversations",
+    color: "from-purple-600 to-purple-400",
+    popular: false
+  }
+]
+
+// Helper function to get platform gradient color
+function getPlatformColor(platformName: string): string {
+  const platform = availablePlatforms.find(
+    p => p.id.toLowerCase() === platformName.toLowerCase()
+  )
+  return platform?.color || 'from-gray-600 to-gray-500'
+}
+
+export default function PlatformConnectPage() {
+  // Initialize as empty array to ensure proper typing
+  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [isConnecting, setIsConnecting] = useState<string | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const [selectedPlatformId, setSelectedPlatformId] = useState<string | null>(null)
+  const [showConnected, setShowConnected] = useState(true)
+  const { toast } = useToast()
+  const router = useRouter()
+  
+  // Check authentication status on mount
+  useEffect(() => {
+    const api = getAPI();
+    setIsAuthenticated(api.isAuthenticated());
+    
+    if (api.isAuthenticated()) {
+      loadConnectedAccounts();
+    }
+  }, []);
+
+  // Function to load connected accounts from API
+  const loadConnectedAccounts = async () => {
+    setIsLoading(true)
+    try {
+      const accounts = await socialPlatformsApi.getAccounts()
+        setConnectedAccounts(accounts)
+    } catch (err: any) {
+      console.error('Error loading accounts:', err)
+      
+      // Handle various errors but don't immediately redirect
+      toast({
+        title: "Error",
+        description: "Failed to load connected accounts",
+        variant: "destructive",
+      })
+      
+      // Ensure we have an empty array on error
+      setConnectedAccounts([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Handle platform selection from circular nav
+  const handleSelectPlatform = (platform: { id: string }) => {
+    setSelectedPlatformId(platform.id);
+    
+    // If on the available tab, scroll to the platform card
+    setTimeout(() => {
+      const platformCard = document.getElementById(`platform-card-${platform.id}`);
+      if (platformCard) {
+        platformCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
+
+  // Handle platform connection
+  const handleConnectPlatform = async (platform: any) => {
+    setIsConnecting(platform.id)
+    try {
+      // Get authorization URL and open popup window
+      const response = await socialPlatformsApi.initiateOAuth(platform.id)
+      console.log('OAuth response:', response)
+      
+      if (response && response.authorization_url) {
+        // Open the authorization URL in a new window
+        const authWindow = window.open(response.authorization_url, '_blank', 'width=600,height=700')
+        
+        if (!authWindow) {
+          // If popup was blocked
+          toast({
+            title: "Popup Blocked",
+            description: `Please allow popups for this site and try again.`,
+            variant: "destructive",
+          })
+          setIsConnecting(null)
+          return
+        }
+        
+        // Show toast to guide the user
+        toast({
+          title: "Authorization Started",
+          description: `Please complete the authorization in the popup window.`,
+        })
+      } else {
+        throw new Error('No authorization URL received')
+      }
+      
+      // If user is authenticated, poll for new accounts
+      if (isAuthenticated) {
+        // Set up polling to check for newly connected accounts
+        let attempts = 0
+        const interval = setInterval(async () => {
+          attempts++
+          if (attempts > 30) { // Stop after 30 attempts (1 minute)
+            clearInterval(interval)
+            toast({
+              title: "Connection Timeout",
+              description: "Please try connecting again",
+              variant: "destructive",
+            })
+            return
+          }
+          
+          try {
+            // Check for new accounts
+            const updatedAccounts = await socialPlatformsApi.getAccounts()
+            
+            // Compare account counts
+            const currentCount = connectedAccounts.length
+            const newAccountsCount = updatedAccounts.length - currentCount
+            
+            if (newAccountsCount > 0) {
+              clearInterval(interval)
+              setConnectedAccounts(updatedAccounts)
+              
+              toast({
+                title: "Account Connected",
+                description: `Successfully connected ${platform.name}`,
+              })
+            }
+          } catch (e) {
+            console.error("Error checking for new accounts:", e)
+          }
+        }, 2000) // Poll every 2 seconds
+      } else {
+        // For unauthenticated users, just show a success message
+        setTimeout(() => {
+          toast({
+            title: "Demo Mode",
+            description: "In demo mode, connections are simulated. Login for full functionality.",
+          })
+        }, 5000);
+      }
+      
+    } catch (err: any) {
+      console.error('Error connecting platform:', err)
+      
+      toast({
+        title: "Connection Failed",
+        description: err.message || "Failed to connect platform. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsConnecting(null)
+    }
+  }
+
+  // Handle account disconnection
+  const handleDisconnectAccount = async (accountId: number) => {
+    try {
+      await socialPlatformsApi.disconnectAccount(accountId)
+      
+      // Update local state
+      setConnectedAccounts(connectedAccounts.filter(account => account.id !== accountId))
+      
+      toast({
+        title: "Account Disconnected",
+        description: "Successfully disconnected account",
+      })
+    } catch (err) {
+      console.error('Error disconnecting account:', err)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect account",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Render the connected accounts tab content
+  const renderConnectedAccounts = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-10">
+          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+          <span>Loading connected accounts...</span>
+        </div>
+      )
+    }
+    
+    if (connectedAccounts.length === 0) {
+      return (
+        <div className="space-y-4 py-10 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+            <Link2 className="h-6 w-6 text-gray-500" />
+          </div>
+          <div>
+            <h3 className="text-lg font-medium">No connected accounts</h3>
+            <p className="text-muted-foreground">Connect your first account to get started</p>
+          </div>
+          <Button onClick={() => setShowConnected(false)} variant="outline">
+            Browse Available Platforms
+          </Button>
+        </div>
+      )
+    }
+
+    // Group accounts by platform for better organization
+    const accountsByPlatform = connectedAccounts.reduce((groups, account) => {
+      const platform = account.platform.name.toLowerCase();
+      if (!groups[platform]) {
+        groups[platform] = [];
+      }
+      groups[platform].push(account);
+      return groups;
+    }, {} as Record<string, SocialAccount[]>);
+    
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Render specialized components for TikTok and LinkedIn */}
+        {accountsByPlatform['tiktok']?.map(account => (
+          <TikTokConnect
+            key={account.id}
+            isConnected={true}
+            account={account}
+            onConnect={async () => {}}
+            onDisconnect={handleDisconnectAccount}
+            isConnecting={false}
+          />
+        ))}
+
+        {accountsByPlatform['linkedin']?.map(account => (
+          <LinkedInConnect
+            key={account.id}
+            isConnected={true}
+            account={account}
+            onConnect={async () => {}}
+            onDisconnect={handleDisconnectAccount}
+            isConnecting={false}
+          />
+        ))}
+
+        {/* Render generic cards for other platforms */}
+        {connectedAccounts
+          .filter(account => 
+            !['tiktok', 'linkedin'].includes(account.platform.name.toLowerCase())
+          )
+          .map(account => {
+            // Determine the appropriate icon based on platform name
+            let Icon = Link2;
+            switch (account.platform.name.toLowerCase()) {
+              case 'facebook': Icon = Facebook; break;
+              case 'instagram': Icon = Instagram; break;
+              case 'twitter': Icon = Twitter; break;
+              case 'youtube': Icon = Youtube; break;
+              case 'pinterest': Icon = PinIcon; break;
+              case 'google': Icon = LineChart; break;
+              case 'threads': Icon = MessageCircle; break;
+            }
+            
+            return (
+              <Card key={account.id} className="overflow-hidden">
+                <CardHeader className={`bg-gradient-to-r ${getPlatformColor(account.platform.name)}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-5 w-5 text-white" />
+                      <CardTitle className="text-white">{account.platform.display_name}</CardTitle>
+                    </div>
+                    {account.is_primary && (
+                      <Badge variant="secondary" className="bg-white/20 text-white">
+                        Primary
+                      </Badge>
+                    )}
+                  </div>
+                  <CardDescription className="text-white/80">
+                    Connected on {new Date(account.created_at).toLocaleDateString()}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3">
+                    {account.profile_picture_url ? (
+                      <img
+                        src={account.profile_picture_url}
+                        alt={account.account_name}
+                        className="h-12 w-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-200">
+                        <Icon className="h-6 w-6 text-gray-500" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-medium">{account.account_name}</h3>
+                      <p className="text-sm text-gray-500">{account.account_id}</p>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="bg-gray-50 px-6 py-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => handleDisconnectAccount(account.id)}
+                  >
+                    Disconnect Account
+                  </Button>
+                </CardFooter>
+              </Card>
+            )
+        })}
+      </div>
+    )
+  }
+
+  // Render available platforms that can be connected
+  const renderAvailablePlatforms = () => {
+    // If we're in a connecting state, show all platforms, otherwise filter to exclude connected ones
+    const filteredPlatforms = isConnecting
+      ? availablePlatforms
+      : availablePlatforms.filter(platform => {
+          // Check if this platform is already connected
+          return !connectedAccounts.some(
+            account => account.platform.name.toLowerCase() === platform.id.toLowerCase()
+          )
+        })
+
+    if (filteredPlatforms.length === 0) {
+      return (
+        <div className="space-y-4 py-10 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+            <CheckCircle className="h-6 w-6 text-green-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-medium">All platforms connected!</h3>
+            <p className="text-muted-foreground">You've connected all available platforms</p>
+          </div>
+          <Button onClick={() => setShowConnected(true)} variant="outline">
+            View Connected Accounts
+          </Button>
+        </div>
+      )
+    }
+
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Render specialized components for TikTok and LinkedIn when not connected */}
+        {filteredPlatforms.some(p => p.id === 'tiktok') && (
+          <TikTokConnect
+            isConnected={false}
+            onConnect={() => handleConnectPlatform(filteredPlatforms.find(p => p.id === 'tiktok')!)}
+            onDisconnect={async () => {}}
+            isConnecting={isConnecting === 'tiktok'}
+          />
+        )}
+
+        {filteredPlatforms.some(p => p.id === 'linkedin') && (
+          <LinkedInConnect
+            isConnected={false}
+            onConnect={() => handleConnectPlatform(filteredPlatforms.find(p => p.id === 'linkedin')!)}
+            onDisconnect={async () => {}}
+            isConnecting={isConnecting === 'linkedin'}
+          />
+        )}
+
+        {/* Render generic cards for other platforms */}
+        {filteredPlatforms
+          .filter(platform => !['tiktok', 'linkedin'].includes(platform.id))
+          .map(platform => (
+            <Card 
+              key={platform.id} 
+              id={`platform-card-${platform.id}`} 
+              className={`overflow-hidden ${selectedPlatformId === platform.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+            >
+              <CardHeader className={`bg-gradient-to-r ${platform.color}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <platform.icon className="h-5 w-5 text-white" />
+                    <CardTitle className="text-white">{platform.name}</CardTitle>
+                  </div>
+                  {platform.popular && (
+                    <Badge variant="secondary" className="bg-white/20 text-white">
+                      Popular
+                    </Badge>
+                  )}
+                </div>
+                <CardDescription className="text-white/80">
+                  {platform.description}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="flex flex-col items-center justify-center py-4 text-center">
+                  <platform.icon className="mb-4 h-12 w-12 text-gray-400" />
+                  <h3 className="mb-2 text-lg font-medium">Connect {platform.name}</h3>
+                  <p className="mb-4 text-sm text-gray-500">
+                    {platform.description}
+                  </p>
+                </div>
+              </CardContent>
+              <CardFooter className="bg-gray-50 px-6 py-4">
+                <Button
+                  className="w-full"
+                  onClick={() => handleConnectPlatform(platform)}
+                  disabled={isConnecting === platform.id}
+                >
+                  {isConnecting === platform.id ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>Connect {platform.name}</>
+                  )}
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+      </div>
+    )
+  }
+
+  // Render a demo/unauthenticated view or the full authenticated view
+  if (!isAuthenticated) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Platform Connect</h2>
+            <p className="text-muted-foreground">Connect and manage your social media accounts</p>
+          </div>
+        </div>
+
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Demo Mode</AlertTitle>
+          <AlertDescription>
+            You are in demo mode. Connections will open OAuth windows but won't fully connect without authentication.
+            <div className="mt-4">
+              <Button onClick={() => router.push('/login')} variant="outline" size="sm">
+                Login for Full Access
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+
+        {/* Add the circular navigation component for demo mode too */}
+        <CircularNav 
+          platforms={availablePlatforms} 
+          onSelectPlatform={handleSelectPlatform} 
+          selectedPlatformId={selectedPlatformId}
+        />
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* TikTok and LinkedIn components for unauthenticated users */}
+          <TikTokConnect
+            isConnected={false}
+            onConnect={() => handleConnectPlatform(availablePlatforms.find(p => p.id === 'tiktok')!)}
+            onDisconnect={async () => {}}
+            isConnecting={isConnecting === 'tiktok'}
+          />
+
+          <LinkedInConnect
+            isConnected={false}
+            onConnect={() => handleConnectPlatform(availablePlatforms.find(p => p.id === 'linkedin')!)}
+            onDisconnect={async () => {}}
+            isConnecting={isConnecting === 'linkedin'}
+          />
+
+          {/* Generic cards for other platforms */}
+          {availablePlatforms
+            .filter(platform => !['tiktok', 'linkedin'].includes(platform.id))
+            .slice(0, 4) // Limit to keep UI clean
+            .map(platform => (
+              <Card 
+                key={platform.id} 
+                id={`platform-card-${platform.id}`}
+                className={`overflow-hidden ${selectedPlatformId === platform.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+              >
+                <CardHeader className={`bg-gradient-to-r ${platform.color}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <platform.icon className="h-5 w-5 text-white" />
+                      <CardTitle className="text-white">{platform.name}</CardTitle>
+                    </div>
+                    {platform.popular && (
+                      <Badge variant="secondary" className="bg-white/20 text-white">
+                        Popular
+                      </Badge>
+                    )}
+                  </div>
+                  <CardDescription className="text-white/80">
+                    {platform.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <platform.icon className="mb-4 h-12 w-12 text-gray-400" />
+                    <h3 className="mb-2 text-lg font-medium">Connect {platform.name}</h3>
+                    <p className="mb-4 text-sm text-gray-500">
+                      {platform.description}
+                    </p>
+                  </div>
+                </CardContent>
+                <CardFooter className="bg-gray-50 px-6 py-4">
+                  <Button
+                    className="w-full"
+                    onClick={() => handleConnectPlatform(platform)}
+                    disabled={isConnecting === platform.id}
+                  >
+                    {isConnecting === platform.id ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      <>Connect {platform.name}</>
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+        </div>
+      </div>
+    )
+  }
+
+  // The main authenticated UI with tabs
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Platform Connect</h2>
+          <p className="text-muted-foreground">Connect and manage your social media accounts</p>
+        </div>
+        <Button onClick={loadConnectedAccounts} disabled={isLoading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
+      </div>
+
+      {/* Add the circular navigation component */}
+      <CircularNav 
+        platforms={availablePlatforms} 
+        onSelectPlatform={handleSelectPlatform} 
+        selectedPlatformId={selectedPlatformId}
+      />
+
+      {connectedAccounts.length === 0 && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Configuration Required</AlertTitle>
+          <AlertDescription>
+            Please connect at least one social media account.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Tabs defaultValue={showConnected ? "connected" : "available"} className="space-y-4">
+        <TabsList>
+          <TabsTrigger 
+            value="connected" 
+            onClick={() => setShowConnected(true)}
+          >
+            Connected Platforms
+          </TabsTrigger>
+          <TabsTrigger 
+            value="available"
+            onClick={() => setShowConnected(false)}
+          >
+            Available Platforms
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="connected">
+          {renderConnectedAccounts()}
+        </TabsContent>
+
+        <TabsContent value="available">
+          {renderAvailablePlatforms()}
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}

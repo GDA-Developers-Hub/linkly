@@ -139,3 +139,9 @@ export async function diagnoseAccountIdIssue(accountId: number): Promise<string>
     return `Error diagnosing account issue: ${error instanceof Error ? error.message : String(error)}`;
   }
 } 
+
+// https://twitter.com/i/oauth2/authorize?client_id=WFZUOThVQmpjS1E4ZldpRTNkQm86MTpjaQ&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fapi%2Fsocial_platforms%2Foauth%2Fcallback%2Ftwitter%2F&response_type=code&scope=tweet.read+tweet.write+users.read+offline.access&state=uYA8PnCCqshzCFt1v7ssX-gnYHJ6f9Bo9aY_8Hp6x8o&code_challenge=e2E9YThkfZWrU0oJKCgzFhBPhHKrFQi8rreaA1gDaIw&code_challenge_method=S256
+
+// https://twitter.com/i/oauth2/authorize?client_id=WFZUOThVQmpjS1E4ZldpRTNkQm86MTpjaQ&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fapi%2Fsocial_platforms%2Foauth%2Fcallback%2Ftwitter%2F&response_type=code&scope=tweet.read+tweet.write+users.read+offline.access&state=uYA8PnCCqshzCFt1v7ssX-gnYHJ6f9Bo9aY_8Hp6x8o&code_challenge=e2E9YThkfZWrU0oJKCgzFhBPhHKrFQi8rreaA1gDaIw&code_challenge_method=S256
+
+// http://localhost:8000/api/social_platforms/oauth/callback/twitter/?state=uYA8PnCCqshzCFt1v7ssX-gnYHJ6f9Bo9aY_8Hp6x8o&code=XzRkR3BUWkpaQ1VRT2hwblJIMnJSbGRwRF9zNTBNZXEzTWFqWmZ1RGpXdi1FOjE3NDcxMzA3MzQ0NDI6MToxOmFjOjE
