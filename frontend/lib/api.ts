@@ -596,7 +596,7 @@ class API {
     return this.request<PostResponse>("/api/posts/", "POST", posts);
   }
    async publishPost(id: number): Promise<PostResponse> {
-    return this.request<PostResponse>(`/api/posts/${id}/publish`, "POST", {});
+    return this.request<PostResponse>(`/api/posts/${id}/publish/`, "POST", {});
   }
 
 
