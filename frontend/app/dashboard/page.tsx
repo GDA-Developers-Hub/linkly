@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { ArrowUpRight, BarChart3, Calendar, Clock, RefreshCw, Users, TrendingUp, Activity, Eye, Plus, Link2 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
-import { getSocialBuAPI, withErrorHandling } from "@/lib/socialbu-api"
+// import { getSocialBuAPI, withErrorHandling } from "@/lib/socials-api"
 import { useToast } from "@/components/ui/use-toast"
 import { Avatar } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -158,132 +158,132 @@ export default function DashboardPage() {
       }
       
       // Fall back to SocialBu integration if direct integration is not available
-      await withErrorHandling(async () => {
-        console.log('[Dashboard] Fetching dashboard data from SocialBu');
-        const api = getSocialBuAPI()
+      // await withErrorHandling(async () => {
+      //   console.log('[Dashboard] Fetching dashboard data from SocialBu');
+      //   const api = getSocialBuAPI()
 
-        // Fetch insights
-        console.log('[Dashboard] Fetching insights');
-        const insightsData = await api.getInsights()
+      //   // Fetch insights
+      //   console.log('[Dashboard] Fetching insights');
+      //   const insightsData = await api.getInsights()
         
-        // Fetch connected accounts
-        console.log('[Dashboard] Fetching connected accounts');
-        const connectedAccounts = await api.getAccounts()
-        console.log('[Dashboard] Received', connectedAccounts.length, 'connected accounts');
+      //   // Fetch connected accounts
+      //   console.log('[Dashboard] Fetching connected accounts');
+      //   const connectedAccounts = await api.getAccounts()
+      //   console.log('[Dashboard] Received', connectedAccounts.length, 'connected accounts');
 
-        // Fetch recent posts - limit to 5 posts
-        console.log('[Dashboard] Fetching recent posts');
-        const postsResponse = await api.getPosts({ limit: 5 })
-        console.log('[Dashboard] Received posts:', 
-          postsResponse.items?.length, 
-          'of', 
-          postsResponse.total, 
-          'total posts'
-        );
+      //   // Fetch recent posts - limit to 5 posts
+      //   console.log('[Dashboard] Fetching recent posts');
+      //   const postsResponse = await api.getPosts({ limit: 5 })
+      //   console.log('[Dashboard] Received posts:', 
+      //     postsResponse.items?.length, 
+      //     'of', 
+      //     postsResponse.total, 
+      //     'total posts'
+      //   );
         
-        // Extract posts from the paginated response
-        const postsData = postsResponse.items || [];
+      //   // Extract posts from the paginated response
+      //   const postsData = postsResponse.items || [];
 
-        // Get basic metrics from insights (simplified for demo)
-        const totalFollowers = insightsData.reduce((sum, insight) => 
-          insight.metric === 'followers' ? sum + insight.value : sum, 0);
+      //   // Get basic metrics from insights (simplified for demo)
+      //   const totalFollowers = insightsData.reduce((sum, insight) => 
+      //     insight.metric === 'followers' ? sum + insight.value : sum, 0);
           
-        const avgEngagement = insightsData.reduce((sum, insight) => 
-          insight.metric === 'engagement' ? sum + insight.value : sum, 0);
+      //   const avgEngagement = insightsData.reduce((sum, insight) => 
+      //     insight.metric === 'engagement' ? sum + insight.value : sum, 0);
           
-        const totalReach = insightsData.reduce((sum, insight) => 
-          insight.metric === 'reach' ? sum + insight.value : sum, 0);
+      //   const totalReach = insightsData.reduce((sum, insight) => 
+      //     insight.metric === 'reach' ? sum + insight.value : sum, 0);
 
-        // Create platform-specific metrics
-        const platformMetrics: Record<string, PlatformMetrics> = {};
+      //   // Create platform-specific metrics
+      //   const platformMetrics: Record<string, PlatformMetrics> = {};
         
-        // Initialize metrics for each connected account/platform
-        connectedAccounts.forEach(account => {
-          const platformType = account.type || (account as any)._type || 'unknown';
+      //   // Initialize metrics for each connected account/platform
+      //   connectedAccounts.forEach(account => {
+      //     const platformType = account.type || (account as any)._type || 'unknown';
           
-          if (!platformMetrics[platformType]) {
-            platformMetrics[platformType] = {
-              followers: 0,
-              engagement: 0,
-              reach: 0,
-              posts: {
-                scheduled: 0,
-                published: 0,
-                total: 0
-              }
-            };
-          }
+      //     if (!platformMetrics[platformType]) {
+      //       platformMetrics[platformType] = {
+      //         followers: 0,
+      //         engagement: 0,
+      //         reach: 0,
+      //         posts: {
+      //           scheduled: 0,
+      //           published: 0,
+      //           total: 0
+      //         }
+      //       };
+      //     }
           
-          // Add metrics for this account based on available data
-          // In a real implementation, you would get this data from your API
-          platformMetrics[platformType].followers += (account as any).followers || 0;
-          if ((account as any).engagement_rate) {
-            platformMetrics[platformType].engagement = 
-          Math.max(platformMetrics[platformType].engagement, (account as any).engagement_rate || 0);
-          }
-          platformMetrics[platformType].reach += (account as any).reach || 0;
-        });
+      //     // Add metrics for this account based on available data
+      //     // In a real implementation, you would get this data from your API
+      //     platformMetrics[platformType].followers += (account as any).followers || 0;
+      //     if ((account as any).engagement_rate) {
+      //       platformMetrics[platformType].engagement = 
+      //     Math.max(platformMetrics[platformType].engagement, (account as any).engagement_rate || 0);
+      //     }
+      //     platformMetrics[platformType].reach += (account as any).reach || 0;
+      //   });
         
-        // Count platform-specific posts
-        postsData.forEach(post => {
-          const platform = post.account_type || 'unknown';
-          if (platformMetrics[platform]) {
-            if (post.status === 'scheduled') {
-              platformMetrics[platform].posts.scheduled++;
-            } else if (post.status === 'published') {
-              platformMetrics[platform].posts.published++;
-            }
-            platformMetrics[platform].posts.total++;
-          }
-        });
+      //   // Count platform-specific posts
+      //   postsData.forEach(post => {
+      //     const platform = post.account_type || 'unknown';
+      //     if (platformMetrics[platform]) {
+      //       if (post.status === 'scheduled') {
+      //         platformMetrics[platform].posts.scheduled++;
+      //       } else if (post.status === 'published') {
+      //         platformMetrics[platform].posts.published++;
+      //       }
+      //       platformMetrics[platform].posts.total++;
+      //     }
+      //   });
         
-        // Transform data for the dashboard
-        const transformedInsights: InsightsData = {
-          followers: totalFollowers,
-          engagement: avgEngagement,
-          reach: totalReach,
-          posts: {
-            scheduled: postsData.filter((post) => post.status === "scheduled").length,
-            published: postsData.filter((post) => post.status === "published").length,
-            total: postsResponse.total, // Use the total from the response
-          },
-          platformMetrics,
-          connectedAccounts: connectedAccounts.map(account => {
-            const platformType = account.type || (account as any)._type || 'Unknown';
-            // Extract properties safely with defaults
-            return {
-              id: account.id,
-              name: account.name,
-              _type: (account as any)._type || account.type || 'Unknown',
-              type: platformType,
-              image: (account as any).image || '',
-              active: typeof (account as any).active === 'boolean' ? (account as any).active : true,
-              metrics: platformMetrics[platformType] || null
-            }
-          })
-        }
+      //   // Transform data for the dashboard
+      //   const transformedInsights: InsightsData = {
+      //     followers: totalFollowers,
+      //     engagement: avgEngagement,
+      //     reach: totalReach,
+      //     posts: {
+      //       scheduled: postsData.filter((post) => post.status === "scheduled").length,
+      //       published: postsData.filter((post) => post.status === "published").length,
+      //       total: postsResponse.total, // Use the total from the response
+      //     },
+      //     platformMetrics,
+      //     connectedAccounts: connectedAccounts.map(account => {
+      //       const platformType = account.type || (account as any)._type || 'Unknown';
+      //       // Extract properties safely with defaults
+      //       return {
+      //         id: account.id,
+      //         name: account.name,
+      //         _type: (account as any)._type || account.type || 'Unknown',
+      //         type: platformType,
+      //         image: (account as any).image || '',
+      //         active: typeof (account as any).active === 'boolean' ? (account as any).active : true,
+      //         metrics: platformMetrics[platformType] || null
+      //       }
+      //     })
+      //   }
 
-        // Transform posts data
-        const recentPosts: RecentPost[] = postsResponse.items.map(post => {
-          const status = post.status || (post.published ? 'published' : post.draft ? 'draft' : 'scheduled')
-          return {
-          id: post.id,
-          content: post.content,
-            status,
-            scheduled_at: post.publish_at || null,
-            platform: post.account_type || 'unknown',
-          engagement: {
-              likes: 0,
-              comments: 0,
-              shares: 0,
-          },
-          }
-        })
+      //   // Transform posts data
+      //   const recentPosts: RecentPost[] = postsResponse.items.map(post => {
+      //     const status = post.status || (post.published ? 'published' : post.draft ? 'draft' : 'scheduled')
+      //     return {
+      //     id: post.id,
+      //     content: post.content,
+      //       status,
+      //       scheduled_at: post.publish_at || null,
+      //       platform: post.account_type || 'unknown',
+      //     engagement: {
+      //         likes: 0,
+      //         comments: 0,
+      //         shares: 0,
+      //     },
+      //     }
+      //   })
 
-        setInsights(transformedInsights)
-        setRecentPosts(recentPosts)
-        console.log('[Dashboard] Dashboard data loaded successfully from SocialBu');
-      }, "Failed to fetch dashboard data")
+      //   setInsights(transformedInsights)
+      //   setRecentPosts(recentPosts)
+      //   console.log('[Dashboard] Dashboard data loaded successfully from SocialBu');
+      // }, "Failed to fetch dashboard data")
     } catch (error) {
       console.error("[Dashboard] Error fetching dashboard data:", error)
     } finally {

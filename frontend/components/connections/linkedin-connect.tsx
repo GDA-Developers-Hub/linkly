@@ -6,11 +6,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Linkedin, CheckCircle, Building2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { SocialAccount } from "@/services/social-platforms-api"
+import { AuthAPI} from "@/lib/socials-api"
 
 interface LinkedInConnectProps {
   isConnected: boolean
   account?: SocialAccount
-  onConnect: () => Promise<void>
+  onConnect?: () => Promise<void>
   onDisconnect: (accountId: number) => Promise<void>
   isConnecting: boolean
 }
@@ -28,6 +29,8 @@ export function LinkedInConnect({
   const [email, setEmail] = useState<string>("") 
   const [authRequired, setAuthRequired] = useState<boolean>(false)
 
+  const auth = new AuthAPI()
+  
   // Extract LinkedIn-specific data if available
   useEffect(() => {
     if (account && account.metadata) {
@@ -150,7 +153,7 @@ export function LinkedInConnect({
               </div>
             ) : (
               <Button 
-                onClick={onConnect} 
+                onClick={async () => auth.link("linkedin")} 
                 className="bg-blue-700 hover:bg-blue-600 text-white"
                 disabled={isConnecting}
               >

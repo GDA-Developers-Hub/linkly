@@ -28,7 +28,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/use-toast"
-import type { Team, TeamMember } from "@/lib/socialbu-api"
+import type { Team, TeamMember } from "@/lib/socials-api"
 import { MoreHorizontal, Plus, UserPlus, Mail, Shield, Crown, Users, UserX } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 

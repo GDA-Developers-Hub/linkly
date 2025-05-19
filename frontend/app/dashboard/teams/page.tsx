@@ -1,4 +1,4 @@
-import { Team } from "@/lib/socialbu-api"
+import { Team } from "@/lib/socials-api"
 
 const MOCK_TEAMS: Team[] = [
   { id: 1, name: "Marketing Team", created_at: new Date().toISOString() },

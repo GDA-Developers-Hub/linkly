@@ -23,15 +23,11 @@ const nextConfig = {
   },
   env: {
     // Define API URL for both development and production
-    API_URL: process.env.NODE_ENV === 'production' 
-      ? 'https://linkly-production.up.railway.app/api'
-      : 'http://localhost:8000/api',
+    API_URL: process.env.API_URL,
   },
   // Make API URL available as a public environment variable
   publicRuntimeConfig: {
-    API_URL: process.env.NODE_ENV === 'production'
-      ? 'https://linkly-production.up.railway.app/api'
-      : 'http://localhost:8000/api',
+    API_URL: process.env.API_URL
   },
 }
 

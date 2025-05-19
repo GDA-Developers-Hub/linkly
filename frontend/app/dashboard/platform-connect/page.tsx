@@ -31,6 +31,8 @@ import { getAPI } from "@/lib/api"
 import { CircularNav } from "./CircularNav"
 // Import auth constants and utilities
 import { AUTH } from "@/lib/constants"
+import { AuthAPI} from "@/lib/socials-api"
+
 import { initializeOAuth } from "@/lib/oauth-adapter"
 // Import auth hook from dedicated hooks directory
 import { useSocialAuth } from "@/hooks/use-social-auth"
@@ -128,6 +130,9 @@ const availablePlatforms: Platform[] = [
     popular: false
   }
 ]
+
+const auth = new AuthAPI()
+
 
 // Helper function to get platform gradient color
 function getPlatformColor(platformName: string): string {
@@ -752,7 +757,7 @@ export default function PlatformConnectPage() {
     // Ensure connectedAccounts is an array before using reduce
     const accountsByPlatform = Array.isArray(connectedAccounts) 
       ? connectedAccounts.reduce((groups: Record<string, SocialAccount[]>, account: SocialAccount) => {
-          const platform = account.platform.name.toLowerCase();
+          const platform = account.provider;
           if (!groups[platform]) {
             groups[platform] = [];
           }
@@ -780,8 +785,7 @@ export default function PlatformConnectPage() {
             key={account.id}
             isConnected={true}
             account={account}
-            onConnect={async () => {}}
-            onDisconnect={handleDisconnectAccount}
+            onDisconnect={async () => {}}
             isConnecting={false}
           />
         ))}
@@ -833,12 +837,12 @@ export default function PlatformConnectPage() {
         {/* Render generic cards for other platforms */}
         {connectedAccounts
           .filter((account: SocialAccount) => 
-            !['tiktok', 'linkedin', 'youtube', 'threads', 'pinterest', 'google'].includes(account.platform.name.toLowerCase())
+            !['tiktok', 'linkedin', 'youtube', 'threads', 'pinterest', 'google'].includes(account.provider)
           )
           .map((account: SocialAccount) => {
             // Determine the appropriate icon based on platform name
             let Icon = Link2;
-            switch (account.platform.name.toLowerCase()) {
+            switch (account.provider) {
               case 'facebook': Icon = Facebook; break;
               case 'instagram': Icon = Instagram; break;
               case 'twitter': Icon = Twitter; break;
@@ -850,11 +854,11 @@ export default function PlatformConnectPage() {
             
             return (
               <Card key={account.id} className="overflow-hidden">
-                <CardHeader className={`bg-gradient-to-r ${getPlatformColor(account.platform.name)}`}>
+                <CardHeader className={`bg-gradient-to-r ${getPlatformColor(account.provider)}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Icon className="h-5 w-5 text-white" />
-                      <CardTitle className="text-white">{account.platform.display_name}</CardTitle>
+                      <CardTitle className="text-white">{account.display_name}</CardTitle>
                     </div>
                     {account.is_primary && (
                       <Badge variant="secondary" className="bg-white/20 text-white">
@@ -871,7 +875,7 @@ export default function PlatformConnectPage() {
                     {account.profile_picture_url ? (
                       <img
                         src={account.profile_picture_url}
-                        alt={account.account_name}
+                        alt={account.display_name}
                         className="h-12 w-12 rounded-full object-cover"
                       />
                     ) : (
@@ -910,7 +914,7 @@ export default function PlatformConnectPage() {
       : availablePlatforms.filter(platform => {
           // Check if this platform is already connected
           return !connectedAccounts.some(
-            account => account.platform.name.toLowerCase() === platform.id.toLowerCase()
+            account => account.provider === platform.id.toLowerCase()
           )
         })
 

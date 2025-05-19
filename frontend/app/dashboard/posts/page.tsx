@@ -27,10 +27,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { getSocialBuAPI, withErrorHandling, type Post, type Account } from "@/lib/socialbu-api"
+import { getSocialBuAPI, withErrorHandling, type Post, type Account } from "@/lib/socials-api"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { SocialAccount, socialPlatformsApi } from "@/services/social-platforms-api"
 
 // Map platform names to icons and colors
 const platformConfig: Record<string, { icon: any; color: string }> = {

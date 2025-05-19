@@ -41,7 +41,7 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { format, addDays, subDays } from "date-fns"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
-import { getSocialBuAPI, withErrorHandling, type Post, type Account } from "@/lib/socialbu-api"
+import { getSocialBuAPI, withErrorHandling, type Post, type Account } from "@/lib/socials-api"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 

@@ -1,5 +1,5 @@
 import { toast } from "@/components/ui/use-toast"
-import { getSocialBuAPI, type Account } from "@/lib/socialbu-api"
+import { getSocialBuAPI, type Account } from "@/lib/socials-api"
 
 // Interface for connection test result
 export interface ConnectionTestResult {

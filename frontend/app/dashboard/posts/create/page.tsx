@@ -15,8 +15,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { format } from "date-fns"
-import { getSocialBuAPI, withErrorHandling, type Account, type Media } from "@/lib/socialbu-api"
 import { useToast } from "@/components/ui/use-toast"
+import { type SocialAccount, socialPlatformsApi } from "@/services/social-platforms-api"
+import { getAPI } from "@/lib/api"
 
 // Map platform names to icons and colors
 const platformConfig: Record<string, { icon: any; color: string }> = {
@@ -26,57 +27,31 @@ const platformConfig: Record<string, { icon: any; color: string }> = {
   linkedin: { icon: Linkedin, color: "#0A66C2" },
 }
 
+// Define Media type
+interface Media {
+  id: number
+  url?: string
+  type?: string
+}
+
 export default function CreatePostPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [date, setDate] = useState<Date>(new Date())
   const [time, setTime] = useState<string>(format(new Date(), "HH:mm"))
   const [selectedPlatforms, setSelectedPlatforms] = useState<number[]>([])
-  // Store the mapping between local account IDs and SocialBu account IDs
-  const [accountIdMapping, setAccountIdMapping] = useState<Record<number, number>>({})
   const [uploadedMedia, setUploadedMedia] = useState<Media[]>([])
-  const [accounts, setAccounts] = useState<Account[]>([])
+  const [accounts, setAccounts] = useState<SocialAccount[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
-  const [content, setContent] = useState("")
+  const [content, setContent] = useState<string>("")
   const [isDraft, setIsDraft] = useState(false)
 
   // Fetch connected accounts
   const fetchAccounts = async () => {
     try {
-      await withErrorHandling(async () => {
-        const api = getSocialBuAPI()
-        const accountsData = await api.getAccounts()
-        setAccounts(accountsData)
-
-        // Get user info to obtain the correct SocialBu user ID
-        try {
-          const userInfo = await api.getUserInfo()
-          console.log("Fetched user info:", userInfo)
-          
-          if (userInfo && userInfo.user_id) {
-            const socialBuUserId = parseInt(userInfo.user_id, 10)
-            
-            // Create a mapping from local account IDs to the SocialBu user ID
-            // This ensures we always use the correct ID when creating posts
-            const mapping: Record<number, number> = {}
-            accountsData.forEach(account => {
-              mapping[account.id] = socialBuUserId
-              console.log(`Mapped local account ${account.id} to SocialBu user ID ${socialBuUserId}`)
-            })
-            
-            setAccountIdMapping(mapping)
-            console.log("Account ID mapping created:", mapping)
-          }
-        } catch (userInfoError) {
-          console.error("Error fetching user info:", userInfoError)
-        }
-
-        // Select first account by default if available
-        if (accountsData.length > 0) {
-          setSelectedPlatforms([accountsData[0].id])
-        }
-      }, "Failed to fetch connected accounts")
+      const accounts = await socialPlatformsApi.getAccounts()
+      setAccounts(Array.isArray(accounts) ? accounts : [])
     } catch (error) {
       console.error("Error fetching accounts:", error)
     }
@@ -102,18 +77,35 @@ export default function CreatePostPage() {
 
     setIsUploading(true)
     try {
-      await withErrorHandling(async () => {
-        const api = getSocialBuAPI()
-        const file = e.target.files![0]
-        const media = await api.uploadMedia(file)
-        setUploadedMedia([...uploadedMedia, media])
-        toast({
-          title: "Media uploaded",
-          description: "Your media has been uploaded successfully.",
-        })
-      }, "Failed to upload media")
+      const file = e.target.files[0]
+
+      // Use AllAuth media upload endpoint
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const response = await fetch("/api/social/media/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to upload media")
+      }
+
+      const media = await response.json()
+      setUploadedMedia([...uploadedMedia, media])
+
+      toast({
+        title: "Media uploaded",
+        description: "Your media has been uploaded successfully.",
+      })
     } catch (error) {
       console.error("Error uploading media:", error)
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload media. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsUploading(false)
       // Reset the input
@@ -137,32 +129,6 @@ export default function CreatePostPage() {
       return
     }
 
-    // Get the platform type if only one platform is selected
-    const selectedPlatform = selectedPlatforms.length === 1 
-      ? accounts.find(acc => acc.id === selectedPlatforms[0])?.platform 
-      : undefined;
-    
-    // Platform-specific validations according to SocialBu API docs
-    if (selectedPlatform) {
-      if (selectedPlatform === 'instagram' && uploadedMedia.length === 0) {
-        toast({
-          title: "Media required",
-          description: "Instagram posts require at least one image or video.",
-          variant: "destructive",
-        })
-        return
-      }
-      
-      if (selectedPlatform === 'twitter' && content.trim().length > 280) {
-        toast({
-          title: "Content too long",
-          description: `Twitter posts are limited to 280 characters. Your post has ${content.trim().length} characters.`,
-          variant: "destructive",
-        })
-        return
-      }
-    }
-
     // Content validation - either content or media is required
     if (!content.trim() && uploadedMedia.length === 0) {
       toast({
@@ -175,100 +141,80 @@ export default function CreatePostPage() {
 
     setIsLoading(true)
     try {
-      await withErrorHandling(async () => {
-        const api = getSocialBuAPI()
+      // Combine date and time for scheduled_time
+      const scheduledDate = new Date(date)
+      const [hours, minutes] = time.split(":").map(Number)
+      scheduledDate.setHours(hours, minutes)
 
-        // Combine date and time for scheduled_at
-        const scheduledDate = new Date(date)
-        const [hours, minutes] = time.split(":").map(Number)
-        scheduledDate.setHours(hours, minutes)
-
-        // Map selected platform IDs to the correct SocialBu account IDs
-        let correctAccountIds: number[] = [];
-        
-        if (Object.keys(accountIdMapping).length > 0) {
-          // If we have mappings, use them to get the correct SocialBu account IDs
-          correctAccountIds = selectedPlatforms.map(localId => {
-            const socialBuId = accountIdMapping[localId];
-            if (socialBuId) {
-              console.log(`Using mapped SocialBu ID ${socialBuId} for local account ${localId}`);
-              return socialBuId;
-            }
-            console.warn(`No mapping found for local account ${localId}, using as is`);
-            return localId;
-          });
-        } else {
-          // If no mappings are available, use the selected platforms as-is
-          // (backend will still correct these IDs)
-          correctAccountIds = selectedPlatforms;
-          console.warn("No account ID mappings available, using original IDs:", selectedPlatforms);
+      // Determine post type based on media
+      let postType = "text"
+      if (uploadedMedia.length > 0) {
+        const mediaType = uploadedMedia[0].type || ""
+        if (mediaType.includes("image")) {
+          postType = "image"
+        } else if (mediaType.includes("video")) {
+          postType = "video"
         }
-        
-        console.log("Original selected platforms:", selectedPlatforms);
-        console.log("Mapped to SocialBu account IDs:", correctAccountIds);
-        
-        // Create post data in the new format required by SocialBu API
-        const postData = {
-          accounts: correctAccountIds, // Use the correct SocialBu account IDs
-          content,
-          draft: isDraft,
-          // Format the date exactly in the "Y-m-d H:i:s" format required by SocialBu API
-          publish_at: isDraft ? undefined : format(scheduledDate, "yyyy-MM-dd HH:mm:ss"),
-          // Convert uploaded media to the format expected by SocialBu
-          // The backend expects an array of objects with 'upload_token' field
-          existing_attachments: uploadedMedia.length > 0 
-            ? uploadedMedia.map(media => ({ 
-                upload_token: media.id.toString() 
-              }))
-            : undefined,
-          // Optional fields
-          team_id: 0, // Default to 0 if no specific team ID is available
-          postback_url: "https://186b-41-139-175-41.ngrok-free.app/dashboard/posts",
-          // Include the platform for better backend handling
-          platform: selectedPlatform,
-          
-          // Platform-specific options based on SocialBu API docs
-          options: {
-            // Common options
-            post_as_story: false,
-            
-            // Platform-specific options
-            ...(selectedPlatform === 'facebook' && {
-              comment: "", // Optional comment for the post
-            }),
-            
-            ...(selectedPlatform === 'instagram' && {
-              post_as_reel: false, // Post as a reel instead of regular post
-              share_reel_to_feed: false, // Share reel to feed option
-            }),
-            
-            ...(selectedPlatform === 'twitter' && {
-              media_alt_text: "", // Alt text for media
-              threaded_replies: false, // Enable threaded replies
-            }),
-            
-            ...(selectedPlatform === 'linkedin' && {
-              trim_link_from_content: true, // Remove link from content and use as separate field
-              customize_link: false, // Customize link preview
-            })
+      }
+
+      // Create post data in the exact format required by AllAuth API
+      const postData = {
+        content: content,
+        post_type: postType,
+        scheduled_time: scheduledDate.toISOString(),
+        status: isDraft ? "draft" : "scheduled",
+        platforms: selectedPlatforms.map((platformId) => {
+          // Find the account to get social_app if available
+          const account = accounts.find((acc) => acc.social_account_id === platformId)
+          return {
+            social_account: platformId,
+            social_app: account?.social_app_id,
+            custom_content: "",
           }
-        }
+        }),
+      }
 
-        // Create post
-        const post = await api.createPost(postData)
+      // If we have media, handle it separately as it's not part of the main request body
+      if (uploadedMedia.length > 0) {
+        // Attach media IDs in a separate request or as query parameters
+        // This depends on how your API expects to receive media information
+        const mediaIds = uploadedMedia.map((media) => media.id)
 
-        toast({
-          title: isDraft ? "Draft saved" : "Post scheduled",
-          description: isDraft
-            ? "Your draft has been saved successfully."
-            : `Your post has been scheduled for ${format(scheduledDate, "PPP p")}.`,
+        // Example: You might need to make a separate API call to associate media
+        // or your API might accept media IDs as query parameters
+        await fetch(`/api/social/posts/media?ids=${mediaIds.join(",")}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
         })
+      }
 
-        // Redirect to posts page
-        router.push("/dashboard/posts")
-      }, "Failed to create post")
+      // Create post using AllAuth API
+      const response = await getAPI().createPost(postData)
+
+
+      if (response) {
+        await getAPI().publishPost(response.id)
+      }
+
+
+      toast({
+        title: isDraft ? "Draft saved" : "Post scheduled",
+        description: isDraft
+          ? "Your draft has been saved successfully."
+          : `Your post has been scheduled for ${format(scheduledDate, "PPP p")}.`,
+      })
+
+      // Redirect to posts page
+      router.push("/dashboard/posts")
     } catch (error) {
       console.error("Error creating post:", error)
+      toast({
+        title: "Failed to create post",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -298,11 +244,11 @@ export default function CreatePostPage() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="end">
-                <CalendarComponent 
-                  mode="single" 
-                  selected={date} 
-                  onSelect={(newDate) => newDate && setDate(newDate)} 
-                  initialFocus 
+                <CalendarComponent
+                  mode="single"
+                  selected={date}
+                  onSelect={(newDate) => newDate && setDate(newDate)}
+                  initialFocus
                 />
                 <div className="p-3 border-t">
                   <div className="flex items-center gap-2">
@@ -345,23 +291,25 @@ export default function CreatePostPage() {
                     <div>
                       <Label className="text-base font-medium mb-2 block">Select Platforms</Label>
                       <div className="flex flex-wrap gap-3">
-                        {Array.isArray(accounts) && accounts.length > 0 ? accounts.map((account) => {
-                          const platform = platformConfig[account.platform] || { icon: ImageIcon, color: "#666" }
-                          const PlatformIcon = platform.icon
-                          const isSelected = selectedPlatforms.includes(account.id)
+                        {Array.isArray(accounts) && accounts.length > 0 ? (
+                          accounts.map((account) => {
+                            const platform = platformConfig[account.provider] || { icon: ImageIcon, color: "#666" }
+                            const PlatformIcon = platform.icon
+                            const isSelected = selectedPlatforms.includes(account.id)
 
-                          return (
-                            <Button
-                              key={account.id}
-                              variant={isSelected ? "default" : "outline"}
-                              className={`flex items-center ${isSelected ? "bg-[#FF8C2A] hover:bg-[#e67e25]" : ""}`}
-                              onClick={() => togglePlatform(account.id)}
-                            >
-                              <PlatformIcon className="mr-2 h-4 w-4" />
-                              {account.name}
-                            </Button>
-                          )
-                        }) : (
+                            return (
+                              <Button
+                                key={account.id}
+                                variant={isSelected ? "default" : "outline"}
+                                className={`flex items-center ${isSelected ? "bg-[#FF8C2A] hover:bg-[#e67e25]" : ""}`}
+                                onClick={() => togglePlatform(account.id)}
+                              >
+                                <PlatformIcon className="mr-2 h-4 w-4" />
+                                {account.display_name}
+                              </Button>
+                            )
+                          })
+                        ) : (
                           <div className="text-muted-foreground text-sm">
                             No connected platforms. Please connect a platform first.
                           </div>
@@ -516,7 +464,7 @@ export default function CreatePostPage() {
                       accounts
                         .filter((account) => selectedPlatforms.includes(account.id))
                         .map((account) => {
-                          const platform = platformConfig[account.platform] || { icon: ImageIcon, color: "#666" }
+                          const platform = platformConfig[account.provider] || { icon: ImageIcon, color: "#666" }
                           const PlatformIcon = platform.icon
 
                           return (
@@ -525,7 +473,7 @@ export default function CreatePostPage() {
                                 <div className="p-1 rounded-full" style={{ backgroundColor: `${platform.color}20` }}>
                                   <PlatformIcon className="h-5 w-5" style={{ color: platform.color }} />
                                 </div>
-                                <span className="font-medium">{account.name} Preview</span>
+                                <span className="font-medium">{account.display_name} Preview</span>
                               </div>
                               <div className="bg-muted rounded-md h-40 flex items-center justify-center mb-3">
                                 {uploadedMedia.length > 0 ? (

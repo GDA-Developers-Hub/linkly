@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { getSocialBuAPI } from "@/lib/socialbu-api"
+import { getSocialBuAPI } from "@/lib/socials-api"
 import { Loader2, AlertCircle, Copy, CheckCircle, Facebook, Instagram, Twitter, Linkedin, RefreshCw, Check, AlertTriangle, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 

@@ -18,22 +18,22 @@ const API_BASE_URL = getApiBaseUrl();
 
 class UserService {
     private async get<T>(endpoint: string): Promise<T> {
-        const response = await axios.get<T>(`${API_BASE_URL}/api/users${endpoint}`);
+        const response = await axios.get<T>(`${API_BASE_URL}/account/${endpoint}`);
         return response.data;
     }
 
     private async post<T>(endpoint: string, data?: any): Promise<T> {
-        const response = await axios.post<T>(`${API_BASE_URL}/api/users${endpoint}`, data);
+        const response = await axios.post<T>(`${API_BASE_URL}/account/${endpoint}`, data);
         return response.data;
     }
 
     private async patch<T>(endpoint: string, data: any): Promise<T> {
-        const response = await axios.patch<T>(`${API_BASE_URL}/api/users${endpoint}`, data);
+        const response = await axios.patch<T>(`${API_BASE_URL}/account/${endpoint}`, data);
         return response.data;
     }
 
     private async delete<T>(endpoint: string): Promise<T> {
-        const response = await axios.delete<T>(`${API_BASE_URL}/api/users${endpoint}`);
+        const response = await axios.delete<T>(`${API_BASE_URL}/account/${endpoint}`);
         return response.data;
     }
 

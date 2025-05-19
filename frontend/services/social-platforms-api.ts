@@ -5,23 +5,21 @@
 
 // Types
 export interface SocialAccount {
-  id: number;
-  account_id: string;
-  account_name: string;
+  id?: number;
+  uid: string;
+  account_id?: string;
+  display_name: string;
   account_type: string;
-  platform: {
-    id: number;
-    name: string;
-    display_name: string;
-  };
-  profile_picture_url: string | null;
-  status: string;
-  is_primary: boolean;
+  provider: string;
+  email: string;
+  profile_picture_url?: string | null;
+  status?: string;
+  is_primary?: boolean;
   followers?: number;
   engagement_rate?: number;
   reach?: number;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface SocialPost {
@@ -67,7 +65,7 @@ export class SocialPlatformsAPI {
 
   constructor() {
     // Default to the production URL instead of local development
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://linkly-production.up.railway.app/api';
+    this.baseUrl = process.env.API_URL || 'http://localhost:8000';
     
     console.log('SocialPlatformsAPI using backend URL:', this.baseUrl);
   }
@@ -116,9 +114,9 @@ export class SocialPlatformsAPI {
    */
   async getAccountsWithAllauth(): Promise<SocialAccount[]> {
     // Use the new unified accounts endpoint
-    const endpoint = this.baseUrl.endsWith('/api/') 
-      ? 'social_platforms/api/accounts/' 
-      : '/api/social_platforms/api/accounts/';
+    const endpoint = this.baseUrl.endsWith('/accounts/') 
+      ? 'connected-accounts/' 
+      : '/accounts/connected-accounts/';
 
     console.log(`Fetching accounts from Allauth endpoint: ${this.baseUrl}${endpoint}`);
     
