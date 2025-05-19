@@ -26,6 +26,13 @@ class PostMediaSerializer(serializers.ModelSerializer):
         return None
 
 
+    def get_social_app_id(self, obj):
+        try:
+            return SocialApp.objects.get(provider=obj.provider).id
+        except SocialApp.DoesNotExist:
+            return None
+
+
 class PostMetricsSerializer(serializers.ModelSerializer):
     class Meta:
         model = PostMetrics

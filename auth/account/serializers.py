@@ -4,6 +4,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserProfile
 from django.contrib.auth.models import Group
+from allauth.socialaccount.models import SocialAccount, SocialApp
 
 User = get_user_model()
 
@@ -94,3 +95,32 @@ class ChangePasswordSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['confirm_password']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
         return attrs
+
+
+class ConnectedAccountSerializer(serializers.ModelSerializer):
+    social_account_id = serializers.IntegerField(source="id")
+    social_app_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SocialAccount
+        # include all model fields + extras
+        fields = "__all__"  # this includes: id, provider, uid, user, last_login, extra_data, etc.
+        extra_fields = ["social_account_id", "social_app_id"]
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        # Add custom field values
+        representation["social_account_id"] = instance.id
+        representation["social_app_id"] = self.get_social_app_id(instance)
+        return representation
+    
+    def get_social_app_id(self, obj):
+        # Try to match with SocialApp (may require better logic if using multiple apps per provider)
+        try:
+            if obj.provider == "linkedin":
+                provider = "openid_connect"
+            else:
+                provider = obj.provider
+            return SocialApp.objects.get(provider=provider).id
+        except SocialApp.DoesNotExist:
+            return None

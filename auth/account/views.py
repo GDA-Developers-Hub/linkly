@@ -6,14 +6,19 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth.models import Group
-from rest_framework.decorators import action
-
+from rest_framework.decorators import action, api_view, permission_classes
+from .models import UserProfile
+from allauth.socialaccount.models import SocialAccount
 from .serializers import (
     UserSerializer, 
     UserRegisterSerializer, 
     CustomTokenObtainPairSerializer,
-    ChangePasswordSerializer
+    ChangePasswordSerializer,
+    ConnectedAccountSerializer
 )
+ # Set up logging
+import logging
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -27,9 +32,7 @@ class UserRegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        # Set up logging
-        import logging
-        logger = logging.getLogger(__name__)
+       
         logger.info(f"Starting user registration process for email: {request.data.get('email')}")
         
         # Create user in our system
@@ -37,7 +40,6 @@ class UserRegisterView(generics.CreateAPIView):
         logger.info(f"Created user in database with ID: {user.id}")
         
         # Ensure UserProfile exists (normally created by signal, but check as backup)
-        from .models import UserProfile
         if not hasattr(user, 'profile'):
             UserProfile.objects.create(user=user)
             logger.info(f"Created UserProfile for user ID: {user.id}")
@@ -197,3 +199,12 @@ class UserViewSet(viewsets.ModelViewSet):
                 {'success': False, 'message': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class ConnectedAccountsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        accounts = SocialAccount.objects.filter(user=request.user)
+        serializer = ConnectedAccountSerializer(accounts, many=True)
+        return Response(serializer.data)
