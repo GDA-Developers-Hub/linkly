@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { getSocialBuAPI } from "@/lib/socials-api"
 import { Loader2, AlertCircle, Copy, CheckCircle, Facebook, Instagram, Twitter, Linkedin, RefreshCw, Check, AlertTriangle, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
@@ -61,17 +60,42 @@ export function AccountChecker({ onValidAccountSelect }: AccountCheckerProps) {
     setError(null)
     
     try {
-      const api = getSocialBuAPI()
-      const response = await fetch('/api/socialbu/my_accounts/')
+      // Mock account data instead of API call
+      const mockAccounts: Account[] = [
+        { 
+          id: 1, 
+          name: "Facebook Business Page", 
+          platform: "facebook", 
+          type: "page", 
+          status: "connected", 
+          in_database: true 
+        },
+        { 
+          id: 2, 
+          name: "Instagram Profile", 
+          platform: "instagram", 
+          type: "profile", 
+          status: "connected", 
+          in_database: true 
+        },
+        { 
+          id: 3, 
+          name: "Twitter Account", 
+          platform: "twitter", 
+          type: "profile", 
+          status: "connected", 
+          in_database: true 
+        }
+      ];
       
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to fetch accounts')
-      }
+      // Mock user ID
+      const mockUserId = "user_12345";
+
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      const data: AccountsResponse = await response.json()
-      setAccounts(data.accounts)
-      setUserId(data.user_id)
+      setAccounts(mockAccounts);
+      setUserId(mockUserId);
     } catch (err) {
       console.error('Error fetching accounts:', err)
       setError(err instanceof Error ? err.message : 'Unknown error occurred')
@@ -112,7 +136,7 @@ export function AccountChecker({ onValidAccountSelect }: AccountCheckerProps) {
       <Card>
         <CardHeader>
           <CardTitle>Checking Your Accounts</CardTitle>
-          <CardDescription>Verifying your SocialBu accounts...</CardDescription>
+          <CardDescription>Verifying your connected accounts...</CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center items-center py-6">
           <Spinner />
@@ -149,7 +173,7 @@ export function AccountChecker({ onValidAccountSelect }: AccountCheckerProps) {
         </CardTitle>
         <CardDescription>
           {userId ? (
-            <>SocialBu User ID: <span className="font-mono">{userId}</span></>
+            <>User ID: <span className="font-mono">{userId}</span></>
           ) : (
             "These are the accounts you can post to"
           )}

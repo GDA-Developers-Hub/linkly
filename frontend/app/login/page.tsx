@@ -5,13 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { getSocialBuAPI } from "@/lib/socials-api"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { Loader2 } from "lucide-react"
 
-export default function SocialBuLoginPage() {
+export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -33,24 +32,18 @@ export default function SocialBuLoginPage() {
     setIsLoading(true)
 
     try {
-      // Get SocialBu API instance
-      const api = getSocialBuAPI()
-      
-      // Authenticate
-      await api.authenticate(email, password)
-
-      // Show success message
+      // Simply redirect to dashboard (no authentication in demo mode)
       toast({
         title: "Success",
-        description: "You have been successfully logged in to SocialBu",
+        description: "Logged in successfully",
       })
-
+      
       // Redirect to dashboard
       router.push("/dashboard")
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Authentication failed",
+        description: "Authentication failed",
         variant: "destructive",
       })
     } finally {
@@ -62,9 +55,9 @@ export default function SocialBuLoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Log in to SocialBu</CardTitle>
+          <CardTitle className="text-2xl font-bold">Log in</CardTitle>
           <CardDescription>
-            Enter your SocialBu credentials to access your account
+            Enter your credentials to access your account
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -117,7 +110,7 @@ export default function SocialBuLoginPage() {
             <p className="text-center text-xs text-gray-500 mt-4">
               By logging in, you agree to the{" "}
               <a 
-                href="https://socialbu.com/terms" 
+                href="/terms" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="underline"
@@ -126,7 +119,7 @@ export default function SocialBuLoginPage() {
               </a>{" "}
               and{" "}
               <a 
-                href="https://socialbu.com/privacy" 
+                href="/privacy" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="underline"

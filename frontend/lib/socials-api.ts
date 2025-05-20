@@ -1,8 +1,7 @@
-import { withErrorHandling } from "./api";
-import { socialPlatformsApi } from "@/services/social-platforms-api";
+import { withErrorHandling as originalWithErrorHandling } from "./api";
 
 // Re-export withErrorHandling for backward compatibility
-export { withErrorHandling };
+export const withErrorHandling = originalWithErrorHandling;
 
 // Basic Post and Account type definitions for backward compatibility
 export interface Post {
@@ -30,37 +29,6 @@ export interface Account {
   name: string;
   platform?: string;
   account_type?: string;
-}
-
-// Compatibility function to provide the getSocialBuAPI functionality
-export function getSocialBuAPI() {
-  // Add missing methods to the socialPlatformsApi if they don't exist
-  if (!socialPlatformsApi.deletePost) {
-    socialPlatformsApi.deletePost = async (id: number) => {
-      console.log(`[Mock] Deleting post ${id}`);
-      return { success: true };
-    };
-  }
-  
-  // Make sure we have all the methods that might be used
-  const enhancedApi = {
-    ...socialPlatformsApi,
-    getPosts: socialPlatformsApi.getPosts || (async (params: any = {}) => {
-      console.log('[Mock] Getting posts with params:', params);
-      return [];
-    }),
-    getAccounts: socialPlatformsApi.getAccounts || (async () => {
-      console.log('[Mock] Getting accounts');
-      return [];
-    }),
-    deletePost: socialPlatformsApi.deletePost || (async (id: number) => {
-      console.log(`[Mock] Deleting post ${id}`);
-      return { success: true };
-    })
-  };
-  
-  // Return the enhanced socialPlatformsApi
-  return enhancedApi;
 }
 
 export class AuthAPI {
