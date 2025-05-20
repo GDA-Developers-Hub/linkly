@@ -8,7 +8,6 @@ import { ModeToggle } from "@/components/mode-toggle"
 import Image from "next/image"
 import logo from "@/public/logo-no-bg.png"
 import socialbu from "@/public/socialbu-logo.png"
-import linklyVideo from "@/public/linkly.mp4"
 import {
   ChevronRight,
   ArrowRight,
@@ -41,12 +40,14 @@ const TypewriterEffect = ({
   text, 
   duration = 1.5, 
   delay = 0,
-  className = "" 
+  className = "",
+  continuous = false
 }: { 
   text: string; 
   duration?: number; 
   delay?: number;
   className?: string;
+  continuous?: boolean;
 }) => {
   const [displayText, setDisplayText] = React.useState("");
   
@@ -54,16 +55,49 @@ const TypewriterEffect = ({
     let timeout: NodeJS.Timeout;
     let currentIndex = 0;
     let currentText = "";
+    let isErasing = false;
     
     const typeNextCharacter = () => {
-      if (currentIndex < text.length) {
-        currentText += text.charAt(currentIndex);
-        setDisplayText(currentText);
-        currentIndex++;
+      if (!continuous) {
+        // Original single-pass typing logic
+        if (currentIndex < text.length) {
+          currentText += text.charAt(currentIndex);
+          setDisplayText(currentText);
+          currentIndex++;
+          
+          // Calculate typing speed with some randomness for realism
+          const typingSpeed = (duration * 1000) / text.length * (0.5 + Math.random());
+          timeout = setTimeout(typeNextCharacter, typingSpeed);
+        }
+      } else {
+        // Continuous typing and erasing logic
+        if (!isErasing) {
+          // Typing forward
+          if (currentIndex < text.length) {
+            currentText += text.charAt(currentIndex);
+            currentIndex++;
+          } else {
+            isErasing = true;
+            timeout = setTimeout(typeNextCharacter, 2000); // Pause at the end
+            return;
+          }
+        } else {
+          // Erasing
+          if (currentText.length > 0) {
+            currentText = currentText.slice(0, -1);
+            currentIndex--;
+          } else {
+            isErasing = false;
+            timeout = setTimeout(typeNextCharacter, 1000); // Pause before retyping
+            return;
+          }
+        }
         
-        // Calculate typing speed with some randomness for realism
-        const typingSpeed = (duration * 1000) / text.length * (0.5 + Math.random());
-        timeout = setTimeout(typeNextCharacter, typingSpeed);
+        setDisplayText(currentText);
+        
+        // Calculate speed - faster for erasing, normal for typing
+        const speed = isErasing ? 50 : (duration * 1000) / text.length * (0.5 + Math.random());
+        timeout = setTimeout(typeNextCharacter, speed);
       }
     };
     
@@ -76,7 +110,7 @@ const TypewriterEffect = ({
       clearTimeout(timeout);
       clearTimeout(startTimeout);
     };
-  }, [text, duration, delay]);
+  }, [text, duration, delay, continuous]);
   
   return <span className={className}>{displayText}</span>;
 };
@@ -182,27 +216,6 @@ export function LandingPage() {
   const handleVideoLoad = () => {
     setIsVideoLoaded(true)
   }
-
-  // Preload video when component mounts
-  React.useEffect(() => {
-    const video = videoRef.current
-    if (video) {
-      video.preload = "metadata" // Only load video metadata initially
-      video.load()
-    }
-  }, [])
-
-  // Cleanup video on unmount
-  React.useEffect(() => {
-    const video = videoRef.current
-    return () => {
-      if (video) {
-        video.pause()
-        video.src = ""
-        video.load()
-      }
-    }
-  }, [])
 
   // Handle scroll event to change header appearance
   React.useEffect(() => {
@@ -740,7 +753,7 @@ export function LandingPage() {
                           animate={{ opacity: 1 }}
                           transition={{ delay: 0.5 }}
                         >
-                          <TypewriterEffect text="Creating perfect caption..." duration={2} />
+                          <TypewriterEffect text="Creating perfect caption..." duration={2} continuous={true} />
                         </motion.div>
                         
                         <div className="bg-gray-100 dark:bg-gray-700/50 p-3 rounded-lg mb-4">
@@ -754,6 +767,7 @@ export function LandingPage() {
                               text="Enjoying the sunrise views with our new summer collection! ☀️ Perfect for your morning routine and daily inspiration." 
                               duration={3} 
                               delay={2.5}
+                              continuous={true}
                             />
                           </motion.div>
                         </div>
@@ -770,6 +784,7 @@ export function LandingPage() {
                             duration={2} 
                             delay={6}
                             className="text-[#FF8C2A] dark:text-[#FF8C2A] text-sm font-medium"
+                            continuous={true}
                           />
                         </motion.div>
                         
