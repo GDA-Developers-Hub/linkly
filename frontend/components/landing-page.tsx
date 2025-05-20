@@ -8,6 +8,7 @@ import { ModeToggle } from "@/components/mode-toggle"
 import Image from "next/image"
 import logo from "@/public/logo-no-bg.png"
 import socialbu from "@/public/socialbu-logo.png"
+import linklyVideo from "@/public/linkly.mp4"
 import {
   ChevronRight,
   ArrowRight,
@@ -152,17 +153,49 @@ export function LandingPage() {
   const [howItWorksRef, howItWorksInView] = useScrollAnimation()
   const [trustedByRef, trustedByInView] = useScrollAnimation()
 
-  // Simplified video state
-  const [recordedVideoUrl, setRecordedVideoUrl] = React.useState<string | null>(null)
-  
-  // Cleanup on unmount
-  React.useEffect(() => {
-    return () => {
-      if (recordedVideoUrl && recordedVideoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(recordedVideoUrl);
+  // Video state management
+  const [isVideoPlaying, setIsVideoPlaying] = React.useState(false)
+  const [isVideoLoaded, setIsVideoLoaded] = React.useState(false)
+  const [showPreview, setShowPreview] = React.useState(true)
+  const videoRef = React.useRef<HTMLVideoElement>(null)
+
+  const handleVideoPlay = () => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play()
+        setIsVideoPlaying(true)
+        setShowPreview(false)
+      } else {
+        videoRef.current.pause()
+        setIsVideoPlaying(false)
       }
-    };
-  }, [recordedVideoUrl]);
+    }
+  }
+
+  const handleVideoLoad = () => {
+    setIsVideoLoaded(true)
+  }
+
+  // Preload video when component mounts
+  React.useEffect(() => {
+    const video = videoRef.current
+    if (video) {
+      video.preload = "metadata" // Only load video metadata initially
+      video.load()
+    }
+  }, [])
+
+  // Cleanup video on unmount
+  React.useEffect(() => {
+    const video = videoRef.current
+    return () => {
+      if (video) {
+        video.pause()
+        video.src = ""
+        video.load()
+      }
+    }
+  }, [])
 
   // Handle scroll event to change header appearance
   React.useEffect(() => {
@@ -220,8 +253,6 @@ export function LandingPage() {
     "/placeholder.svg?height=40&width=120",
   ]
 
-
-
   // Add this for carousel autoplay control
   const [api, setApi] = React.useState<any>()
   
@@ -236,8 +267,6 @@ export function LandingPage() {
     // Clear interval on component unmount
     return () => clearInterval(autoplayInterval);
   }, [api]);
-
-
 
   return (
     <div className="min-h-screen bg-background">
@@ -1024,96 +1053,78 @@ export function LandingPage() {
                 </p>
             </div>
 
-            <div className="relative rounded-xl overflow-hidden shadow-2xl border-4 border-white dark:border-gray-800 bg-gradient-to-br from-white to-gray-100 dark:from-gray-900 dark:to-gray-800">
-              {recordedVideoUrl ? (
-                <div className="relative w-full aspect-video bg-black">
-                  <video
-                    src={recordedVideoUrl}
-                    controls
-                    autoPlay
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-              ) : (
-                <div className="relative w-full aspect-video bg-gradient-to-br from-gray-900 to-black flex flex-col items-center justify-center">
-                  <div className="absolute inset-0 opacity-20">
-                    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2940')] bg-cover bg-center"></div>
-                    <div className="absolute inset-0 bg-gradient-to-r from-black to-transparent"></div>
-                  </div>
-                  
-                  <div className="relative z-10">
-                    <div className="mb-4 p-4 rounded-full bg-[#FF8C2A]/20">
-                      <motion.div
-                        animate={{ scale: [1, 1.2, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                      >
-                        <Play className="h-12 w-12 text-[#FF8C2A]" />
-                      </motion.div>
+            <div className="relative rounded-xl overflow-hidden shadow-2xl border-4 border-white dark:border-gray-800">
+              <div className="relative w-full aspect-video bg-black">
+                {/* Preview Image */}
+                {showPreview && (
+                  <div 
+                    className="absolute inset-0 bg-cover bg-center cursor-pointer"
+                    style={{ 
+                      backgroundImage: 'url(https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2940)',
+                      filter: 'brightness(0.8)'
+                    }}
+                    onClick={handleVideoPlay}
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-white/90 rounded-full p-4 transform transition-transform hover:scale-110">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#FF8C2A" className="h-12 w-12">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </div>
                     </div>
-                    <p className="text-white mb-6 text-lg font-medium">Watch our AI-generated product demo</p>
-                    <Button 
-                      onClick={() => setRecordedVideoUrl("/linkly-demo.mp4")}
-                      className="bg-[#FF8C2A] text-white hover:bg-[#e67e25] px-6 py-3 text-lg font-medium shadow-lg hover:shadow-xl transition-all"
+                  </div>
+                )}
+
+                {/* Loading Spinner */}
+                {!isVideoLoaded && !showPreview && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#FF8C2A] border-t-transparent"></div>
+                  </div>
+                )}
+
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  playsInline
+                  preload="metadata"
+                  onLoadedData={handleVideoLoad}
+                  onClick={handleVideoPlay}
+                >
+                  <source src="/Linkly.mp4" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+                
+                {/* Video controls overlay - always visible on mobile, visible on hover for desktop */}
+                {!showPreview && (
+                  <div 
+                    className="absolute inset-0 flex items-center justify-center bg-black/40 md:opacity-0 md:hover:opacity-100 transition-opacity duration-300"
+                    onClick={handleVideoPlay}
+                  >
+                    <Button
                       size="lg"
+                      className="bg-white/90 text-gray-900 hover:bg-white hover:scale-105 transform transition-all duration-200 shadow-xl"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleVideoPlay()
+                      }}
                     >
-                      Play AI Demo
+                      {isVideoPlaying ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
+                          <rect x="6" y="4" width="4" height="16" />
+                          <rect x="14" y="4" width="4" height="16" />
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      )}
                     </Button>
                   </div>
-                  
-                  {/* AI Assistant Animation */}
-                  <motion.div 
-                    className="absolute bottom-6 right-6 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg max-w-xs"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-[#FF8C2A] flex items-center justify-center">
-                        <span className="text-white font-bold">AI</span>
-                      </div>
-                      <p className="text-sm font-medium">Linkly AI Assistant</p>
-                    </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-300">
-                      "Let me walk you through Linkly's key features: multi-platform scheduling, AI caption generation, engagement analytics, and our visual content calendar!"
-                    </p>
-                  </motion.div>
-                </div>
-              )}
-
-              {/* Video controls overlay */}
-              {recordedVideoUrl && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300">
-                  <Button
-                    size="lg"
-                    className="bg-white text-gray-900 hover:bg-gray-100"
-                    onClick={() => {
-                      const video = document.querySelector('video');
-                      if (video) {
-                        if (video.paused) {
-                          video.play();
-                        } else {
-                          video.pause();
-                        }
-                      }
-                    }}
-                  >
-                    <PlayCircle className="h-8 w-8" />
-                  </Button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </motion.div>
         </section>
-
-        
-
-
-
-
-
-
-
-
       </main>
 
       {/* Footer */}
@@ -1121,3 +1132,4 @@ export function LandingPage() {
     </div>
   )
 }
+
