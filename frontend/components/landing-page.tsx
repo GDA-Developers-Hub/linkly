@@ -23,6 +23,8 @@ import {
   ExternalLink,
   ArrowUpRight,
   ChevronLeft,
+  Play,
+  PlayCircle,
 } from "lucide-react"
 import { PlatformIcons } from "@/components/platform-icons"
 import { SocialIntegrationIllustrationV2 } from "@/components/illustrations/social-integration-illustration-v2"
@@ -31,24 +33,52 @@ import { useIsMobile } from "@/components/ui/use-mobile"
 import { cn } from "@/lib/utils"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
-import { PartnerCarousel } from "@/components/partner-carousel"
 import { SiteFooter } from "@/components/site-footer"
 
-interface Testimonial {
-  id: number
-  quote: string
-  author: string
-  role: string
-  company?: string
-  avatar?: string
-}
-
-interface Partner {
-  id: number
-  name: string
-  logo: string
-  description: string
-}
+// TypewriterEffect component for animated typing
+const TypewriterEffect = ({ 
+  text, 
+  duration = 1.5, 
+  delay = 0,
+  className = "" 
+}: { 
+  text: string; 
+  duration?: number; 
+  delay?: number;
+  className?: string;
+}) => {
+  const [displayText, setDisplayText] = React.useState("");
+  
+  React.useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    let currentIndex = 0;
+    let currentText = "";
+    
+    const typeNextCharacter = () => {
+      if (currentIndex < text.length) {
+        currentText += text.charAt(currentIndex);
+        setDisplayText(currentText);
+        currentIndex++;
+        
+        // Calculate typing speed with some randomness for realism
+        const typingSpeed = (duration * 1000) / text.length * (0.5 + Math.random());
+        timeout = setTimeout(typeNextCharacter, typingSpeed);
+      }
+    };
+    
+    // Start typing after the specified delay
+    const startTimeout = setTimeout(() => {
+      typeNextCharacter();
+    }, delay * 1000);
+    
+    return () => {
+      clearTimeout(timeout);
+      clearTimeout(startTimeout);
+    };
+  }, [text, duration, delay]);
+  
+  return <span className={className}>{displayText}</span>;
+};
 
 interface Feature {
   title: string
@@ -116,163 +146,23 @@ export function LandingPage() {
   const { theme } = useTheme()
   const isMobile = useIsMobile()
 
-  const [partners] = React.useState<Partner[]>([
-    {
-      id: 1,
-      name: "Google",
-      logo: "/google-logo.png",
-      description: "Search and advertising partner powering our analytics and ad campaigns.",
-    },
-    {
-      id: 2,
-      name: "AWS",
-      logo: "/aws-logo.svg",
-      description: "Cloud infrastructure powering our scalable platform services.",
-    },
-    {
-      id: 3,
-      name: "LinkedIn",
-      logo: "/linkedin-logo.png",
-      description: "Professional networking and B2B marketing partner.",
-    },
-    {
-      id: 4,
-      name: "Instagram",
-      logo: "/instagram-logo.svg",
-      description: "Visual storytelling and influencer marketing partner.",
-    },
-    {
-      id: 5,
-      name: "WhatsApp",
-      logo: "/whatsapp-logo.svg",
-      description: "Messaging integration for customer engagement and support.",
-    },
-    {
-      id: 6,
-      name: "Facebook",
-      logo: "/facebook-logo.svg", 
-      description: "Community engagement and advertising partner.",
-    },
-    {
-      id: 7,
-      name: "Twitter",
-      logo: "/twitter-logo.svg",
-      description: "Real-time conversation and trend monitoring partner.",
-    },
-    {
-      id: 8,
-      name: "TikTok",
-      logo: "/tiktok-logo.png",
-      description: "Short-form video content and trending social platform.",
-    },
-    {
-      id: 9,
-      name: "YouTube",
-      logo: "/youtube-logo.svg",
-      description: "Video content hosting and marketing platform integration.",
-    },
-  ])
-
   // Animation refs
   const [heroRef, heroInView] = useScrollAnimation(0.1)
   const [featuresRef, featuresInView] = useScrollAnimation()
   const [howItWorksRef, howItWorksInView] = useScrollAnimation()
-  const [partnersRef, partnersInView] = useScrollAnimation()
-  const [futureRef, futureInView] = useScrollAnimation()
   const [trustedByRef, trustedByInView] = useScrollAnimation()
 
-  // Remove the video state variables and functions
-  const [videoStream, setVideoStream] = React.useState<MediaStream | null>(null)
-  const [isRecording, setIsRecording] = React.useState(false)
-  const [recordedChunks, setRecordedChunks] = React.useState<BlobPart[]>([])
+  // Simplified video state
   const [recordedVideoUrl, setRecordedVideoUrl] = React.useState<string | null>(null)
-  const [showRecorder, setShowRecorder] = React.useState(false)
-  const videoRef = React.useRef<HTMLVideoElement>(null)
-  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null)
-
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user', width: 1280, height: 720 },
-        audio: true 
-      });
-      setVideoStream(stream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-      setShowRecorder(true);
-    } catch (err) {
-      console.error("Error accessing camera:", err);
-      // Fallback if camera access fails
-      setRecordedVideoUrl("/linkly-demo.mp4");
-    }
-  };
-
-  const startRecording = () => {
-    if (!videoStream) return;
-    
-    setRecordedChunks([]);
-    const mediaRecorder = new MediaRecorder(videoStream, { mimeType: 'video/webm' });
-    
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) {
-        setRecordedChunks(prev => [...prev, e.data]);
-      }
-    };
-    
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-      setRecordedVideoUrl(url);
-    };
-    
-    mediaRecorderRef.current = mediaRecorder;
-    mediaRecorder.start();
-    setIsRecording(true);
-    
-    // Auto-stop after 30 seconds
-    setTimeout(() => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        stopRecording();
-      }
-    }, 30000);
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
-  const resetRecording = () => {
-    if (recordedVideoUrl) {
-      URL.revokeObjectURL(recordedVideoUrl);
-    }
-    setRecordedVideoUrl(null);
-    setRecordedChunks([]);
-  };
-
-  const stopCamera = () => {
-    if (videoStream) {
-      videoStream.getTracks().forEach(track => track.stop());
-      setVideoStream(null);
-    }
-    setShowRecorder(false);
-    resetRecording();
-  };
-
+  
   // Cleanup on unmount
   React.useEffect(() => {
     return () => {
-      if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-      }
-      if (recordedVideoUrl) {
+      if (recordedVideoUrl && recordedVideoUrl.startsWith('blob:')) {
         URL.revokeObjectURL(recordedVideoUrl);
       }
     };
-  }, [videoStream, recordedVideoUrl]);
+  }, [recordedVideoUrl]);
 
   // Handle scroll event to change header appearance
   React.useEffect(() => {
@@ -330,23 +220,7 @@ export function LandingPage() {
     "/placeholder.svg?height=40&width=120",
   ]
 
-  const futureFeatures = [
-    {
-      title: "Advanced Ad Management",
-      description: "Create, manage, and optimize ad campaigns across multiple platforms with AI-powered targeting.",
-      icon: TrendingUp,
-    },
-    {
-      title: "Cross-Platform Analytics",
-      description: "Comprehensive analytics dashboard with unified metrics across all your social platforms.",
-      icon: BarChart3,
-    },
-    {
-      title: "Audience Insights",
-      description: "Deep demographic and behavioral analysis of your audience across all platforms.",
-      icon: Users,
-    },
-  ]
+
 
   // Add this for carousel autoplay control
   const [api, setApi] = React.useState<any>()
@@ -363,6 +237,8 @@ export function LandingPage() {
     return () => clearInterval(autoplayInterval);
   }, [api]);
 
+
+
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile-optimized header */}
@@ -372,44 +248,52 @@ export function LandingPage() {
         transition={{ duration: 0.5 }}
         className={cn(
           "sticky top-0 z-50 w-full border-b transition-all duration-300",
-          scrolled ? "bg-background/80 backdrop-blur-md" : "bg-background"
+          scrolled ? "bg-background/90 backdrop-blur-md shadow-sm" : "bg-background"
         )}
       >
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <Image src={logo} alt="Linkly Logo" className="h-12 w-auto" priority />
+            <Link href="/" className="flex items-center space-x-2 group" aria-label="Linkly Home">
+              <div className="relative h-12 w-40 overflow-visible">
+                <Image 
+                  src={logo} 
+                  alt="Linkly Logo" 
+                  className="object-contain scale-100 group-hover:scale-105 transition-transform duration-200" 
+                  fill
+                  priority 
+                  sizes="(max-width: 768px) 120px, 160px"
+                />
+              </div>
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center space-x-6">
+            <nav className="hidden md:flex items-center space-x-8">
               <a
                 href="#features"
                 onClick={scrollToSection}
-                className="text-sm font-medium hover:text-primary transition-colors"
+                className="text-sm font-medium hover:text-[#FF8C2A] transition-colors relative after:absolute after:bottom-[-2px] after:left-0 after:h-[2px] after:w-0 after:bg-[#FF8C2A] after:transition-all hover:after:w-full"
+                aria-label="View Features"
               >
                 Features
               </a>
               <a
                 href="#how-it-works"
                 onClick={scrollToSection}
-                className="text-sm font-medium hover:text-primary transition-colors"
+                className="text-sm font-medium hover:text-[#FF8C2A] transition-colors relative after:absolute after:bottom-[-2px] after:left-0 after:h-[2px] after:w-0 after:bg-[#FF8C2A] after:transition-all hover:after:w-full"
+                aria-label="Learn How It Works"
               >
                 How it works
               </a>
-              <a
-                href="#partners"
-                onClick={scrollToSection}
-                className="text-sm font-medium hover:text-primary transition-colors"
-              >
-                Partners
-              </a>
-              <div className="flex items-center space-x-4">
-              <ModeToggle />
-                <Button asChild className="bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
+              <div className="flex items-center space-x-4 ml-2">
+                <ModeToggle />
+                <Button 
+                  asChild 
+                  className="bg-[#FF8C2A] hover:bg-[#e67e25] text-white font-semibold shadow-lg hover:shadow-xl transition-all px-5"
+                  size="sm"
+                >
                   <Link href="/auth/register">Get Started</Link>
                 </Button>
-            </div>
+              </div>
             </nav>
 
             {/* Mobile Navigation Button */}
@@ -456,14 +340,6 @@ export function LandingPage() {
                 How it works
                 <ChevronRight className="h-4 w-4" />
             </a>
-            <a
-              href="#partners"
-                onClick={scrollToSection}
-                className="flex items-center justify-between py-2 text-sm font-medium hover:text-primary transition-colors"
-            >
-              Partners
-                <ChevronRight className="h-4 w-4" />
-            </a>
               <Button asChild className="w-full bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
                 <Link href="/auth/register">Get Started</Link>
               </Button>
@@ -476,80 +352,399 @@ export function LandingPage() {
         {/* Hero Section */}
         <section
           ref={heroRef as React.RefObject<HTMLDivElement>}
-          className="relative overflow-hidden py-20 md:py-32 bg-gradient-to-br from-[#FF8C2A]/10 via-white dark:via-gray-900 to-[#FF8C2A]/5 dark:text-white"
+          className="relative overflow-hidden py-2 md:py-2 bg-gradient-to-br from-[#FF8C2A]/20 via-white dark:via-gray-900 to-blue-500/10 dark:to-blue-500/5"
+          aria-labelledby="hero-heading"
         >
-              <motion.div
-                initial="hidden"
-                animate={heroInView ? "visible" : "hidden"}
+          {/* Background elements - optimized for performance */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <motion.div 
+              className="absolute top-0 left-0 w-full h-full opacity-10"
+              initial={{ backgroundSize: '100%' }}
+              animate={{ 
+                backgroundPosition: ['0% 0%', '100% 100%'],
+                backgroundSize: ['100%', '120%', '100%'] 
+              }}
+              transition={{ duration: 20, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+              style={{
+                backgroundImage: 'radial-gradient(circle at center, rgba(255,140,42,0.8) 0%, transparent 70%)',
+                filter: 'blur(60px)',
+                willChange: 'background-position, background-size'
+              }}
+            />
+            <motion.div 
+              className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-blue-500/20"
+              initial={{ scale: 1, opacity: 0.2 }}
+              animate={{ scale: [1, 1.1, 1], opacity: [0.2, 0.3, 0.2] }}
+              transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ filter: 'blur(40px)', willChange: 'transform, opacity' }}
+            />
+            <motion.div
+              className="absolute h-40 w-40 bottom-20 left-20 rounded-full bg-[#FF8C2A]/30"
+              initial={{ y: -10, opacity: 0.2 }}
+              animate={{ y: [-10, 10, -10], opacity: [0.2, 0.4, 0.2] }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ filter: 'blur(30px)', willChange: 'transform, opacity' }}
+            />
+          </div>
+
+          <motion.div
+            initial="hidden"
+            animate={heroInView ? "visible" : "hidden"}
             variants={staggerContainer}
-            className="container px-4 mx-auto"
+            className="container px-4 mx-auto relative z-10"
           >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <motion.div variants={fadeInLeft} className="text-center lg:text-left">
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 text-gray-900 dark:text-white">
-                  Simplify Your Social Media Management
+                <div className="inline-block mb-4 px-4 py-1 rounded-full bg-[#FF8C2A]/10 text-[#FF8C2A] font-medium text-sm backdrop-blur-sm">
+                  <motion.span 
+                    initial={{ opacity: 0, x: -10 }} 
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5, duration: 0.5 }}
+                  >
+                    Powerful Social Media Tool
+                  </motion.span>
+                </div>
+                <h1 
+                  id="hero-heading"
+                  className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-[#FF8C2A] dark:from-white dark:to-[#FF8C2A]"
+                >
+                  <span className="inline-block">Simplify Your</span>{" "}
+                  <span className="inline-block">Social Media</span>{" "}
+                  <span className="inline-block">Management</span>
                 </h1>
-                <p className="text-lg md:text-xl text-muted-foreground dark:text-gray-200 mb-8 max-w-2xl mx-auto lg:mx-0">
-                  Schedule posts, analyze performance, and grow your social media presence with our all-in-one platform.
+                <p className="text-lg md:text-xl text-muted-foreground dark:text-gray-200 mb-8 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                  Schedule posts, analyze performance, and grow your social media presence with our all-in-one platform designed for businesses of all sizes.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                  <Button size="lg" className="bg-[#FF8C2A] hover:bg-[#e67e25] text-white w-full sm:w-auto shadow-lg transition-transform hover:scale-105" asChild>
-                    <Link href="/auth/register">
-                      Get Started
-                      <ChevronRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <Button
-                    size="lg"
-                    className="w-full sm:w-auto bg-transparent dark:bg-white/10 text-foreground dark:text-white border-foreground dark:border-white hover:bg-foreground/10 transition-transform hover:scale-105"
-                    asChild
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 10 }}
                   >
-                    <a href="#features" onClick={scrollToSection}>
-                      Learn more
-                    </a>
-                  </Button>
+                    <Button 
+                      size="lg" 
+                      className="bg-gradient-to-r from-[#FF8C2A] to-[#e67e25] text-white w-full sm:w-auto shadow-lg hover:shadow-xl transition-all border-0 font-medium" 
+                      asChild
+                    >
+                      <Link href="/auth/register">
+                        Get Started
+                        <ChevronRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </motion.div>
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 10 }}
+                  >
+                    <Button
+                      size="lg"
+                      className="w-full sm:w-auto bg-white/80 dark:bg-white/10 text-gray-800 dark:text-white border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-white/20 transition-all shadow-md hover:shadow-lg font-medium"
+                      asChild
+                    >
+                      <a href="#features" onClick={scrollToSection}>
+                        Learn more
+                      </a>
+                    </Button>
+                  </motion.div>
+                </div>
+                <div className="mt-8 flex items-center justify-center lg:justify-start">
+                  <div className="flex -space-x-2">
+                    {[
+                      "https://randomuser.me/api/portraits/women/32.jpg",
+                      "https://randomuser.me/api/portraits/men/44.jpg",
+                      "https://randomuser.me/api/portraits/women/68.jpg",
+                      "https://randomuser.me/api/portraits/men/75.jpg"
+                    ].map((avatar, i) => (
+                      <motion.div 
+                        key={i} 
+                        className="w-9 h-9 rounded-full border-2 border-white dark:border-gray-800 shadow-sm overflow-hidden"
+                        initial={{ opacity: 0, x: -5 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.8 + (i * 0.1), duration: 0.3 }}
+                      >
+                        <Image 
+                          src={avatar} 
+                          alt={`Customer ${i+1}`}
+                          width={36}
+                          height={36}
+                          className="h-full w-full object-cover"
+                          unoptimized
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
+                  <motion.div 
+                    className="ml-3 text-sm text-muted-foreground"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1.2, duration: 0.5 }}
+                  >
+                    <span className="font-semibold text-gray-900 dark:text-white">2,500+</span> satisfied customers
+                  </motion.div>
                 </div>
               </motion.div>
               <motion.div variants={fadeInRight} className="relative flex justify-center lg:justify-end">
-                <div className="w-full max-w-xl h-[400px] rounded-xl shadow-2xl border-4 border-white dark:border-gray-800 bg-gradient-to-br from-background to-muted/50 dark:from-gray-900 dark:to-gray-800/50 flex items-center justify-center">
+                <div className="w-full max-w-xl h-[400px] md:h-[450px] rounded-xl shadow-2xl border-4 border-white dark:border-gray-800 bg-gradient-to-br from-white to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[url('/vibrant-tech-unveiling.png')] bg-cover bg-center opacity-10 dark:opacity-20"></div>
                   <PlatformIcons />
+                  
+                  {/* Floating elements */}
+                  <motion.div 
+                    className="absolute top-10 right-10 p-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg"
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: [-5, 5, -5], rotate: [-2, 2, -2], opacity: 1 }}
+                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
+                  >
+                    <Share2 className="w-5 h-5 text-[#FF8C2A]" />
+                  </motion.div>
+                  
+                  <motion.div 
+                    className="absolute bottom-10 left-10 p-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg"
+                    initial={{ y: -20, opacity: 0 }}
+                    animate={{ y: [5, -5, 5], rotate: [2, -2, 2], opacity: 1 }}
+                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+                  >
+                    <BarChart3 className="w-5 h-5 text-blue-500" />
+                  </motion.div>
+                  
+                  {/* Glowing effect */}
+                  <motion.div
+                    className="absolute inset-0 pointer-events-none"
+                    initial={{ boxShadow: 'inset 0 0 30px rgba(255, 140, 42, 0.3)' }}
+                    animate={{ 
+                      boxShadow: [
+                        'inset 0 0 30px rgba(255, 140, 42, 0.3)', 
+                        'inset 0 0 50px rgba(255, 140, 42, 0.5)', 
+                        'inset 0 0 30px rgba(255, 140, 42, 0.3)'
+                      ] 
+                    }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  />
                 </div>
+                
+                {/* Stats card */}
+                <motion.div 
+                  className="absolute -bottom-5 -left-5 lg:left-auto lg:-right-5 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700"
+                  initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: 1, duration: 0.5 }}
+                  whileHover={{ y: -5, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30">
+                      <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Growth Rate</div>
+                      <div className="font-bold text-green-600 dark:text-green-400">+147%</div>
+                    </div>
+                  </div>
+                </motion.div>
+                
+                {/* Additional stat card */}
+                <motion.div 
+                  className="absolute -top-5 -right-5 lg:-left-5 lg:right-auto bg-white dark:bg-gray-800 p-3 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700"
+                  initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: 1.2, duration: 0.5 }}
+                  whileHover={{ y: 5, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                      <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Engagement</div>
+                      <div className="font-bold text-blue-600 dark:text-blue-400">+89%</div>
+                    </div>
+                  </div>
+                </motion.div>
               </motion.div>
             </div>
+            
+            {/* Brand logos */}
+            <motion.div 
+              className="mt-16 pt-8 border-t border-gray-200 dark:border-gray-800"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.4, duration: 0.5 }}
+            >
+              <p className="text-center text-sm text-muted-foreground mb-6">Trusted by leading brands worldwide</p>
+              <div className="flex flex-wrap justify-center gap-x-12 gap-y-6 opacity-70">
+                {["/google-logo.png", "/facebook-logo.svg", "/instagram-logo.svg", "/twitter-logo.svg"].map((logo, i) => (
+                  <div key={i} className="h-8 w-auto relative grayscale hover:grayscale-0 transition-all duration-300">
+                    <Image src={logo} alt="Brand logo" width={100} height={32} className="h-full w-auto object-contain" />
+                  </div>
+                ))}
+              </div>
             </motion.div>
+          </motion.div>
         </section>
 
         {/* Features Section */}
         <section
           id="features"
           ref={featuresRef as React.RefObject<HTMLDivElement>}
-          className="py-20 md:py-32 bg-muted/50"
+          className="py-19 md:py-20 bg-gradient-to-r from-white via-gray-50 to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 relative overflow-hidden"
         >
+            {/* Background elements */}
+            <div className="absolute inset-0 overflow-hidden">
+              <svg className="absolute top-0 left-0 w-full opacity-20 dark:opacity-10" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <filter id="a" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="50" />
+                  </filter>
+                </defs>
+                <g filter="url(#a)">
+                  <circle cx="150" cy="150" r="40" fill="#FF8C2A" />
+                  <circle cx="650" cy="150" r="40" fill="#4F46E5" />
+                  <circle cx="150" cy="650" r="40" fill="#4F46E5" />
+                  <circle cx="650" cy="650" r="40" fill="#FF8C2A" />
+                </g>
+              </svg>
+            </div>
+
             <motion.div
               initial="hidden"
               animate={featuresInView ? "visible" : "hidden"}
               variants={staggerContainer}
-            className="container px-4 mx-auto"
-          >
-            <motion.div variants={fadeInUp} className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900 dark:text-white">Powerful Features for Modern Social Media</h2>
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Everything you need to manage your social media presence effectively and grow your audience.
-              </p>
-            </motion.div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {features.map((feature, index) => (
-                <motion.div
-                  key={feature.title}
-              variants={fadeInUp}
-                  className="bg-background rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-shadow border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center group"
-                >
-                  <feature.icon className="h-12 w-12 text-[#FF8C2A] mb-4 group-hover:scale-110 transition-transform" />
-                  <h3 className="text-xl font-semibold mb-3 text-gray-900 dark:text-white">{feature.title}</h3>
-                  <p className="text-muted-foreground">{feature.description}</p>
-            </motion.div>
-              ))}
-          </div>
+              className="container px-4 mx-auto relative z-10"
+            >
+              <motion.div variants={fadeInUp} className="text-center mb-16">
+                <div className="inline-block mb-3">
+                  <span className="inline-block px-4 py-1 rounded-full bg-[#FF8C2A]/10 text-[#FF8C2A] font-medium text-sm">
+                    Revolutionary Features
+                  </span>
+                </div>
+                <h2 className="text-3xl md:text-4xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-[#FF8C2A] dark:from-white dark:to-[#FF8C2A]">
+                  Powerful Features for Modern Social Media
+                </h2>
+                <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                  Everything you need to manage your social media presence effectively and grow your audience.
+                </p>
+              </motion.div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                {features.map((feature, index) => (
+                  <motion.div
+                    key={feature.title}
+                    variants={fadeInUp}
+                    className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center group hover:border-[#FF8C2A]/30 dark:hover:border-[#FF8C2A]/30"
+                    whileHover={{ y: -5, transition: { duration: 0.2 } }}
+                  >
+                    <div className="relative mb-6">
+                      <div className="absolute inset-0 bg-[#FF8C2A]/20 blur-xl rounded-full transform group-hover:scale-110 transition-transform"></div>
+                      <div className="relative bg-gradient-to-br from-[#FF8C2A] to-[#e67e25] p-3 rounded-xl text-white shadow-lg group-hover:shadow-xl transition-all">
+                        <feature.icon className="h-6 w-6 group-hover:scale-110 transition-transform" />
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-semibold mb-3 text-gray-900 dark:text-white group-hover:text-[#FF8C2A] dark:group-hover:text-[#FF8C2A] transition-colors">{feature.title}</h3>
+                    <p className="text-muted-foreground">{feature.description}</p>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Feature highlight */}
+              <motion.div
+                variants={fadeInUp}
+                className="mt-20 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700"
+              >
+                <div className="grid md:grid-cols-2 gap-0">
+                  <div className="p-8 md:p-12 flex flex-col justify-center">
+                    <div className="inline-block mb-3 px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs font-semibold">
+                      COMING SOON
+                    </div>
+                    <h3 className="text-2xl md:text-3xl font-bold mb-4 text-gray-900 dark:text-white">AI-Powered Content Creation</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Our advanced AI algorithms analyze trending content and help you create engaging posts that resonate with your audience, saving you time and increasing engagement.
+                    </p>
+                    <ul className="space-y-3 mb-6">
+                      {['Smart caption generation', 'Hashtag recommendations', 'Optimal posting time suggestions'].map((item, i) => (
+                        <li key={i} className="flex items-center">
+                          <div className="mr-2 flex-shrink-0 p-1 bg-green-100 dark:bg-green-900/30 rounded-full">
+                            <svg className="h-4 w-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                          <span className="text-gray-700 dark:text-gray-300">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Button className="bg-[#FF8C2A] hover:bg-[#e67e25] text-white w-full sm:w-auto shadow-md">
+                      Join the Waitlist
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="relative h-60 md:h-auto">
+                    <div 
+                      className="absolute inset-0 bg-cover bg-center opacity-30" 
+                      style={{
+                        backgroundImage: "url('https://images.unsplash.com/photo-1506815444479-bfdb1e96c566?q=80&auto=format&fit=crop')",
+                        backgroundPosition: 'center 35%'
+                      }}
+                    ></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#FF8C2A]/40 to-blue-500/40"></div>
+                    <div className="absolute inset-0 flex items-center justify-center p-6">
+                      <motion.div 
+                        className="w-full max-w-sm p-5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg shadow-xl"
+                        animate={{ y: [0, -10, 0] }}
+                        transition={{ duration: 4, repeat: Infinity, repeatType: 'reverse' }}
+                      >
+                        <div className="flex items-center mb-3">
+                          <div className="w-8 h-8 rounded-full bg-[#FF8C2A] flex items-center justify-center mr-3">
+                            <MessageSquare className="h-4 w-4 text-white" />
+                          </div>
+                          <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        </div>
+                        
+                        {/* Caption with typing animation */}
+                        <motion.div 
+                          className="mb-3 font-medium text-sm text-gray-800 dark:text-gray-200"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.5 }}
+                        >
+                          <TypewriterEffect text="Creating perfect caption..." duration={2} />
+                        </motion.div>
+                        
+                        <div className="bg-gray-100 dark:bg-gray-700/50 p-3 rounded-lg mb-4">
+                          <motion.div
+                            className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 2.5 }}
+                          >
+                            <TypewriterEffect 
+                              text="Enjoying the sunrise views with our new summer collection! ☀️ Perfect for your morning routine and daily inspiration." 
+                              duration={3} 
+                              delay={2.5}
+                            />
+                          </motion.div>
+                        </div>
+                        
+                        {/* Hashtags */}
+                        <motion.div 
+                          className="flex flex-wrap gap-2 mb-4"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 6 }}
+                        >
+                          <TypewriterEffect 
+                            text="#summervibes #morningroutine #inspiration #lifestyle #trending" 
+                            duration={2} 
+                            delay={6}
+                            className="text-[#FF8C2A] dark:text-[#FF8C2A] text-sm font-medium"
+                          />
+                        </motion.div>
+                        
+                        <div className="h-10 w-full bg-[#FF8C2A]/80 hover:bg-[#FF8C2A] rounded text-white font-medium flex items-center justify-center cursor-pointer transition-colors">
+                          Use This Caption
+                        </div>
+                      </motion.div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             </motion.div>
         </section>
 
@@ -557,7 +752,7 @@ export function LandingPage() {
         <section
           id="how-it-works"
           ref={howItWorksRef as React.RefObject<HTMLDivElement>}
-          className="py-20 md:py-32 relative overflow-hidden"
+          className="py-20 md:py-10 relative overflow-hidden"
         >
           {/* Creative background elements */}
           <div className="absolute inset-0 overflow-hidden opacity-10">
@@ -568,12 +763,12 @@ export function LandingPage() {
               animate={{ rotate: 360 }}
               transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
             />
-              </div>
+          </div>
 
-            <motion.div
-              initial="hidden"
-              animate={howItWorksInView ? "visible" : "hidden"}
-              variants={staggerContainer}
+          <motion.div
+            initial="hidden"
+            animate={howItWorksInView ? "visible" : "hidden"}
+            variants={staggerContainer}
             className="container px-4 mx-auto relative z-10"
           >
             <motion.div variants={fadeInUp} className="text-center mb-16">
@@ -581,14 +776,14 @@ export function LandingPage() {
                 <span className="inline-block px-4 py-1 rounded-full bg-[#FF8C2A]/10 text-[#FF8C2A] font-medium text-sm">
                   Simple Four-Step Process
                 </span>
-                </div>
+              </div>
               <h2 className="text-3xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-[#FF8C2A] via-[#FF8C2A]/90 to-blue-500 bg-clip-text text-transparent">
                 How Linkly Works
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
                 Get started in minutes with our intuitive platform designed for businesses of all sizes.
-                </p>
-              </motion.div>
+              </p>
+            </motion.div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <motion.div variants={fadeInLeft} className="order-2 lg:order-1">
@@ -601,7 +796,7 @@ export function LandingPage() {
                   >
                     <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF8C2A] to-[#FF8C2A]/80 flex items-center justify-center shadow-lg shadow-[#FF8C2A]/20 group-hover:shadow-xl group-hover:shadow-[#FF8C2A]/30 transition-all">
                       <span className="text-white font-bold text-xl">1</span>
-                </div>
+                    </div>
                     <div className="pt-2">
                       <h3 className="text-2xl font-semibold mb-3 flex items-center group-hover:text-[#FF8C2A] transition-colors">
                         Connect Your Accounts
@@ -611,7 +806,7 @@ export function LandingPage() {
                         Link your social media accounts in just a few clicks. We support all major platforms.
                       </p>
                     </div>
-              </motion.div>
+                  </motion.div>
 
                   <motion.div 
                     className="flex items-start gap-6 group"
@@ -621,7 +816,7 @@ export function LandingPage() {
                   >
                     <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF8C2A] to-[#FF8C2A]/80 flex items-center justify-center shadow-lg shadow-[#FF8C2A]/20 group-hover:shadow-xl group-hover:shadow-[#FF8C2A]/30 transition-all">
                       <span className="text-white font-bold text-xl">2</span>
-                </div>
+                    </div>
                     <div className="pt-2">
                       <h3 className="text-2xl font-semibold mb-3 flex items-center group-hover:text-[#FF8C2A] transition-colors">
                         Plan Your Content
@@ -630,10 +825,10 @@ export function LandingPage() {
                       <p className="text-muted-foreground text-lg">
                         Use our visual calendar to schedule and organize your content across all platforms.
                       </p>
-          </div>
+                    </div>
                   </motion.div>
 
-            <motion.div
+                  <motion.div
                     className="flex items-start gap-6 group"
                     initial={{ opacity: 0, y: 20 }}
                     animate={howItWorksInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
@@ -641,7 +836,7 @@ export function LandingPage() {
                   >
                     <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF8C2A] to-[#FF8C2A]/80 flex items-center justify-center shadow-lg shadow-[#FF8C2A]/20 group-hover:shadow-xl group-hover:shadow-[#FF8C2A]/30 transition-all">
                       <span className="text-white font-bold text-xl">3</span>
-              </div>
+                    </div>
                     <div className="pt-2">
                       <h3 className="text-2xl font-semibold mb-3 flex items-center group-hover:text-[#FF8C2A] transition-colors">
                         Analyze & Optimize
@@ -651,16 +846,16 @@ export function LandingPage() {
                         Track performance and get AI-powered suggestions to improve your content strategy.
                       </p>
                     </div>
-            </motion.div>
+                  </motion.div>
 
-            <motion.div
+                  <motion.div
                     className="flex items-start gap-6 relative group"
                     initial={{ opacity: 0, y: 20 }}
                     animate={howItWorksInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                     transition={{ duration: 0.5, delay: 0.7 }}
                   >
                     {/* Highlight for Google Ads section */}
-                <motion.div
+                    <motion.div
                       className="absolute -inset-6 rounded-xl bg-gradient-to-r from-[#FF8C2A]/5 to-transparent z-0"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -669,7 +864,7 @@ export function LandingPage() {
                     
                     <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF8C2A] to-[#FF8C2A]/80 flex items-center justify-center shadow-lg shadow-[#FF8C2A]/20 group-hover:shadow-xl group-hover:shadow-[#FF8C2A]/30 transition-all z-10">
                       <span className="text-white font-bold text-xl">4</span>
-                  </div>
+                    </div>
                     <div className="pt-2 z-10">
                       <div className="flex items-center mb-1">
                         <span className="px-2 py-0.5 bg-[#FF8C2A]/10 text-[#FF8C2A] text-xs font-semibold rounded-full">
@@ -710,11 +905,11 @@ export function LandingPage() {
                         </div>
                       </div>
                     </div>
-                </motion.div>
+                  </motion.div>
                 </div>
-            </motion.div>
+              </motion.div>
 
-            <motion.div
+              <motion.div
                 variants={fadeInRight} 
                 className="order-1 lg:order-2"
                 initial={{ opacity: 0, scale: 0.8 }}
@@ -738,7 +933,7 @@ export function LandingPage() {
                   
                   <div className="absolute inset-0 flex items-center justify-center z-0">
                     <SocialIntegrationIllustrationV2 />
-                </div>
+                  </div>
                   
                   {/* Animated Google logo highlight */}
                   <motion.div 
@@ -761,11 +956,11 @@ export function LandingPage() {
                       <span className="text-green-500 font-bold">l</span>
                       <span className="text-red-500 font-bold">e</span>
                       <span className="text-xs ml-1 text-gray-700">Ads</span>
-              </div>
-            </motion.div>
+                    </div>
+                  </motion.div>
 
                   {/* Animated YouTube logo highlight */}
-            <motion.div
+                  <motion.div
                     className="absolute top-10 right-14 bg-white rounded-full p-2 shadow-xl z-20 flex items-center justify-center"
                     animate={{ 
                       y: [0, 10, 0],
@@ -779,11 +974,11 @@ export function LandingPage() {
                   >
                     <div className="flex items-center px-3 py-1">
                       <span className="text-red-600 font-bold text-sm">YouTube</span>
-              </div>
-            </motion.div>
+                    </div>
+                  </motion.div>
 
                   {/* Animated elements */}
-                <motion.div
+                  <motion.div
                     className="absolute h-20 w-20 bg-blue-500/10 rounded-full z-10"
                     style={{ top: '20%', left: '20%' }}
                     animate={{ 
@@ -813,76 +1008,112 @@ export function LandingPage() {
                     }}
                   />
                 </div>
-                </motion.div>
+              </motion.div>
             </div>
           </motion.div>
-        </section>
 
-        {/* Partners Section */}
-        <section
-          id="partners"
-          ref={partnersRef as React.RefObject<HTMLDivElement>}
-          className="py-20 md:py-32 bg-muted/50 relative overflow-hidden"
-        >
-          {/* Creative background elements */}
-          <div className="absolute inset-0 overflow-hidden opacity-10">
-            <div className="absolute h-96 w-96 rounded-full bg-[#FF8C2A]/30 blur-3xl -top-20 -right-20"></div>
-            <div className="absolute h-96 w-96 rounded-full bg-blue-500/30 blur-3xl -bottom-20 -left-20"></div>
-            <motion.div
-              className="absolute top-1/4 left-1/3 h-64 w-64 rounded-full border-2 border-dashed border-[#FF8C2A]/30"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
-            />
-          </div>
-
-          <motion.div
-              initial="hidden"
-              animate={partnersInView ? "visible" : "hidden"}
-            variants={staggerContainer}
-            className="container px-4 mx-auto relative z-10"
+          {/* Product Demo Video Section */}
+          <motion.div 
+            variants={fadeInUp}
+            className="mt-20 pt-10 border-t border-gray-200 dark:border-gray-800 max-w-6xl mx-auto"
           >
-            <motion.div variants={fadeInUp} className="text-center mb-16">
-              <div className="inline-block mb-3">
-                <span className="inline-block px-4 py-1 rounded-full bg-[#FF8C2A]/10 text-[#FF8C2A] font-medium text-sm">
-                  Trusted Partnerships
-                </span>
-                </div>
-              <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900 dark:text-white">Our Technology Partners</h2>
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                We work with industry leaders to provide you with the best social media management experience.
-              </p>
-            </motion.div>
+            <div className="text-center mb-10">
+              <h3 className="text-2xl md:text-3xl font-bold mb-4 text-gray-900 dark:text-white">See Linkly in Action</h3>
+                              <p className="text-muted-foreground max-w-2xl mx-auto">
+                  Watch our comprehensive demonstration of Linkly's powerful features and intuitive workflow in action.
+                </p>
+            </div>
 
-            <motion.div
-              variants={fadeInUp}
-              className="max-w-6xl mx-auto"
-            >
-              <PartnerCarousel partners={partners} />
-            </motion.div>
+            <div className="relative rounded-xl overflow-hidden shadow-2xl border-4 border-white dark:border-gray-800 bg-gradient-to-br from-white to-gray-100 dark:from-gray-900 dark:to-gray-800">
+              {recordedVideoUrl ? (
+                <div className="relative w-full aspect-video bg-black">
+                  <video
+                    src={recordedVideoUrl}
+                    controls
+                    autoPlay
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="relative w-full aspect-video bg-gradient-to-br from-gray-900 to-black flex flex-col items-center justify-center">
+                  <div className="absolute inset-0 opacity-20">
+                    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2940')] bg-cover bg-center"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-black to-transparent"></div>
+                  </div>
+                  
+                  <div className="relative z-10">
+                    <div className="mb-4 p-4 rounded-full bg-[#FF8C2A]/20">
+                      <motion.div
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <Play className="h-12 w-12 text-[#FF8C2A]" />
+                      </motion.div>
+                    </div>
+                    <p className="text-white mb-6 text-lg font-medium">Watch our AI-generated product demo</p>
+                    <Button 
+                      onClick={() => setRecordedVideoUrl("/linkly-demo.mp4")}
+                      className="bg-[#FF8C2A] text-white hover:bg-[#e67e25] px-6 py-3 text-lg font-medium shadow-lg hover:shadow-xl transition-all"
+                      size="lg"
+                    >
+                      Play AI Demo
+                    </Button>
+                  </div>
+                  
+                  {/* AI Assistant Animation */}
+                  <motion.div 
+                    className="absolute bottom-6 right-6 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg max-w-xs"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-[#FF8C2A] flex items-center justify-center">
+                        <span className="text-white font-bold">AI</span>
+                      </div>
+                      <p className="text-sm font-medium">Linkly AI Assistant</p>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      "Let me walk you through Linkly's key features: multi-platform scheduling, AI caption generation, engagement analytics, and our visual content calendar!"
+                    </p>
+                  </motion.div>
+                </div>
+              )}
+
+              {/* Video controls overlay */}
+              {recordedVideoUrl && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300">
+                  <Button
+                    size="lg"
+                    className="bg-white text-gray-900 hover:bg-gray-100"
+                    onClick={() => {
+                      const video = document.querySelector('video');
+                      if (video) {
+                        if (video.paused) {
+                          video.play();
+                        } else {
+                          video.pause();
+                        }
+                      }
+                    }}
+                  >
+                    <PlayCircle className="h-8 w-8" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </motion.div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-20 md:py-32 bg-gradient-to-r from-[#FF8C2A]/10 via-white dark:via-gray-900 to-[#FF8C2A]/5 dark:from-[#FF8C2A]/5 dark:to-gray-900/80">
-          <div className="container px-4 mx-auto">
-            <div className="text-center">
-              <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900 dark:text-white">Ready to Transform Your Social Media?</h2>
-              <p className="text-lg mb-8 max-w-2xl mx-auto text-gray-800 dark:text-gray-200">
-                Join thousands of businesses already using Linkly to grow their social media presence.
-              </p>
-              <Button
-                size="lg"
-                className="bg-[#FF8C2A] text-white hover:bg-[#e67e25] transition-transform hover:scale-105 shadow-lg"
-                asChild
-              >
-                <Link href="/auth/register">
-                  Get Started
-                    <ChevronRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-            </div>
-          </div>
-        </section>
+        
+
+
+
+
+
+
+
+
       </main>
 
       {/* Footer */}

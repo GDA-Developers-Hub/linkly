@@ -83,7 +83,7 @@ export interface Account {
 
 export class AuthAPI {
   private readonly backendBase =
-    process.env.API_URL || "http://localhost:8000";
+    process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://linkly-production-f31e.up.railway.app";
 
   // Redirect to link a social account
   link(provider: "google" | "facebook" | "linkedin" | "twitter") {

@@ -3,7 +3,7 @@
  */
 
 // Base URL for API calls
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://linkly-production-f31e.up.railway.app';
 
 // API endpoints
 export const ENDPOINTS = {

@@ -125,13 +125,16 @@ export function PartnerCarousel({ partners }: PartnerCarouselProps) {
                   transition={{ duration: 3, repeat: Infinity }}
                 />
                 
-                <img
+                <Image
                   src={partner.logo}
                   alt={partner.name + ' logo'}
+                  width={80}
+                  height={40}
                   className="max-h-16 max-w-[80px] object-contain relative z-10"
                   onError={(e) => {
                     // Fallback to placeholder if image fails to load
-                    e.currentTarget.src = `https://placehold.co/200x80/FF8C2A/FFFFFF?text=${partner.name}`;
+                    const imgElement = e.currentTarget as HTMLImageElement;
+                    imgElement.src = `https://placehold.co/200x80/FF8C2A/FFFFFF?text=${partner.name}`;
                   }}
                 />
               </div>
