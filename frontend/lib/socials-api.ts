@@ -3,6 +3,56 @@ import { withErrorHandling as originalWithErrorHandling } from "./api";
 // Re-export withErrorHandling for backward compatibility
 export const withErrorHandling = originalWithErrorHandling;
 
+// Add mock getSocialBuAPI function
+export const getSocialBuAPI = () => {
+  // This is a mock implementation to satisfy imports
+  return {
+    accounts: {
+      list: async () => {
+        return {
+          items: [
+            { id: 1, name: "Facebook Page", platform: "facebook", account_type: "page" },
+            { id: 2, name: "Instagram", platform: "instagram", account_type: "profile" },
+            { id: 3, name: "Twitter", platform: "twitter", account_type: "profile" }
+          ]
+        };
+      },
+      get: async (id: number) => {
+        const accounts = [
+          { id: 1, name: "Facebook Page", platform: "facebook", account_type: "page" },
+          { id: 2, name: "Instagram", platform: "instagram", account_type: "profile" },
+          { id: 3, name: "Twitter", platform: "twitter", account_type: "profile" }
+        ];
+        return accounts.find(account => account.id === id);
+      }
+    },
+    posts: {
+      list: async () => {
+        return {
+          items: [
+            {
+              id: 1,
+              status: "published",
+              account_id: 1,
+              created_at: new Date().toISOString(),
+              published_at: new Date().toISOString(),
+              content: "Sample published post"
+            },
+            {
+              id: 2,
+              status: "scheduled",
+              account_id: 2,
+              created_at: new Date().toISOString(),
+              publish_at: new Date(Date.now() + 86400000).toISOString(),
+              content: "Sample scheduled post"
+            }
+          ]
+        };
+      }
+    }
+  };
+};
+
 // Basic Post and Account type definitions for backward compatibility
 export interface Post {
   id: number;
