@@ -23,7 +23,11 @@ const calculatePosition = (index: number, total: number) => {
   const x = 50 + radius * Math.cos(angle);
   const y = 50 + radius * Math.sin(angle);
   
-  return { top: `${y}%`, left: `${x}%` };
+  // Round to 2 decimal places to ensure consistency between server and client
+  return { 
+    top: `${Number(y.toFixed(2))}%`, 
+    left: `${Number(x.toFixed(2))}%` 
+  };
 }
 
 // Platform configuration to match the circular layout in the screenshot
@@ -128,13 +132,15 @@ function PlatformIconsComponent() {
         {[...Array(18)].map((_, i) => {
           const angle = (i * 20 * Math.PI) / 180;
           const radius = 42;
+          const x = 50 + radius * Math.cos(angle);
+          const y = 50 + radius * Math.sin(angle);
           return (
             <div 
               key={i}
               className="absolute h-1.5 w-1.5 bg-orange-200 rounded-full"
               style={{
-                top: `${50 + radius * Math.sin(angle)}%`,
-                left: `${50 + radius * Math.cos(angle)}%`,
+                top: `${Number(y.toFixed(2))}%`,
+                left: `${Number(x.toFixed(2))}%`,
                 transform: 'translate(-50%, -50%)',
               }}
             />

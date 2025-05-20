@@ -77,21 +77,21 @@ export function MainNav() {
             >
               Pricing
             </Link>
-            <Link
+            {/* <Link
               href="/#testimonials"
               className={`text-sm font-medium hover:text-primary transition-colors ${
                 isActive("/#testimonials") ? "text-primary" : ""
               }`}
             >
               Testimonials
-            </Link>
+            </Link> */}
           </nav>
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild>
               <Link href="/auth/login">Log in</Link>
             </Button>
             <Button asChild className="bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
-              <Link href="/auth/register">Try for free</Link>
+              <Link href="/auth/register">Get Started</Link>
             </Button>
             <ModeToggle />
           </div>
@@ -145,7 +145,7 @@ export function MainNav() {
               <Link href="/auth/login">Log in</Link>
             </Button>
             <Button asChild className="w-full bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
-              <Link href="/auth/register">Try for free</Link>
+              <Link href="/auth/register">Get Started</Link>
             </Button>
           </div>
         </nav>

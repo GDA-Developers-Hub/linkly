@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
 import { PartnerCarousel } from "@/components/partner-carousel"
+import { SiteFooter } from "@/components/site-footer"
 
 interface Testimonial {
   id: number
@@ -115,33 +116,6 @@ export function LandingPage() {
   const { theme } = useTheme()
   const isMobile = useIsMobile()
 
-  const [testimonials] = React.useState<Testimonial[]>([
-    {
-      id: 1,
-      quote: "Linkly has transformed how we manage our social media. The time savings alone are worth every penny!",
-      author: "Sarah Johnson",
-      role: "Marketing Director",
-      company: "TechVision Inc.",
-      avatar: "/placeholder-user.jpg",
-    },
-    {
-      id: 2,
-      quote: "The analytics and insights have helped us increase engagement by over 40% in just two months.",
-      author: "Michael Chen",
-      role: "Social Media Manager",
-      company: "Global Brands",
-      avatar: "/placeholder-user.jpg",
-    },
-    {
-      id: 3,
-      quote: "As a small business owner, Linkly gives me enterprise-level tools at a price I can afford.",
-      author: "Jessica Williams",
-      role: "Founder",
-      company: "Bright Ideas Co.",
-      avatar: "/placeholder-user.jpg",
-    },
-  ])
-
   const [partners] = React.useState<Partner[]>([
     {
       id: 1,
@@ -204,7 +178,6 @@ export function LandingPage() {
   const [featuresRef, featuresInView] = useScrollAnimation()
   const [howItWorksRef, howItWorksInView] = useScrollAnimation()
   const [partnersRef, partnersInView] = useScrollAnimation()
-  const [testimonialsRef, testimonialsInView] = useScrollAnimation()
   const [futureRef, futureInView] = useScrollAnimation()
   const [trustedByRef, trustedByInView] = useScrollAnimation()
 
@@ -431,17 +404,10 @@ export function LandingPage() {
               >
                 Partners
               </a>
-              <a
-                href="#testimonials"
-                onClick={scrollToSection}
-                className="text-sm font-medium hover:text-primary transition-colors"
-              >
-                Testimonials
-              </a>
               <div className="flex items-center space-x-4">
               <ModeToggle />
                 <Button asChild className="bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
-                  <Link href="/auth/register">Try for free</Link>
+                  <Link href="/auth/register">Get Started</Link>
                 </Button>
             </div>
             </nav>
@@ -498,16 +464,8 @@ export function LandingPage() {
               Partners
                 <ChevronRight className="h-4 w-4" />
             </a>
-            <a
-              href="#testimonials"
-                onClick={scrollToSection}
-                className="flex items-center justify-between py-2 text-sm font-medium hover:text-primary transition-colors"
-            >
-              Testimonials
-                <ChevronRight className="h-4 w-4" />
-            </a>
               <Button asChild className="w-full bg-[#FF8C2A] hover:bg-[#e67e25] text-white">
-                <Link href="/auth/register">Try for free</Link>
+                <Link href="/auth/register">Get Started</Link>
               </Button>
           </nav>
           </motion.div>
@@ -537,7 +495,7 @@ export function LandingPage() {
                 <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                   <Button size="lg" className="bg-[#FF8C2A] hover:bg-[#e67e25] text-white w-full sm:w-auto shadow-lg transition-transform hover:scale-105" asChild>
                     <Link href="/auth/register">
-                      Try for free
+                      Get Started
                       <ChevronRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
@@ -904,56 +862,6 @@ export function LandingPage() {
           </motion.div>
         </section>
 
-        {/* Testimonials Section */}
-        <section
-          id="testimonials"
-          ref={testimonialsRef as React.RefObject<HTMLDivElement>}
-          className="py-20 md:py-32"
-        >
-            <motion.div
-              initial="hidden"
-              animate={testimonialsInView ? "visible" : "hidden"}
-              variants={staggerContainer}
-            className="container px-4 mx-auto"
-          >
-            <motion.div variants={fadeInUp} className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900 dark:text-white">What Our Customers Say</h2>
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Join thousands of satisfied customers who have transformed their social media management with Linkly.
-              </p>
-            </motion.div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {testimonials.map((testimonial, index) => (
-                <motion.div
-                  key={testimonial.id}
-                  variants={fadeInScale}
-                  className="bg-background rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-shadow border border-gray-100 dark:border-gray-800 flex flex-col"
-                >
-                  <div className="flex items-center gap-4 mb-4">
-                    <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold shadow ${
-                        index % 3 === 0 ? 'bg-[#FF8C2A]' : 
-                        index % 3 === 1 ? 'bg-blue-500' : 
-                        'bg-green-500'
-                      }`}
-                    >
-                      {testimonial.author.split(' ').map(name => name[0]).join('')}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{testimonial.author}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {testimonial.role}
-                        {testimonial.company && ` at ${testimonial.company}`}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-muted-foreground">{testimonial.quote}</p>
-                </motion.div>
-              ))}
-          </div>
-            </motion.div>
-        </section>
-
         {/* CTA Section */}
         <section className="py-20 md:py-32 bg-gradient-to-r from-[#FF8C2A]/10 via-white dark:via-gray-900 to-[#FF8C2A]/5 dark:from-[#FF8C2A]/5 dark:to-gray-900/80">
           <div className="container px-4 mx-auto">
@@ -968,7 +876,7 @@ export function LandingPage() {
                 asChild
               >
                 <Link href="/auth/register">
-                  Get Started Now
+                  Get Started
                     <ChevronRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -978,83 +886,7 @@ export function LandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="py-12 md:py-16 bg-background border-t">
-        <div className="container px-4 mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div>
-              <Link href="/" className="flex items-center mb-6">
-                <Image src={logo} alt="Linkly Logo" className="h-12 w-auto" priority />
-                </Link>
-              <p className="text-sm text-muted-foreground">
-                Simplify your social media management with our powerful platform.
-              </p>
-              </div>
-            <div>
-              <h3 className="font-semibold mb-4">Product</h3>
-              <ul className="space-y-3">
-                <li>
-                  <a href="#features" onClick={scrollToSection} className="text-sm text-muted-foreground hover:text-primary">
-                    Features
-                  </a>
-                </li>
-                <li>
-                  <a href="#how-it-works" onClick={scrollToSection} className="text-sm text-muted-foreground hover:text-primary">
-                    How it works
-                  </a>
-                </li>
-                <li>
-                  <a href="#partners" onClick={scrollToSection} className="text-sm text-muted-foreground hover:text-primary">
-                    Partners
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Company</h3>
-              <ul className="space-y-3">
-                <li>
-                  <Link href="/about" className="text-sm text-muted-foreground hover:text-primary">
-                    About us
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/contact" className="text-sm text-muted-foreground hover:text-primary">
-                    Contact
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary">
-                    Privacy
-                    </Link>
-                  </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Connect</h3>
-              <ul className="space-y-3">
-                <li>
-                  <a href="#" className="text-sm text-muted-foreground hover:text-primary">
-                    Twitter
-                  </a>
-                  </li>
-                <li>
-                  <a href="#" className="text-sm text-muted-foreground hover:text-primary">
-                    LinkedIn
-                  </a>
-                  </li>
-                <li>
-                  <a href="#" className="text-sm text-muted-foreground hover:text-primary">
-                    Instagram
-                  </a>
-                  </li>
-              </ul>
-            </div>
-              </div>
-          <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} Linkly. All rights reserved.</p>
-            </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

@@ -142,27 +142,27 @@ function Pricing() {
     },
   ])
 
-  // Sample testimonials data
-  const testimonials = [
-    {
-      id: 1,
-      quote: "Linkly has transformed how we manage our social media presence. The scheduling features save us hours every week.",
-      author: "Sarah Johnson",
-      role: "Marketing Director, TechFlow"
-    },
-    {
-      id: 2,
-      quote: "The analytics provided by Linkly helped us increase our engagement by 45% in just two months.",
-      author: "Michael Chen",
-      role: "Social Media Manager, GrowthHub"
-    },
-    {
-      id: 3,
-      quote: "As a small business owner, I was looking for an affordable solution. Linkly provides enterprise-level features at a price I can afford.",
-      author: "Emily Rodriguez",
-      role: "Founder, Artisan Crafts"
-    }
-  ]
+  // // Sample testimonials data
+  // const testimonials = [
+  //   {
+  //     id: 1,
+  //     quote: "Linkly has transformed how we manage our social media presence. The scheduling features save us hours every week.",
+  //     author: "Sarah Johnson",
+  //     role: "Marketing Director, TechFlow"
+  //   },
+  //   {
+  //     id: 2,
+  //     quote: "The analytics provided by Linkly helped us increase our engagement by 45% in just two months.",
+  //     author: "Michael Chen",
+  //     role: "Social Media Manager, GrowthHub"
+  //   },
+  //   {
+  //     id: 3,
+  //     quote: "As a small business owner, I was looking for an affordable solution. Linkly provides enterprise-level features at a price I can afford.",
+  //     author: "Emily Rodriguez",
+  //     role: "Founder, Artisan Crafts"
+  //   }
+  // ]
 
   return (
     <div>
@@ -218,7 +218,7 @@ function Pricing() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* Testimonials
       <section id="testimonials" ref={testimonialRef} className="py-20 bg-muted/30">
         <div className="container mx-auto px-4">
           <motion.div
@@ -270,7 +270,7 @@ function Pricing() {
             ))}
           </motion.div>
         </div>
-      </section>
+      </section> */}
 
       {/* CTA Section */}
       <section ref={ctaRef} className="bg-primary text-primary-foreground py-20">
@@ -295,8 +295,8 @@ function Pricing() {
             </p>
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center">
               <Button size="lg" variant="secondary" asChild className="bg-white text-primary hover:bg-white/90">
-                <Link href="/dashboard">
-                  Get started for free
+                <Link href="/auth/register">
+                  Get started
                   <ChevronRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
