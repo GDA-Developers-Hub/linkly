@@ -157,6 +157,7 @@ export function LandingPage() {
   const [isVideoPlaying, setIsVideoPlaying] = React.useState(false)
   const [isVideoLoaded, setIsVideoLoaded] = React.useState(false)
   const [showPreview, setShowPreview] = React.useState(true)
+  const [isVideoEnded, setIsVideoEnded] = React.useState(false)
   const videoRef = React.useRef<HTMLVideoElement>(null)
 
   const handleVideoPlay = () => {
@@ -165,11 +166,17 @@ export function LandingPage() {
         videoRef.current.play()
         setIsVideoPlaying(true)
         setShowPreview(false)
+        setIsVideoEnded(false)
       } else {
         videoRef.current.pause()
         setIsVideoPlaying(false)
       }
     }
+  }
+
+  const handleVideoEnd = () => {
+    setIsVideoEnded(true)
+    setIsVideoPlaying(false)
   }
 
   const handleVideoLoad = () => {
@@ -1082,6 +1089,35 @@ export function LandingPage() {
                   </div>
                 )}
 
+                {/* Video End State with Logo */}
+                {isVideoEnded && (
+                  <div 
+                    className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center cursor-pointer"
+                    onClick={handleVideoPlay}
+                  >
+                    <div className="relative h-20 w-48 mb-4">
+                      <Image 
+                        src={logo} 
+                        alt="Linkly Logo" 
+                        className="object-contain" 
+                        fill
+                        sizes="(max-width: 768px) 120px, 160px"
+                      />
+                    </div>
+                    <Button
+                      size="lg"
+                      className="bg-[#FF8C2A] text-white hover:bg-[#e67e25] hover:scale-105 transform transition-all duration-200 shadow-xl"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleVideoPlay()
+                      }}
+                    >
+                      Watch Again
+                      <PlayCircle className="ml-2 h-5 w-5" />
+                    </Button>
+                  </div>
+                )}
+
                 <video
                   ref={videoRef}
                   className="w-full h-full object-cover"
@@ -1089,6 +1125,7 @@ export function LandingPage() {
                   preload="metadata"
                   onLoadedData={handleVideoLoad}
                   onClick={handleVideoPlay}
+                  onEnded={handleVideoEnd}
                 >
                   <source src="/Linkly.mp4" type="video/mp4" />
                   Your browser does not support the video tag.
