@@ -81,29 +81,44 @@ export interface Account {
   account_type?: string;
 }
 
-// export class AuthAPI {
 export class AuthAPI {
-    private readonly backendBase =
-      process.env.NEXT_PUBLIC_API_URL || 
-      process.env.API_URL || 
-      (process.env.NODE_ENV === "development" 
-        ? "http://localhost:8000"
-        : "https://linkly-production-f31e.up.railway.app");
-  
-    // Redirect to link a social account
-    link(provider: "google" | "facebook" | "linkedin" | "twitter") {
-      const token = localStorage.getItem("linkly_access_token");
-      let url;
-  
-      if (provider === "linkedin") {
-        url = `${this.backendBase}/accounts/oidc/${provider}/login/?process=connect&token=${token}`;
-      } else {
-        url = `${this.backendBase}/accounts/${provider}/login/?process=connect&token=${token}`;
-      }
-  
-      window.location.href = url;
+  private readonly backendBase = (() => {
+    // Get the base URL from environment variables
+    let baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+    
+    if (!baseUrl) {
+      console.warn('API_URL not set in environment variables');
+      baseUrl = ''; // This will cause an error and make it obvious that env vars need to be set
     }
+
+    // Ensure it has protocol
+    if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+      baseUrl = `https://${baseUrl}`;
+    }
+
+    // Ensure trailing slash
+    if (!baseUrl.endsWith('/')) {
+      baseUrl += '/';
+    }
+
+    console.log(`Using Auth API Base URL: ${baseUrl} (${process.env.NODE_ENV} environment)`);
+    return baseUrl;
+  })();
+
+  // Redirect to link a social account
+  link(provider: "google" | "facebook" | "linkedin" | "twitter") {
+    const token = localStorage.getItem("linkly_access_token");
+    let url;
+
+    if (provider === "linkedin") {
+      url = `${this.backendBase}accounts/oidc/${provider}/login/?process=connect&token=${token}`;
+    } else {
+      url = `${this.backendBase}accounts/${provider}/login/?process=connect&token=${token}`;
+    }
+
+    window.location.href = url;
   }
+}
 
   
   

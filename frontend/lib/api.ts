@@ -3,25 +3,25 @@ import { toast } from "@/components/ui/use-toast";
 
 // API Base URL with trailing slash for consistency
 const API_BASE_URL = (() => {
-  // Use environment variable if available, or fallback based on NODE_ENV
-  let baseUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    process.env.API_URL ||
-    (process.env.NODE_ENV === "development"
-      ? "http://localhost:8000"
-      : "https://linkly-production-f31e.up.railway.app");
+  // Get the base URL from environment variables
+  let baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+  
+  if (!baseUrl) {
+    console.warn('API_URL not set in environment variables');
+    baseUrl = ''; // This will cause an error and make it obvious that env vars need to be set
+  }
 
   // Ensure it has protocol
-  if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+  if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
     baseUrl = `https://${baseUrl}`;
   }
 
-  // Ensure it has trailing slash
-  if (!baseUrl.endsWith("/")) {
-    baseUrl += "/";
+  // Ensure trailing slash
+  if (!baseUrl.endsWith('/')) {
+    baseUrl += '/';
   }
 
-  console.log(`Configured API Base URL: ${baseUrl}`);
+  console.log(`Using API Base URL: ${baseUrl} (${process.env.NODE_ENV} environment)`);
   return baseUrl;
 })();
 
