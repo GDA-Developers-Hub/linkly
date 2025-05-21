@@ -4,9 +4,7 @@ import { toast } from "@/components/ui/use-toast";
 // API Base URL with trailing slash for consistency
 const API_BASE_URL = (() => {
   // Get the URL from environment if available
-  let baseUrl = process.env.API_URL
-    ? `${process.env.API_URL}`
-    : "http://localhost:8000/";
+  let baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://linkly-production-f31e.up.railway.app/";
 
   // Add protocol if missing
   if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {

@@ -187,23 +187,18 @@ UNFOLD = {
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": env("DB_NAME"),
-        "USER": env("DB_USER"),
-        "PASSWORD": env("DB_PASSWORD"),
-        "HOST": env("DB_HOST"),
-        "PORT": env("DB_PORT"),
+        "NAME": "railway",
+        "USER": "postgres",
+        "PASSWORD": "yxLhzdNnHLEOGwTKiLeGiPkblTJwHzgH",
+        "HOST": "hopper.proxy.rlwy.net",
+        "PORT": "38987",
     }
 }
 
 # CORS settings - in production, we should be more specific, but for demo we can allow all
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
-CORS_ALLOWED_ORIGINS = [origin for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:3001,http://localhost:3002,https://linkly-frontend.up.railway.app,https://linkly-production.up.railway.app,https://linkly-gd.web.app,https://linkly-gd.firebaseapp.com').split(',') if origin]
+CORS_ALLOWED_ORIGINS = [origin for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:3001,http://localhost:3002,https://linklymvp.web.app').split(',') if origin]
 
-# CSRF_TRUSTED_ORIGINS = [
-#     "https://linkly-production.up.railway.app",
-#     "https://linkly-gd.web.app",
-#     "https://linkly-gd.firebaseapp.com"
-# ]
 
 
 CSRF_TRUSTED_ORIGINS = [

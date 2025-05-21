@@ -9,10 +9,12 @@ const nextConfig = {
   },
   images: {
     domains: ['api.dicebear.com', 'avatar.vercel.sh'],
+    unoptimized: true,
   },
   experimental: {
     scrollRestoration: true,
   },
+  output: 'export',
 };
 
 module.exports = nextConfig;

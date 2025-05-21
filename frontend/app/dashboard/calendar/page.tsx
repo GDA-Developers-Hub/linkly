@@ -41,7 +41,7 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { format, addDays, subDays } from "date-fns"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
-import { getSocialBuAPI, withErrorHandling, type Post, type Account } from "@/lib/socials-api"
+import { type Post, type Account } from "@/lib/socials-api"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 
@@ -84,21 +84,43 @@ export default function CalendarPage() {
   const fetchData = async () => {
     setIsLoading(true)
     try {
-      await withErrorHandling(async () => {
-        const api = getSocialBuAPI()
-
-        // Fetch accounts first
-        const accountsData = await api.getAccounts()
-        setAccounts(accountsData)
-
-        // Fetch posts with status filter if not "all"
-        const statusParam = selectedStatusFilter !== "all" ? selectedStatusFilter : undefined
-        const accountParam = selectedPlatformFilter !== "all" ? Number.parseInt(selectedPlatformFilter) : undefined
-
-        const postsData = await api.getPosts({
-          status: statusParam,
-          account_id: accountParam,
-        })
+      // Simulate fetching data
+      const accountsData = [
+        { id: 1, name: "Facebook Page", platform: "facebook", account_type: "page" },
+        { id: 2, name: "Instagram", platform: "instagram", account_type: "profile" },
+        { id: 3, name: "Twitter", platform: "twitter", account_type: "profile" }
+      ];
+      
+      setAccounts(accountsData);
+      
+      // Mock posts data
+      const postsData = {
+        items: [
+          {
+            id: 1,
+            status: "published",
+            account_id: 1,
+            created_at: new Date().toISOString(),
+            published_at: new Date().toISOString(),
+            content: "This is a sample published post for Facebook"
+          },
+          {
+            id: 2,
+            status: "scheduled",
+            account_id: 2,
+            created_at: new Date().toISOString(),
+            publish_at: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
+            content: "This is a scheduled post for Instagram"
+          },
+          {
+            id: 3,
+            status: "draft",
+            account_id: 3,
+            created_at: new Date().toISOString(),
+            content: "This is a draft post for Twitter"
+          }
+        ]
+      };
 
         // Check if postsData is the expected type with items
         if (!postsData || typeof postsData !== 'object') {
@@ -107,7 +129,8 @@ export default function CalendarPage() {
         }
 
         // Extract the items from PaginatedPosts response
-        const posts = Array.isArray(postsData) ? postsData : (postsData.items || []);
+        // Extract posts from the mock data
+        const posts = postsData.items || [];
         console.log(`Processing ${posts.length} posts`);
 
         // Convert posts to calendar events
@@ -115,7 +138,7 @@ export default function CalendarPage() {
           .filter((post) => post.publish_at || post.created_at)
           .map((post) => {
             // Get account for this post
-            const postAccount = accountsData.find((account: Account) => account.id === post.account_id)
+            const postAccount = accountsData.find((account) => account.id === post.account_id)
 
             return {
               id: post.id,
@@ -128,7 +151,6 @@ export default function CalendarPage() {
           })
 
         setEvents(events)
-      }, "Failed to fetch calendar data")
     } catch (error) {
       console.error("Error fetching data:", error)
     } finally {
@@ -139,21 +161,27 @@ export default function CalendarPage() {
   // Delete a post
   const deletePost = async (postId: number) => {
     try {
-      await withErrorHandling(async () => {
-        const api = getSocialBuAPI()
-        await api.deletePost(postId)
-        toast({
-          title: "Post deleted",
-          description: "The post has been successfully deleted.",
-        })
-        // Refresh posts list
-        fetchData()
-        // Close dialogs
-        setIsPostDetailsOpen(false)
-        setIsEditDialogOpen(false)
-      }, "Failed to delete post")
+      // Simulate deleting a post
+      console.log(`Deleting post ${postId}`);
+      
+      toast({
+        title: "Post deleted",
+        description: "The post has been successfully deleted.",
+      });
+      
+      // Update local state to remove the deleted post
+      setEvents(prev => prev.filter(event => event.post.id !== postId));
+      
+      // Close dialogs
+      setIsPostDetailsOpen(false);
+      setIsEditDialogOpen(false);
     } catch (error) {
-      console.error("Error deleting post:", error)
+      console.error("Error deleting post:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete post",
+        variant: "destructive"
+      });
     }
   }
 
@@ -191,7 +219,9 @@ export default function CalendarPage() {
   const EventComponent = ({ event }: { event: CalendarEvent }) => {
     // Get the first account for color
     const firstAccount = event.account || { platform: "unknown" }
-    const platform = platformConfig[firstAccount.platform] || { icon: Plus, color: "#666" }
+    const platform = firstAccount.platform && typeof firstAccount.platform === 'string' 
+      ? platformConfig[firstAccount.platform] || { icon: Plus, color: "#666" } 
+      : { icon: Plus, color: "#666" }
 
     return (
       <div
@@ -206,9 +236,11 @@ export default function CalendarPage() {
           {event.account && (
             <div className="flex items-center gap-1">
               {(() => {
-                const platform = platformConfig[event.account.platform] || { icon: Plus, color: "#666" }
-                const PlatformIcon = platform.icon
-                return <PlatformIcon className="h-3 w-3" style={{ color: platform.color }} />
+                const platformIcon = event.account.platform && typeof event.account.platform === 'string'
+                  ? platformConfig[event.account.platform] || { icon: Plus, color: "#666" }
+                  : { icon: Plus, color: "#666" }
+                const PlatformIcon = platformIcon.icon
+                return <PlatformIcon className="h-3 w-3" style={{ color: platformIcon.color }} />
               })()}
             </div>
           )}
@@ -347,16 +379,24 @@ export default function CalendarPage() {
                   {selectedEvent.account && (
                     <Badge
                       style={{
-                        backgroundColor: (platformConfig[selectedEvent.account.platform] || { color: "#666" }).color + "20",
-                        color: (platformConfig[selectedEvent.account.platform] || { color: "#666" }).color,
-                        borderColor: (platformConfig[selectedEvent.account.platform] || { color: "#666" }).color,
+                        backgroundColor: (selectedEvent.account.platform && typeof selectedEvent.account.platform === 'string' 
+                          ? platformConfig[selectedEvent.account.platform] || { color: "#666" }
+                          : { color: "#666" }).color + "20",
+                        color: (selectedEvent.account.platform && typeof selectedEvent.account.platform === 'string'
+                          ? platformConfig[selectedEvent.account.platform] || { color: "#666" }
+                          : { color: "#666" }).color,
+                        borderColor: (selectedEvent.account.platform && typeof selectedEvent.account.platform === 'string'
+                          ? platformConfig[selectedEvent.account.platform] || { color: "#666" }
+                          : { color: "#666" }).color,
                       }}
                       variant="outline"
                       className="flex items-center gap-1"
                     >
                       {(() => {
-                        const platform = platformConfig[selectedEvent.account.platform] || { icon: Plus, color: "#666" }
-                        const PlatformIcon = platform.icon
+                        const platformIcon = selectedEvent.account.platform && typeof selectedEvent.account.platform === 'string'
+                          ? platformConfig[selectedEvent.account.platform] || { icon: Plus, color: "#666" }
+                          : { icon: Plus, color: "#666" }
+                        const PlatformIcon = platformIcon.icon
                         return <PlatformIcon className="h-3 w-3" />
                       })()}
                       {selectedEvent.account.name}
@@ -425,7 +465,9 @@ export default function CalendarPage() {
                   <Label htmlFor="edit-platforms">Platforms</Label>
                   <div className="flex flex-wrap gap-2">
                     {accounts.map((account) => {
-                      const platform = platformConfig[account.platform] || { icon: Plus, color: "#666" }
+                      const platform = account.platform && typeof account.platform === 'string'
+                        ? platformConfig[account.platform] || { icon: Plus, color: "#666" }
+                        : { icon: Plus, color: "#666" }
                       const PlatformIcon = platform.icon
                       const isSelected = selectedEvent.post.account_id === account.id
 

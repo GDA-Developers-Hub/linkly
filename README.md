@@ -1,6 +1,6 @@
 # Linkly - Social Media Management Platform
 
-![Linkly Logo](frontend/public/linkly-logo.png)
+![image](https://github.com/user-attachments/assets/37815f07-d676-495f-a4ac-0e2200ecc694)
 
 ## Overview
 

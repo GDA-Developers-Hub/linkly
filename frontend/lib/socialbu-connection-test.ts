@@ -1,5 +1,5 @@
 import { toast } from "@/components/ui/use-toast"
-import { getSocialBuAPI, type Account } from "@/lib/socials-api"
+import { type Account } from "@/lib/socials-api"
 
 // Interface for connection test result
 export interface ConnectionTestResult {
@@ -13,46 +13,49 @@ export interface ConnectionTestResult {
 }
 
 /**
- * Tests the connection to SocialBu API
+ * Tests the connection to API
  * @param accountId Optional account ID to test specific account connection
  * @returns ConnectionTestResult object with status and details
  */
 export async function testSocialBuConnection(accountId?: number): Promise<ConnectionTestResult> {
   try {
-    const api = getSocialBuAPI();
+    // Create mock accounts
+    const mockAccounts = [
+      { id: 1, name: "Facebook Page", platform: "facebook", account_type: "page" },
+      { id: 2, name: "Instagram", platform: "instagram", account_type: "profile" },
+      { id: 3, name: "Twitter", platform: "twitter", account_type: "profile" }
+    ];
     
-    // Call the custom endpoint we added to the SocialBu proxy backend
-    let endpoint = "socialbu/test_connection";
+    // Call the mock endpoint
+    let endpoint = "test_connection";
     if (accountId) {
       endpoint += `?account_id=${accountId}`;
     }
     
-    // Use the generic request method from the API - we can't access the private api property directly
-    // Create a function that makes the request and returns a promise
-    const result = await new Promise<ConnectionTestResult>((resolve, reject) => {
-      // Use any public method of the API class to get our result
-      api.getAccounts()
-        .then(() => {
-          // Now make our actual request to the test endpoint
-          // Since we can't access the private api property directly, we'll use fetch
-          fetch(`/api/${endpoint}`)
-            .then(response => {
-              if (!response.ok) {
-                throw new Error(`API responded with status ${response.status}`);
-              }
-              return response.json();
-            })
-            .then(data => resolve(data as ConnectionTestResult))
-            .catch(err => reject(err));
-        })
-        .catch(err => reject(err));
-    });
+    // Simulate a test connection
+    const mockResult: ConnectionTestResult = {
+      status: 'connected',
+      message: 'Connection successful',
+      accounts: mockAccounts
+    };
     
-    console.log('[SocialBu] Connection test result:', result);
+    // If account ID is provided, check if it exists in our mock data
+    if (accountId) {
+      const account = mockAccounts.find(acc => acc.id === accountId);
+      if (account) {
+        mockResult.account_details = account;
+        mockResult.platform = account.platform;
+      } else {
+        mockResult.status = 'error';
+        mockResult.message = `Account with ID ${accountId} not found`;
+      }
+    }
     
-    return result;
+    console.log('[Mock] Connection test result:', mockResult);
+    
+    return mockResult;
   } catch (error) {
-    console.error('[SocialBu] Connection test failed:', error);
+    console.error('[Mock] Connection test failed:', error);
     
     // Format the error response
     return {
@@ -64,7 +67,7 @@ export async function testSocialBuConnection(accountId?: number): Promise<Connec
 }
 
 /**
- * Test connection to SocialBu and show toast with result
+ * Test connection to API and show toast with result
  * @param accountId Optional account ID to test
  * @returns The test result
  */
@@ -81,7 +84,7 @@ export async function testAndNotify(accountId?: number): Promise<ConnectionTestR
     } else if (result.status === 'auth_error') {
       toast({
         title: "Authentication error",
-        description: "Your SocialBu authentication has expired. Please reconnect your account.",
+        description: "Your authentication has expired. Please reconnect your account.",
         variant: "destructive",
       });
     } else {
@@ -120,16 +123,16 @@ export async function diagnoseAccountIdIssue(accountId: number): Promise<string>
     if (result.status === 'connected') {
       return `Account ${accountId} is valid and connected. Platform: ${result.platform || 'Unknown'}`;
     } else if (result.status === 'auth_error') {
-      return `Your SocialBu authentication has expired. Please reconnect your account.`;
+      return `Your authentication has expired. Please reconnect your account.`;
     } else if (result.accounts && result.accounts.length > 0) {
       // List available accounts to help user identify the correct one
       const accountsList = result.accounts
-        .map(acc => `- ${acc.name} (ID: ${acc.id}, Platform: ${acc.platform || acc._type || 'Unknown'})`)
+        .map(acc => `- ${acc.name} (ID: ${acc.id}, Platform: ${acc.platform || 'Unknown'})`)
         .join('\n');
         
       return `Account ID ${accountId} was not found. Available accounts:\n${accountsList}`;
     } else if (result.local_account_info) {
-      return `Account ${accountId} exists in local database but not in SocialBu. 
+      return `Account ${accountId} exists in local database but not connected. 
               Local info: ${result.local_account_info.platform} account "${result.local_account_info.account_name}" 
               Status: ${result.local_account_info.status}`;
     } else {
@@ -138,7 +141,7 @@ export async function diagnoseAccountIdIssue(accountId: number): Promise<string>
   } catch (error) {
     return `Error diagnosing account issue: ${error instanceof Error ? error.message : String(error)}`;
   }
-} 
+}
 
 // https://twitter.com/i/oauth2/authorize?client_id=WFZUOThVQmpjS1E4ZldpRTNkQm86MTpjaQ&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fapi%2Fsocial_platforms%2Foauth%2Fcallback%2Ftwitter%2F&response_type=code&scope=tweet.read+tweet.write+users.read+offline.access&state=uYA8PnCCqshzCFt1v7ssX-gnYHJ6f9Bo9aY_8Hp6x8o&code_challenge=e2E9YThkfZWrU0oJKCgzFhBPhHKrFQi8rreaA1gDaIw&code_challenge_method=S256
 

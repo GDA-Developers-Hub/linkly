@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build:vercel",
+  "devCommand": "next dev",
+  "framework": "nextjs",
+  "outputDirectory": "out",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://linkly-production.up.railway.app",
+    "API_URL": "https://linkly-production.up.railway.app"
+  }
+} 
