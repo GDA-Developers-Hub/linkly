@@ -264,14 +264,68 @@ export function LandingPage() {
     },
   ]
 
-  const trustedByCompanies = [
-    "/placeholder.svg?height=40&width=120",
-    "/placeholder.svg?height=40&width=120",
-    "/placeholder.svg?height=40&width=120",
-    "/placeholder.svg?height=40&width=120",
-    "/placeholder.svg?height=40&width=120",
-    "/placeholder.svg?height=40&width=120",
-  ]
+  const trustedPartners = [
+    {
+      name: "LinkedIn",
+      logo: "/linkedln.jpg",
+      width: 50,
+      height: 15
+    },
+    {
+      name: "Google",
+      logo: "/google.jpg",
+      width: 50,
+      height: 15
+    },
+    {
+      name: "Meta",
+      logo: "/meta.jpg",
+      width: 50,
+      height: 15
+    },
+    {
+      name: "GoDigitalAfrica",
+      logo: "/godigital.jpg",
+      width: 50,
+      height: 15
+    },
+    {
+      name: "Facebook",
+      logo: "/facebook-logo.svg",
+      width: 50,
+      height: 15
+    },
+    {
+      name: "Linkedln",
+      logo: "/linkedln.jpg",
+      width: 50,
+      height: 15
+    },
+    {
+      name: "Instagram",
+      logo: "/instagram-logo.svg",
+      width: 50,
+      height: 15
+    },
+    {
+      name: "Twitter",
+      logo: "/twitter-logo.svg",
+      width: 50,
+      height: 15
+    },
+    {
+      name: "TikTok",
+      logo: "/tiktok.jpg",
+      width: 50,
+      height: 15
+    },
+    {
+      name: "YouTube",
+      logo: "/youtube-logo.svg",
+      width: 50,
+      height: 15
+    }
+  ];
 
   // Add this for carousel autoplay control
   const [api, setApi] = React.useState<any>()
@@ -300,17 +354,17 @@ export function LandingPage() {
           scrolled ? "bg-background/90 backdrop-blur-md shadow-sm" : "bg-background"
         )}
       >
-        <div className="container mx-auto px-4">
-          <div className="flex h-16 items-center justify-between">
+        <div className="container mx-auto px-0">
+          <div className="flex h-14 items-center justify-between">
             <Link href="/" className="flex items-center space-x-2 group" aria-label="Linkly Home">
-              <div className="relative h-12 w-40 overflow-visible">
+              <div className="relative h-24 w-40 overflow-visible">
                 <Image 
                   src={logo} 
                   alt="Linkly Logo" 
                   className="object-contain scale-100 group-hover:scale-105 transition-transform duration-200" 
                   fill
                   priority 
-                  sizes="(max-width: 768px) 120px, 160px"
+                  // sizes="(max-width: 768px) 120px, 160px"
                 />
               </div>
             </Link>
@@ -619,14 +673,66 @@ export function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1.4, duration: 0.5 }}
             >
-              <p className="text-center text-sm text-muted-foreground mb-6">Trusted by leading brands worldwide</p>
-              <div className="flex flex-wrap justify-center gap-x-12 gap-y-6 opacity-70">
-                {["/google-logo.png", "/facebook-logo.svg", "/instagram-logo.svg", "/twitter-logo.svg"].map((logo, i) => (
-                  <div key={i} className="h-8 w-auto relative grayscale hover:grayscale-0 transition-all duration-300">
-                    <Image src={logo} alt="Brand logo" width={100} height={32} className="h-full w-auto object-contain" />
-                  </div>
-                ))}
-              </div>
+              <p className="text-center text-sm text-muted-foreground mb-8">Trusted by leading brands worldwide</p>
+              <motion.div 
+                className="relative overflow-hidden w-full px-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.6 }}
+              >
+                <motion.div
+                  className="flex space-x-20 items-center py-6"
+                  animate={{
+                    x: ["0%", "-50%"],
+                  }}
+                  transition={{
+                    x: {
+                      duration: 25,
+                      repeat: Infinity,
+                      repeatType: "loop",
+                      ease: "linear",
+                    },
+                  }}
+                >
+                  {/* First set of logos */}
+                  {trustedPartners.map((partner, i) => (
+                    <motion.div
+                      key={`first-${partner.name}`}
+                      className="flex-shrink-0 relative grayscale hover:grayscale-0 transition-all duration-300"
+                      whileHover={{ scale: 1.1 }}
+                    >
+                      <Image
+                        src={partner.logo}
+                        alt={`${partner.name} logo`}
+                        width={partner.width}
+                        height={partner.height}
+                        className="object-contain"
+                      />
+                    </motion.div>
+                  ))}
+                  
+                  {/* Duplicate set for seamless loop */}
+                  {trustedPartners.map((partner, i) => (
+                    <motion.div
+                      key={`second-${partner.name}`}
+                      className="flex-shrink-0 relative grayscale hover:grayscale-0 transition-all duration-300"
+                      whileHover={{ scale: 1.1 }}
+                    >
+                      <Image
+                        src={partner.logo}
+                        alt={`${partner.name} logo`}
+                        width={partner.width}
+                        height={partner.height}
+                        className="object-contain"
+                      />
+                    </motion.div>
+                  ))}
+                </motion.div>
+
+                {/* Gradient overlays */}
+                <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-background to-transparent z-10" />
+                <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-background to-transparent z-10" />
+              </motion.div>
             </motion.div>
           </motion.div>
         </section>
@@ -635,7 +741,7 @@ export function LandingPage() {
         <section
           id="features"
           ref={featuresRef as React.RefObject<HTMLDivElement>}
-          className="py-19 md:py-20 bg-gradient-to-r from-white via-gray-50 to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 relative overflow-hidden"
+          className="py-19 md:py-18 bg-gradient-to-r from-white via-gray-50 to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 relative overflow-hidden"
         >
             {/* Background elements */}
             <div className="absolute inset-0 overflow-hidden">
@@ -1106,31 +1212,46 @@ export function LandingPage() {
 
                 {/* Video End State with Logo */}
                 {isVideoEnded && (
-                  <div 
-                    className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center cursor-pointer"
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center cursor-pointer"
                     onClick={handleVideoPlay}
                   >
-                    <div className="relative h-20 w-48 mb-4">
+                    <motion.div 
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ delay: 0.2, duration: 0.5 }}
+                      className="relative h-32 sm:h-40 w-72 sm:w-96 mb-8"
+                    >
                       <Image 
                         src={logo} 
                         alt="Linkly Logo" 
                         className="object-contain" 
                         fill
-                        sizes="(max-width: 768px) 120px, 160px"
+                        sizes="(max-width: 768px) 288px, 384px"
+                        priority
                       />
-                    </div>
-                    <Button
-                      size="lg"
-                      className="bg-[#FF8C2A] text-white hover:bg-[#e67e25] hover:scale-105 transform transition-all duration-200 shadow-xl"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleVideoPlay()
-                      }}
+                    </motion.div>
+                    <motion.div
+                      initial={{ y: 20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: 0.4, duration: 0.5 }}
                     >
-                      Watch Again
-                      <PlayCircle className="ml-2 h-5 w-5" />
-                    </Button>
-                  </div>
+                      <Button
+                        size="lg"
+                        className="bg-[#FF8C2A] text-white hover:bg-[#e67e25] hover:scale-105 transform transition-all duration-200 shadow-xl"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleVideoPlay()
+                        }}
+                      >
+                        Watch Again
+                        <PlayCircle className="ml-2 h-5 w-5" />
+                      </Button>
+                    </motion.div>
+                  </motion.div>
                 )}
 
                 <video
