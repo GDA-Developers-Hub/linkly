@@ -3,17 +3,22 @@ import { toast } from "@/components/ui/use-toast";
 
 // API Base URL with trailing slash for consistency
 const API_BASE_URL = (() => {
-  // Get the URL from environment if available
-  let baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://linkly-production-f31e.up.railway.app/";
+  // Use environment variable if available, or fallback based on NODE_ENV
+  let baseUrl =
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.API_URL ||
+    (process.env.NODE_ENV === "development"
+      ? "http://localhost:8000"
+      : "https://linkly-production-f31e.up.railway.app");
 
-  // Add protocol if missing
+  // Ensure it has protocol
   if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
     baseUrl = `https://${baseUrl}`;
   }
 
-  // Add trailing slash if missing
+  // Ensure it has trailing slash
   if (!baseUrl.endsWith("/")) {
-    baseUrl = `${baseUrl}/`;
+    baseUrl += "/";
   }
 
   console.log(`Configured API Base URL: ${baseUrl}`);

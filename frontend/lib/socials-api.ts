@@ -81,19 +81,29 @@ export interface Account {
   account_type?: string;
 }
 
+// export class AuthAPI {
 export class AuthAPI {
-  private readonly backendBase =
-    process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://linkly-production-f31e.up.railway.app";
-
-  // Redirect to link a social account
-  link(provider: "google" | "facebook" | "linkedin" | "twitter") {
-    const token = localStorage.getItem("linkly_access_token")
-    let url;
-    if (provider === "linkedin") {
-      url = `${this.backendBase}/accounts/oidc/${provider}/login/?process=connect&token=${token}`;
-    } else {
-      url = `${this.backendBase}/accounts/${provider}/login/?process=connect&token=${token}`;
+    private readonly backendBase =
+      process.env.NEXT_PUBLIC_API_URL || 
+      process.env.API_URL || 
+      (process.env.NODE_ENV === "development" 
+        ? "http://localhost:8000"
+        : "https://linkly-production-f31e.up.railway.app");
+  
+    // Redirect to link a social account
+    link(provider: "google" | "facebook" | "linkedin" | "twitter") {
+      const token = localStorage.getItem("linkly_access_token");
+      let url;
+  
+      if (provider === "linkedin") {
+        url = `${this.backendBase}/accounts/oidc/${provider}/login/?process=connect&token=${token}`;
+      } else {
+        url = `${this.backendBase}/accounts/${provider}/login/?process=connect&token=${token}`;
+      }
+  
+      window.location.href = url;
     }
-    window.location.href = url;
   }
-}
+
+  
+  
