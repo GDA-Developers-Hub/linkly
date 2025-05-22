@@ -263,11 +263,10 @@ export default function CreatePostPage() {
       // Create post using AllAuth API
       const response = await getAPI().createPost(postData)
 
-
-      if (response) {
+      // Only publish if it's not a draft
+      if (response && !isDraft) {
         await getAPI().publishPost(response.id)
       }
-
 
       toast({
         title: isDraft ? "Draft saved" : "Post scheduled",
