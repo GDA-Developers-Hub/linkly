@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar, Clock, Facebook, ImageIcon, Instagram, Linkedin, Twitter, Upload, X } from "lucide-react"
+import { Calendar, Clock, Facebook, Hash, ImageIcon, Instagram, Linkedin, Twitter, Upload, Wand2, X, Sparkles } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
@@ -16,8 +16,9 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { format } from "date-fns"
 import { useToast } from "@/components/ui/use-toast"
-import { type SocialAccount, socialPlatformsApi } from "@/services/social-platforms-api"
+import { type SocialAccount, type Post, socialPlatformsApi } from "@/services/social-platforms-api"
 import { getAPI } from "@/lib/api"
+import { generateEnhancedContent } from "@/lib/ai-generation"
 
 // Map platform names to icons and colors
 const platformConfig: Record<string, { icon: any; color: string }> = {
@@ -46,6 +47,83 @@ export default function CreatePostPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [content, setContent] = useState<string>("")
   const [isDraft, setIsDraft] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [optimalTimes, setOptimalTimes] = useState<any>(null)
+  const [isLoadingOptimalTimes, setIsLoadingOptimalTimes] = useState(false)
+
+  // AI content generation function
+  const generateContent = async (type: 'caption' | 'hashtags') => {
+    setIsGenerating(true)
+    try {
+      // Get selected platform information
+      const selectedPlatformNames = accounts
+        .filter(acc => selectedPlatforms.includes(acc.id))
+        .map(acc => acc.provider)
+
+      // If no platforms selected, use default settings
+      if (selectedPlatformNames.length === 0) {
+        toast({
+          title: "No platforms selected",
+          description: "Generating general content. Select specific platforms for optimized results.",
+          variant: "default",
+        })
+        selectedPlatformNames.push('general')
+      }
+
+      // Call backend API
+      const response = await fetch('/api/ai/generate/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type,
+          prompt: content,
+          context: {
+            platforms: selectedPlatformNames,
+            mediaTypes: uploadedMedia.map(m => m.type),
+            scheduledTime: date?.toISOString(),
+            contentStructure: {
+              tone: selectedPlatformNames.includes('linkedin') ? 'professional' : 'casual',
+              format: uploadedMedia.length > 0 ? 'media-focused' : 'text-only',
+              useEmoji: !selectedPlatformNames.includes('linkedin'),
+              hashtagPlacement: selectedPlatformNames.includes('twitter') ? 'inline' : 'end'
+            }
+          }
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to generate content')
+      }
+
+      const data = await response.json()
+
+      // Update content based on generation type
+      if (type === 'hashtags') {
+        setContent(prev => `${prev}\n\n${data.content}`)
+      } else {
+        setContent(data.content)
+      }
+
+      toast({
+        title: "Content generated",
+        description: `AI has generated ${type === 'caption' ? 'a caption' : 'hashtags'} ${
+          selectedPlatformNames[0] === 'general' ? 'for general use' : 'optimized for your selected platforms'
+        }.`,
+      })
+    } catch (error) {
+      console.error('Error generating content:', error)
+      toast({
+        title: "Generation failed",
+        description: error instanceof Error ? error.message : "Failed to generate content. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   // Fetch connected accounts
   const fetchAccounts = async () => {
@@ -158,7 +236,7 @@ export default function CreatePostPage() {
       }
 
       // Create post data in the exact format required by AllAuth API
-      const postData = {
+      const postData: Post = {
         content: content,
         post_type: postType,
         scheduled_time: scheduledDate.toISOString(),
@@ -220,6 +298,42 @@ export default function CreatePostPage() {
     }
   }
 
+  // Get optimal posting time suggestions
+  const getOptimalTimes = async (platform: string) => {
+    setIsLoadingOptimalTimes(true)
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const response = await fetch('/api/ai/optimal-time', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          platform,
+          timezone,
+        }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error)
+
+      setOptimalTimes(data)
+      toast({
+        title: "Optimal times retrieved",
+        description: "AI has suggested the best posting times for maximum engagement.",
+      })
+    } catch (error) {
+      console.error('Error getting optimal times:', error)
+      toast({
+        title: "Failed to get optimal times",
+        description: "Could not retrieve optimal posting time suggestions.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingOptimalTimes(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       <header className="border-b">
@@ -255,6 +369,30 @@ export default function CreatePostPage() {
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <Input type="time" className="w-full" value={time} onChange={(e) => setTime(e.target.value)} />
                   </div>
+                  {selectedPlatforms.length > 0 && (
+                    <div className="mt-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => getOptimalTimes(accounts.find(acc => acc.id === selectedPlatforms[0])?.provider || 'general')}
+                        disabled={isLoadingOptimalTimes}
+                      >
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        {isLoadingOptimalTimes ? 'Getting suggestions...' : 'Get optimal time'}
+                      </Button>
+                      {optimalTimes && (
+                        <div className="mt-2 text-sm space-y-2">
+                          <p className="font-medium">Suggested times:</p>
+                          <div className="bg-muted p-2 rounded-md">
+                            <p>{optimalTimes.bestTime}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{optimalTimes.explanation}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <Button
                     className="w-full mt-3 bg-[#1E5AA8] hover:bg-[#174a8c]"
                     onClick={() => {
@@ -321,16 +459,42 @@ export default function CreatePostPage() {
                       <Label htmlFor="content" className="text-base font-medium mb-2 block">
                         Post Content
                       </Label>
-                      <Textarea
-                        id="content"
-                        placeholder="What would you like to share?"
-                        className="min-h-[150px]"
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                        <span>Add #hashtags to increase visibility</span>
-                        <span>{content.length}/280 characters</span>
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => generateContent('caption')}
+                            disabled={isGenerating}
+                            className="flex items-center gap-2"
+                          >
+                            <Wand2 className="h-4 w-4" />
+                            {isGenerating ? 'Generating...' : 'Generate Caption'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => generateContent('hashtags')}
+                            disabled={isGenerating}
+                            className="flex items-center gap-2"
+                          >
+                            <Hash className="h-4 w-4" />
+                            {isGenerating ? 'Generating...' : 'Generate Hashtags'}
+                          </Button>
+                        </div>
+                        <Textarea
+                          id="content"
+                          placeholder="What would you like to share?"
+                          className="min-h-[150px]"
+                          value={content}
+                          onChange={(e) => setContent(e.target.value)}
+                        />
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Add #hashtags to increase visibility</span>
+                          <span>{content.length}/280 characters</span>
+                        </div>
                       </div>
                     </div>
 

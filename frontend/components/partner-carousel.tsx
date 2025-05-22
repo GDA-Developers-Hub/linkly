@@ -114,7 +114,7 @@ export function PartnerCarousel({ partners }: PartnerCarouselProps) {
             className={`flex-none px-2 w-full sm:w-1/${Math.min(visiblePartners, 2)} md:w-1/${Math.min(visiblePartners, 3)} lg:w-1/${Math.min(visiblePartners, 4)}`}
             whileHover={{ scale: 1.05 }}
           >
-            <div className="bg-background rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center h-full">
+            <div className="bg-background rounded-2xl p-6 shadow-2xl transition-all border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center h-full">
               <div className="mb-6 mx-auto h-20 w-20 relative flex items-center justify-center">
                 <motion.div 
                   className="absolute inset-0 rounded-full bg-gradient-to-r from-[#FF8C2A]/10 to-blue-500/10"

@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "analytics",
     "subscriptions",
     "google_ads",
+    "ai_services",
 ]
 
 MIDDLEWARE = [
@@ -175,7 +176,7 @@ ACCOUNT_EMAIL_VERIFICATION = 'optional'
 SOCIALACCOUNT_LOGIN_ON_GET = True
 SOCIALACCOUNT_STORE_TOKENS = True
 
-LOGIN_REDIRECT_URL = env('LOGIN_REDIRECT_URL')
+LOGIN_REDIRECT_URL = env('LOGIN_REDIRECT_URL').strip()
 SOCIALACCOUNT_ADAPTER = 'account.adapters.CustomSocialAccountAdapter'
 
 SPECTACULAR_SETTINGS = {

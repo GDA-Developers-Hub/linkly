@@ -7,6 +7,7 @@ import { Linkedin, CheckCircle, Building2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { SocialAccount } from "@/services/social-platforms-api"
 import { AuthAPI} from "@/lib/socials-api"
+import { useRouter, useSearchParams } from "next/navigation"
 
 interface LinkedInConnectProps {
   isConnected: boolean
@@ -24,6 +25,8 @@ export function LinkedInConnect({
   isConnecting 
 }: LinkedInConnectProps) {
   const { toast } = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [companyPages, setCompanyPages] = useState<any[]>([])
   const [fullName, setFullName] = useState<string>("")
   const [email, setEmail] = useState<string>("") 
@@ -31,6 +34,27 @@ export function LinkedInConnect({
 
   const auth = new AuthAPI()
   
+  // Handle URL parameters for connection status
+  useEffect(() => {
+    const linkedPlatform = searchParams.get('linked')?.toLowerCase().trim()
+    
+    if (linkedPlatform === 'linkedin') {
+      toast({
+        title: "LinkedIn Connected",
+        description: "Your LinkedIn account has been connected successfully!",
+        duration: 5000,
+      })
+      
+      // Clean up the URL by removing query parameters
+      router.replace('/dashboard/platform-connect')
+      
+      // Refresh the account list if callback provided
+      if (onConnect) {
+        onConnect()
+      }
+    }
+  }, [searchParams])
+
   // Extract LinkedIn-specific data if available
   useEffect(() => {
     if (account && account.metadata) {

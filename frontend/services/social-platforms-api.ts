@@ -5,21 +5,12 @@
 
 // Types
 export interface SocialAccount {
-  id?: number;
-  uid: string;
-  account_id?: string;
-  display_name: string;
-  account_type: string;
+  id: number;
   provider: string;
-  email: string;
-  profile_picture_url?: string | null;
-  status?: string;
-  is_primary?: boolean;
-  followers?: number;
-  engagement_rate?: number;
-  reach?: number;
-  created_at?: string;
-  updated_at?: string;
+  display_name: string;
+  social_account_id: number;
+  social_app_id: number;
+  name?: string;
 }
 
 export interface SocialPost {
@@ -42,6 +33,18 @@ export interface SocialPlatform {
   display_name: string;
   auth_url: string;
   is_active: boolean;
+}
+
+export interface Post {
+  content: string;
+  post_type: string;
+  scheduled_time: string;
+  status: "draft" | "scheduled" | "published" | "failed";
+  platforms: {
+    social_account: number;
+    social_app: number | undefined;
+    custom_content: string;
+  }[];
 }
 
 // Safe localStorage access
@@ -448,6 +451,26 @@ export class SocialPlatformsAPI {
     }
 
     return await response.json();
+  }
+
+  async createPost(post: Post) {
+    const response = await fetch('/api/social/posts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(post),
+    })
+    if (!response.ok) throw new Error('Failed to create post')
+    return response.json()
+  }
+
+  async deletePost(postId: number) {
+    const response = await fetch(`/api/social/posts/${postId}`, {
+      method: 'DELETE',
+    })
+    if (!response.ok) throw new Error('Failed to delete post')
+    return response.json()
   }
 }
 

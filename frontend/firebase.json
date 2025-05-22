@@ -11,6 +11,22 @@
         "source": "**",
         "destination": "/index.html"
       }
-    ]
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ],
+    "environment": {
+      "NEXT_PUBLIC_API_URL": "https://linkly-production-f31e.up.railway.app",
+      "API_URL": "https://linkly-production-f31e.up.railway.app"
+    }
   }
 }
+

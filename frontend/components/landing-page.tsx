@@ -356,7 +356,7 @@ export function LandingPage() {
       >
         <div className="container mx-auto px-0">
           <div className="flex h-14 items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2 group" aria-label="Linkly Home">
+            <Link href="/" className="flex items-center space-x-2 group mt-4" aria-label="Linkly Home">
               <div className="relative h-24 w-40 overflow-visible">
                 <Image 
                   src={logo} 
@@ -455,7 +455,7 @@ export function LandingPage() {
         {/* Hero Section */}
         <section
           ref={heroRef as React.RefObject<HTMLDivElement>}
-          className="relative overflow-hidden py-2 md:py-2 bg-gradient-to-br from-[#FF8C2A]/20 via-white dark:via-gray-900 to-blue-500/10 dark:to-blue-500/5"
+          className="relative overflow-hidden py-3 md:py-5 bg-gradient-to-br from-[#FF8C2A]/20 via-white dark:via-gray-900 to-blue-500/10 dark:to-blue-500/5"
           aria-labelledby="hero-heading"
         >
           {/* Background elements - optimized for performance */}

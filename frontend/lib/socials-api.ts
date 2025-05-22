@@ -91,10 +91,15 @@ export class AuthAPI {
       baseUrl = ''; // This will cause an error and make it obvious that env vars need to be set
     }
 
-    // Ensure it has protocol
-    if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-      baseUrl = `https://${baseUrl}`;
+    // Force HTTPS for production URLs
+    if (baseUrl.includes('railway.app') || process.env.NODE_ENV === 'production') {
+      baseUrl = baseUrl.replace('http://', 'https://');
     }
+
+    // Ensure it has protocol
+    // if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+    //   baseUrl = process.env.NODE_ENV === 'development' ? `http://${baseUrl}` : `https://${baseUrl}`;
+    // }
 
     // Ensure trailing slash
     if (!baseUrl.endsWith('/')) {
@@ -114,6 +119,11 @@ export class AuthAPI {
       url = `${this.backendBase}accounts/oidc/${provider}/login/?process=connect&token=${token}`;
     } else {
       url = `${this.backendBase}accounts/${provider}/login/?process=connect&token=${token}`;
+    }
+
+    // Force HTTPS for production URLs
+    if (process.env.NODE_ENV === 'production') {
+      url = url.replace('http://', 'https://');
     }
 
     window.location.href = url;

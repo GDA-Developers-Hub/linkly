@@ -1,6 +1,11 @@
 // API client for our Django backend
 import { toast } from "@/components/ui/use-toast";
 
+// Log environment information
+console.log('Current NODE_ENV:', process.env.NODE_ENV);
+console.log('NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+console.log('API_URL:', process.env.API_URL);
+
 // API Base URL with trailing slash for consistency
 const API_BASE_URL = (() => {
   // Get the base URL from environment variables
@@ -11,9 +16,14 @@ const API_BASE_URL = (() => {
     baseUrl = ''; // This will cause an error and make it obvious that env vars need to be set
   }
 
+  // Force HTTPS for production URLs
+  if (baseUrl.includes('railway.app') || process.env.NODE_ENV === 'production') {
+    baseUrl = baseUrl.replace('http://', 'https://');
+  }
+
   // Ensure it has protocol
   if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-    baseUrl = `https://${baseUrl}`;
+    baseUrl = process.env.NODE_ENV === 'development' ? `http://${baseUrl}` : `https://${baseUrl}`;
   }
 
   // Ensure trailing slash

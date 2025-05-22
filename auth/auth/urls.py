@@ -39,4 +39,5 @@ urlpatterns = [
     path('api/subscriptions/', include('subscriptions.urls')),
     path('api/content/', include('content.urls')),
     path('api/analytics/', include('analytics.urls')),
+    path('api/ai/', include('ai_services.urls')),
 ]
