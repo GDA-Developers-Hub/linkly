@@ -70,41 +70,33 @@ export default function CreatePostPage() {
         selectedPlatformNames.push('general')
       }
 
-      // Call backend API
-      const response = await fetch('/api/ai/generate/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type,
-          prompt: content,
-          context: {
-            platforms: selectedPlatformNames,
-            mediaTypes: uploadedMedia.map(m => m.type),
-            scheduledTime: date?.toISOString(),
-            contentStructure: {
-              tone: selectedPlatformNames.includes('linkedin') ? 'professional' : 'casual',
-              format: uploadedMedia.length > 0 ? 'media-focused' : 'text-only',
-              useEmoji: !selectedPlatformNames.includes('linkedin'),
-              hashtagPlacement: selectedPlatformNames.includes('twitter') ? 'inline' : 'end'
-            }
+      const api = getAPI();
+      let generatedContent;
+
+      // Use the ai/generate endpoint for both caption and hashtags
+      const response = await api.request<{ content: string }>('api/ai/generate/', 'POST', {
+        type,
+        prompt: content,
+        context: {
+          platforms: selectedPlatformNames,
+          mediaTypes: uploadedMedia.map(m => m.type),
+          scheduledTime: date?.toISOString(),
+          contentStructure: {
+            tone: selectedPlatformNames.includes('linkedin') ? 'professional' : 'casual',
+            format: uploadedMedia.length > 0 ? 'media-focused' : 'text-only',
+            useEmoji: !selectedPlatformNames.includes('linkedin'),
+            hashtagPlacement: selectedPlatformNames.includes('twitter') ? 'inline' : 'end'
           }
-        }),
-      })
+        }
+      });
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to generate content')
-      }
-
-      const data = await response.json()
+      generatedContent = response.content;
 
       // Update content based on generation type
       if (type === 'hashtags') {
-        setContent(prev => `${prev}\n\n${data.content}`)
+        setContent(prev => `${prev}\n\n${generatedContent}`)
       } else {
-        setContent(data.content)
+        setContent(generatedContent)
       }
 
       toast({
@@ -302,22 +294,18 @@ export default function CreatePostPage() {
   const getOptimalTimes = async (platform: string) => {
     setIsLoadingOptimalTimes(true)
     try {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-      const response = await fetch('/api/ai/optimal-time', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          platform,
-          timezone,
-        }),
-      })
+      const api = getAPI();
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      
+      const response = await api.request<{
+        bestTime: string;
+        explanation: string;
+      }>('api/ai/optimal-time/', 'POST', {
+        platform,
+        timezone,
+      });
 
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error)
-
-      setOptimalTimes(data)
+      setOptimalTimes(response);
       toast({
         title: "Optimal times retrieved",
         description: "AI has suggested the best posting times for maximum engagement.",

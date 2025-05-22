@@ -9,23 +9,10 @@ console.log('API_URL:', process.env.API_URL);
 // API Base URL with trailing slash for consistency
 const API_BASE_URL = (() => {
   // Get the base URL from environment variables
-  let baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+  let baseUrl = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:8000'  // Use local backend in development
+    : 'https://linkly-production-f31e.up.railway.app';  // Use production in production
   
-  if (!baseUrl) {
-    console.warn('API_URL not set in environment variables');
-    baseUrl = ''; // This will cause an error and make it obvious that env vars need to be set
-  }
-
-  // Force HTTPS for production URLs
-  if (baseUrl.includes('railway.app') || process.env.NODE_ENV === 'production') {
-    baseUrl = baseUrl.replace('http://', 'https://');
-  }
-
-  // Ensure it has protocol
-  if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-    baseUrl = process.env.NODE_ENV === 'development' ? `http://${baseUrl}` : `https://${baseUrl}`;
-  }
-
   // Ensure trailing slash
   if (!baseUrl.endsWith('/')) {
     baseUrl += '/';

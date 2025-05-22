@@ -23,9 +23,10 @@
         ]
       }
     ],
-    "environment": {
+    "env": {
       "NEXT_PUBLIC_API_URL": "https://linkly-production-f31e.up.railway.app",
-      "API_URL": "https://linkly-production-f31e.up.railway.app"
+      "API_URL": "https://linkly-production-f31e.up.railway.app",
+      "BACKEND_URL": "https://linkly-production-f31e.up.railway.app"
     }
   }
 }

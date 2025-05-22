@@ -1,12 +1,12 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-import openai
+from openai import OpenAI
 from django.conf import settings
 from datetime import datetime
 import json
 
-openai.api_key = settings.OPENAI_API_KEY
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 def create_system_prompt(generation_type, context):
     # Base prompt
@@ -80,8 +80,8 @@ def generate_content(request):
         # Create system prompt
         system_prompt = create_system_prompt(generation_type, context)
 
-        # Call OpenAI API
-        completion = openai.ChatCompletion.create(
+        # Call OpenAI API with new format
+        completion = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -92,7 +92,7 @@ def generate_content(request):
         )
 
         return Response({
-            'content': completion.choices[0].message['content']
+            'content': completion.choices[0].message.content
         })
 
     except Exception as e:
@@ -121,7 +121,7 @@ Consider:
 - Day of the week variations
 Return a JSON object with suggested times and brief explanations."""
 
-        completion = openai.ChatCompletion.create(
+        completion = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -132,7 +132,7 @@ Return a JSON object with suggested times and brief explanations."""
             response_format={"type": "json_object"}
         )
 
-        return Response(json.loads(completion.choices[0].message['content']))
+        return Response(json.loads(completion.choices[0].message.content))
 
     except Exception as e:
         return Response(
