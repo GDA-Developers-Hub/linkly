@@ -20,9 +20,9 @@ class PostMediaSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "file_url", "created_at"]
 
     def get_file_url(self, obj):
-        request = self.context.get("request")
-        if obj.file and request:
-            return request.build_absolute_uri(obj.file.url)
+        if obj.file:
+            # Use the Cloudinary URL directly
+            return obj.get_url()
         return None
 
 

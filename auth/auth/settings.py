@@ -84,6 +84,8 @@ INSTALLED_APPS = [
     "subscriptions",
     "google_ads",
     "ai_services",
+    "cloudinary",
+    "cloudinary_storage",
 ]
 
 MIDDLEWARE = [
@@ -295,3 +297,9 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Cloudinary settings
+CLOUDINARY_URL = "cloudinary://994411676296526:oI3_CnYfKjTfELOZChxcNWlq7yU@dk968wdtt"
+
+# Configure Django to use Cloudinary for media storage
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'

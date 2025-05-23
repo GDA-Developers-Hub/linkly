@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from allauth.socialaccount.models import SocialApp, SocialAccount
+from cloudinary.models import CloudinaryField
 
 
 class Post(models.Model):
@@ -75,12 +76,21 @@ class PostPlatform(models.Model):
 
 
 class PostMedia(models.Model):
+    MEDIA_TYPES = (
+        ('image', 'Image'),
+        ('video', 'Video'),
+        ('audio', 'Audio'),
+        ('document', 'Document'),
+    )
+    
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='media')
-    file = models.FileField(upload_to='post_media/')
+    file = CloudinaryField('media', folder='post_media', resource_type='auto')
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPES, default='image')
     order = models.PositiveSmallIntegerField(default=0)
 
     caption = models.TextField(blank=True)
     alt_text = models.CharField(max_length=255, blank=True)
+    duration = models.FloatField(null=True, blank=True, help_text='Duration in seconds for video/audio')
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -88,7 +98,11 @@ class PostMedia(models.Model):
         ordering = ['order']
 
     def __str__(self):
-        return f"Media {self.id} for {self.post}"
+        return f"{self.get_media_type_display()} {self.id} for {self.post}"
+        
+    def get_url(self):
+        """Return the Cloudinary URL for the media"""
+        return self.file.url if self.file else None
 
 
 class PostMetrics(models.Model):

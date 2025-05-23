@@ -9,4 +9,5 @@ urlpatterns = [
     path('<int:pk>/publish/', views.PublishPostView.as_view(), name='publish-post'),
     path('<int:pk>/cancel/', views.CancelPostView.as_view(), name='cancel-post'),
     path('metrics/', views.PostMetricsListView.as_view(), name='post-metrics'),
+    path('upload/cloudinary/', views.CloudinaryMediaUploadView.as_view(), name='cloudinary-upload'),
 ]

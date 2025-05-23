@@ -744,8 +744,9 @@ class API {
     );
   }
 
-  // Media upload
+  // Media upload using Cloudinary
   async uploadMedia(file: File): Promise<{ url: string; id: number }> {
+    console.log('Using Cloudinary upload endpoint for media upload');
     const formData = new FormData();
     formData.append("file", file);
 
@@ -753,14 +754,23 @@ class API {
     let mediaType = "image";
     if (file.type.startsWith("video/")) {
       mediaType = "video";
+    } else if (file.type.startsWith("audio/")) {
+      mediaType = "audio";
     } else if (file.type.startsWith("image/gif")) {
       mediaType = "gif";
+    } else if (file.type.startsWith("application/")) {
+      mediaType = "document";
     }
 
     // Add the media_type field to the form data
     formData.append("media_type", mediaType);
 
-    const response = await fetch(buildUrl("api/content/media/"), {
+    // Connect directly to the Django backend for Cloudinary uploads
+    // IMPORTANT: Include trailing slash for Django URL patterns
+    const djangoUrl = 'http://localhost:8000/api/posts/upload/cloudinary/';
+    console.log(`Uploading media to: ${djangoUrl} (including trailing slash for Django)`);
+    
+    const response = await fetch(djangoUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
@@ -769,11 +779,17 @@ class API {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage =
-        errorData.detail ||
-        errorData.message ||
-        `Upload failed with status ${response.status}`;
+      const errorText = await response.text();
+      console.error('Upload failed:', response.status, errorText);
+      
+      let errorMessage;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.detail || errorData.message || `Upload failed with status ${response.status}`;
+      } catch (e) {
+        errorMessage = `Upload failed with status ${response.status}: ${errorText.substring(0, 100)}`;
+      }
+      
       throw new Error(errorMessage);
     }
 
