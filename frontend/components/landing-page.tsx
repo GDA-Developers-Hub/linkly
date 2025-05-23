@@ -25,6 +25,7 @@ import {
   ChevronLeft,
   Play,
   PlayCircle,
+  Clock,
 } from "lucide-react"
 import { PlatformIcons } from "@/components/platform-icons"
 import { SocialIntegrationIllustrationV2 } from "@/components/illustrations/social-integration-illustration-v2"
@@ -309,7 +310,7 @@ export function LandingPage() {
     },
     {
       name: "Twitter",
-      logo: "/twitter-logo.svg",
+      logo: "/x.jpg",
       width: 50,
       height: 15
     },
@@ -413,7 +414,7 @@ export function LandingPage() {
                 ) : (
                   <Menu className="h-6 w-6" />
                 )}
-            </Button>
+              </Button>
             </div>
           </div>
         </div>
@@ -554,10 +555,10 @@ export function LandingPage() {
                 <div className="mt-8 flex items-center justify-center lg:justify-start">
                   <div className="flex -space-x-2">
                     {[
-                      "https://randomuser.me/api/portraits/women/32.jpg",
-                      "https://randomuser.me/api/portraits/men/44.jpg",
-                      "https://randomuser.me/api/portraits/women/68.jpg",
-                      "https://randomuser.me/api/portraits/men/75.jpg"
+                      "https://randomuser.me/api/portraits/women/71.jpg",  // Black African woman
+                      "https://randomuser.me/api/portraits/men/91.jpg",   // Black African man
+                      "https://randomuser.me/api/portraits/women/85.jpg", // Black African woman
+                      "https://randomuser.me/api/portraits/men/55.jpg"    // Black African man
                     ].map((avatar, i) => (
                       <motion.div 
                         key={i} 
@@ -1174,126 +1175,208 @@ export function LandingPage() {
             variants={fadeInUp}
             className="mt-20 pt-10 border-t border-gray-200 dark:border-gray-800 max-w-6xl mx-auto"
           >
-            <div className="text-center mb-10">
+            <div className="text-center mb-16">
               <h3 className="text-2xl md:text-3xl font-bold mb-4 text-gray-900 dark:text-white">See Linkly in Action</h3>
-                              <p className="text-muted-foreground max-w-2xl mx-auto">
-                  Watch our comprehensive demonstration of Linkly's powerful features and intuitive workflow in action.
-                </p>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Watch our comprehensive demonstration of Linkly's powerful features and intuitive workflow in action.
+              </p>
             </div>
 
-            <div className="relative rounded-xl overflow-hidden shadow-2xl border-4 border-white dark:border-gray-800">
-              <div className="relative w-full aspect-video bg-black">
-                {/* Preview Image */}
-                {showPreview && (
-                  <div 
-                    className="absolute inset-0 bg-cover bg-center cursor-pointer"
-                    style={{ 
-                      backgroundImage: 'url(https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2940)',
-                      filter: 'brightness(0.8)'
-                    }}
-                    onClick={handleVideoPlay}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="bg-white/90 rounded-full p-4 transform transition-transform hover:scale-110">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#FF8C2A" className="h-12 w-12">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+              {/* Left Content Column */}
+              <div className="space-y-8">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="space-y-6"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-full bg-[#FF8C2A]/10 flex items-center justify-center flex-shrink-0">
+                      <Globe className="w-6 h-6 text-[#FF8C2A]" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-semibold mb-2">Cross-Platform Management</h4>
+                      <p className="text-muted-foreground">Experience seamless integration across all major social media platforms in one unified dashboard.</p>
                     </div>
                   </div>
-                )}
 
-                {/* Loading Spinner */}
-                {!isVideoLoaded && !showPreview && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#FF8C2A] border-t-transparent"></div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-full bg-[#FF8C2A]/10 flex items-center justify-center flex-shrink-0">
+                      <BarChart3 className="w-6 h-6 text-[#FF8C2A]" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-semibold mb-2">Real-Time Analytics</h4>
+                      <p className="text-muted-foreground">Track your performance metrics and engagement rates with our powerful analytics tools.</p>
+                    </div>
                   </div>
-                )}
 
-                {/* Video End State with Logo */}
-                {isVideoEnded && (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.5 }}
-                    className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center cursor-pointer"
-                    onClick={handleVideoPlay}
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-full bg-[#FF8C2A]/10 flex items-center justify-center flex-shrink-0">
+                      <Zap className="w-6 h-6 text-[#FF8C2A]" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-semibold mb-2">AI-Powered Insights</h4>
+                      <p className="text-muted-foreground">Get intelligent recommendations for content optimization and posting schedules.</p>
+                    </div>
+                  </div>
+                </motion.div>
+
+                <div className="pt-6">
+                  <Button 
+                    size="lg"
+                    className="bg-[#FF8C2A] text-white hover:bg-[#e67e25] shadow-lg group"
+                    asChild
                   >
-                    <motion.div 
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ delay: 0.2, duration: 0.5 }}
-                      className="relative h-32 sm:h-40 w-72 sm:w-96 mb-8"
-                    >
-                      <Image 
-                        src={logo} 
-                        alt="Linkly Logo" 
-                        className="object-contain" 
-                        fill
-                        sizes="(max-width: 768px) 288px, 384px"
-                        priority
-                      />
-                    </motion.div>
-                    <motion.div
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.4, duration: 0.5 }}
-                    >
-                      <Button
-                        size="lg"
-                        className="bg-[#FF8C2A] text-white hover:bg-[#e67e25] hover:scale-105 transform transition-all duration-200 shadow-xl"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleVideoPlay()
+                    <Link href="/auth/register">
+                      Start Free Trial
+                      <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Right Video Column */}
+              <div className="relative">
+                <div className="relative rounded-xl overflow-hidden shadow-2xl border-4 border-white dark:border-gray-800 aspect-video max-w-lg mx-auto">
+                  <div className="relative w-full h-full bg-black">
+                    {/* Preview Image */}
+                    {showPreview && (
+                      <div 
+                        className="absolute inset-0 bg-cover bg-center cursor-pointer"
+                        style={{ 
+                          backgroundImage: 'url(https://images.unsplash.com/photo-1607703703520-bb28c92cf0eb?q=80&w=2940)',
+                          filter: 'brightness(0.85)'
                         }}
+                        onClick={handleVideoPlay}
                       >
-                        Watch Again
-                        <PlayCircle className="ml-2 h-5 w-5" />
-                      </Button>
-                    </motion.div>
-                  </motion.div>
-                )}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <motion.div 
+                            className="bg-white/90 rounded-full p-4 transform transition-transform hover:scale-110"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <Play className="h-12 w-12 text-[#FF8C2A]" />
+                          </motion.div>
+                        </div>
+                      </div>
+                    )}
 
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover"
-                  playsInline
-                  preload="metadata"
-                  onLoadedData={handleVideoLoad}
-                  onClick={handleVideoPlay}
-                  onEnded={handleVideoEnd}
-                >
-                  <source src="/Linkly.mp4" type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-                
-                {/* Video controls overlay - always visible on mobile, visible on hover for desktop */}
-                {!showPreview && (
-                  <div 
-                    className="absolute inset-0 flex items-center justify-center bg-black/40 md:opacity-0 md:hover:opacity-100 transition-opacity duration-300"
-                    onClick={handleVideoPlay}
-                  >
-                    <Button
-                      size="lg"
-                      className="bg-white/90 text-gray-900 hover:bg-white hover:scale-105 transform transition-all duration-200 shadow-xl"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleVideoPlay()
-                      }}
+                    {/* Loading Spinner */}
+                    {!isVideoLoaded && !showPreview && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#FF8C2A] border-t-transparent"></div>
+                      </div>
+                    )}
+
+                    {/* Video End State */}
+                    {isVideoEnded && (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.5 }}
+                        className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center cursor-pointer"
+                        onClick={handleVideoPlay}
+                      >
+                        <motion.div 
+                          initial={{ scale: 0.8, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ delay: 0.2, duration: 0.5 }}
+                          className="relative h-24 w-48 mb-6"
+                        >
+                          <Image 
+                            src={logo} 
+                            alt="Linkly Logo" 
+                            className="object-contain" 
+                            fill
+                            sizes="(max-width: 768px) 192px, 192px"
+                            priority
+                          />
+                        </motion.div>
+                        <Button
+                          size="lg"
+                          className="bg-[#FF8C2A] text-white hover:bg-[#e67e25] hover:scale-105 transform transition-all duration-200 shadow-xl"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleVideoPlay()
+                          }}
+                        >
+                          Watch Again
+                          <PlayCircle className="ml-2 h-5 w-5" />
+                        </Button>
+                      </motion.div>
+                    )}
+
+                    <video
+                      ref={videoRef}
+                      className="w-full h-full object-cover"
+                      playsInline
+                      preload="metadata"
+                      onLoadedData={handleVideoLoad}
+                      onClick={handleVideoPlay}
+                      onEnded={handleVideoEnd}
+                      controls
                     >
-                      {isVideoPlaying ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
-                          <rect x="6" y="4" width="4" height="16" />
-                          <rect x="14" y="4" width="4" height="16" />
-                        </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      )}
-                    </Button>
+                      <source src="/linkly_Mvp.mp4" type="video/mp4" />
+                      Your browser does not support the video tag.
+                    </video>
+                    
+                    {/* Video controls overlay */}
+                    {!showPreview && !isVideoEnded && (
+                      <div 
+                        className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300"
+                        onClick={handleVideoPlay}
+                      >
+                        <Button
+                          size="lg"
+                          className="bg-white/90 text-gray-900 hover:bg-white hover:scale-105 transform transition-all duration-200 shadow-xl"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleVideoPlay()
+                          }}
+                        >
+                          {isVideoPlaying ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
+                              <rect x="6" y="4" width="4" height="16" />
+                              <rect x="14" y="4" width="4" height="16" />
+                            </svg>
+                          ) : (
+                            <Play className="h-8 w-8" />
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+
+                {/* Video Features Pills */}
+                <motion.div 
+                  className="absolute -bottom-4 -left-4 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-full bg-green-100 dark:bg-green-900/30">
+                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                    </div>
+                    <span className="text-sm font-medium">HD Quality</span>
+                  </div>
+                </motion.div>
+
+                <motion.div 
+                  className="absolute -top-4 -right-4 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700"
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.7 }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">1:19</span>
+                    <div className="p-1.5 rounded-full bg-[#FF8C2A]/10">
+                      <Clock className="w-3 h-3 text-[#FF8C2A]" />
+                    </div>
+                  </div>
+                </motion.div>
               </div>
             </div>
           </motion.div>

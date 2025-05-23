@@ -299,7 +299,4 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Cloudinary settings
-CLOUDINARY_URL = "cloudinary://994411676296526:oI3_CnYfKjTfELOZChxcNWlq7yU@dk968wdtt"
-
-# Configure Django to use Cloudinary for media storage
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+CLOUDINARY_URL = env("CLOUDINARY_URL")
